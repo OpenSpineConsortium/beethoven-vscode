@@ -244,11 +244,18 @@ with `ashley result`.
 The wizard's first step signs the student in with the university's Microsoft account through VS
 Code's built-in Microsoft sign-in (work or school accounts only; only the account's e-mail is used).
 The AccessID is the part before `@wayne.edu`, and the student continues only if it is on the lab's
-pre-approved list: `extension/media/allowlist.json`, shipped in the VSIX (`python tools/allow.py
-add ab1234`, then rebuild), or a newer copy published at the URL in `ashley.allowlistUrl`. This is
-a gate for honest users; the enforceable boundary is still the grid (the student's own account and
-the admin's approval). The lab assumes the student's Claude, GitHub and Hugging Face accounts were
-made with AccessID@wayne.edu.
+approved list. That list lives in the access service (`tools/intake/worker.js`, a Cloudflare Worker):
+students ask for access on the website (`docs/site/request.html`: AccessID, name, e-mail, what for),
+the maintainer approves, denies, adds or removes people on `docs/site/admin.html` (admin token plus
+Cloudflare Access), and the extension fetches the current list from the service's `/allowlist`, in
+the same shape as the bundled file. An approved person's trial button asks the service's `/trial` for
+a key, issued after the service has asked Microsoft who they are; removing a person puts every key
+issued to them on the signed revocation list the service serves at `/revoked`. The service's
+addresses are in `docs/site/services.json`. The bundled list, `extension/media/allowlist.json`
+(`python tools/allow.py add ab1234`, then rebuild), is the fallback when no service is configured
+there or in `ashley.allowlistUrl`. This is a gate for honest users; the enforceable boundary is still
+the grid (the student's own account and the admin's approval). The lab assumes the student's Claude,
+GitHub and Hugging Face accounts were made with AccessID@wayne.edu.
 
 ## Phone access
 

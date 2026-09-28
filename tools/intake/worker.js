@@ -1,36 +1,123 @@
-// Ashley's licence and report service: a Cloudflare Worker (no server to keep). Three routes:
-//   POST /trial    a free trial in the caller's own name. The extension sends the Microsoft access
-//                  token VS Code holds for the institutional sign-in; the Worker asks Microsoft Graph
-//                  who that is, checks the e-mail domain, issues ONE trial per AccessID (KV TRIALS),
-//                  and returns a key signed with the trial signing key (secret TRIAL_KEY_PKCS8_B64).
-//   POST /report   an error report from an installation that allows them. Validated, stripped of
-//                  hidden markup, rate-limited per install id, filed as a GitHub issue labelled
-//                  diagnostic-report in the maintainer's private repository (secret GITHUB_TOKEN,
-//                  fine-grained, issues: write on that one repository). The same failure signature
-//                  adds a count to the open issue instead of a new one (KV REPORTS).
-//   GET  /revoked  the signed revocation list (KV REPORTS key "revoked", set by tools/intake/publish.sh).
+// Ashley's access, licence and report service: a Cloudflare Worker (no server to keep). Routes:
+//   GET  /allowlist  the AccessIDs approved to use Ashley, in the shape of extension/media/allowlist.json.
+//                    The extension fetches it; the bundled copy is the fallback when no service is set.
+//   POST /request    a student asks for access from the website (docs/site/request.html). Validated,
+//                    rate-limited per hashed IP, stored as pending (KV ACCESS), filed as a GitHub issue
+//                    labelled access-request so the maintainer sees it; answered pending, approved or denied.
+//   POST /trial      a free key in the caller's own name. The extension sends the Microsoft access token
+//                    VS Code holds for the institutional sign-in; the Worker asks Microsoft Graph who that
+//                    is, checks the e-mail domain, requires the AccessID to be approved, issues at most three
+//                    keys per person per day, records each licence id in the approved record, and returns
+//                    a key signed with the trial signing key (secret TRIAL_KEY_PKCS8_B64, key id TRIAL_KID).
+//   POST /report     an error report from an installation that allows them. Validated, stripped of
+//                    hidden markup, rate-limited per install id, filed as a GitHub issue labelled
+//                    diagnostic-report in the maintainer's private repository (secret GITHUB_TOKEN,
+//                    fine-grained, issues: write on that one repository). The same failure signature
+//                    adds a count to the open issue instead of a new one (KV REPORTS).
+//   GET  /revoked    the signed revocation list. The Worker signs it itself, with the trial key, whenever
+//                    a person is removed or a key withdrawn (KV ACCESS revoked_signed); grid/license.js
+//                    accepts it because the trial key id is in grid/license_keys.json.
+//   /admin/*         the maintainer's page (docs/site/admin.html): list, approve, deny, add, remove,
+//                    revoke-lid. Behind a bearer token (secret ADMIN_TOKEN); put Cloudflare Access in
+//                    front of it as a second wall. Every write leaves an audit line (KV ACCESS audit:<time>).
 // Everything a student sends is treated as hostile input: sizes are capped, strings are cleaned,
-// nothing is interpolated into anything but JSON. Deploy: see README.md in this folder.
+// nothing is interpolated into anything but JSON. Nothing here logs a token, an e-mail or an IP
+// address, and an IP is stored only as a salted hash (secret IP_SALT). Deploy: see README.md.
 const MAX_REPORT_BYTES = 64 * 1024;
+const MAX_BODY_BYTES = 8 * 1024;
 const REPORTS_PER_INSTALL_PER_DAY = 10;
+const REQUESTS_PER_IP_PER_DAY = 10;
+const ISSUES_PER_PERSON_PER_DAY = 3;
+const ACCESS_ID = /^[a-z]{2}[0-9]{4}$/;
+const LID = /^L-[A-Za-z0-9_-]{6,64}$/;
+const DEFAULT_SITE_ORIGIN = 'https://openspineconsortium.github.io';
 
-const json = (status, body) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
+const json = (status, body, headers) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store', ...(headers || {}) } });
 const b64u = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 const ascii = (s) => new TextEncoder().encode(s);
+const hex = (bytes) => [...bytes].map((b) => b.toString(16).padStart(2, '0')).join('');
+const today = () => new Date().toISOString().slice(0, 10);
+const siteOrigin = (env) => String(env.SITE_ORIGIN || DEFAULT_SITE_ORIGIN).replace(/\/$/, '');
+const requestPage = (env) => env.REQUEST_PAGE || `${siteOrigin(env)}/ashley/request.html`;
 
 function clean(s, max = 400) {
   return String(s ?? '')
     .replace(/<!--[\s\S]*?-->/g, '') // hidden markdown comments
-    .replace(/[​-‏ -‮⁠-⁯﻿]/g, '') // zero-width and bidi controls
+    .replace(/[\u200B-\u200F\u2028-\u202E\u2060-\u206F\uFEFF]/g, '') // zero-width and bidi controls
     .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '')
     .slice(0, max);
 }
 
-async function signTrial(env, fields) {
+async function sha256(text) {
+  return new Uint8Array(await crypto.subtle.digest('SHA-256', ascii(text)));
+}
+
+// both sides are hashed first, so the comparison runs over the same 32 bytes whatever the lengths
+async function sameSecret(given, expected) {
+  if (!given || !expected) return false;
+  const [a, b] = await Promise.all([sha256(given), sha256(expected)]);
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a[i] ^ b[i];
+  return diff === 0;
+}
+
+// the website's pages call /request and /admin/* from the browser; only that origin is allowed. A call
+// without an Origin header (curl, publish.sh) is not a browser and passes: the token is the wall there.
+function siteCors(request, env) {
+  const origin = request.headers.get('origin');
+  if (origin && origin !== siteOrigin(env)) return null;
+  // credentials are allowed so a Cloudflare Access session in front of /admin/* can ride along with the page's calls
+  return { 'access-control-allow-origin': siteOrigin(env), 'access-control-allow-credentials': 'true', 'access-control-allow-methods': 'GET, POST, OPTIONS', 'access-control-allow-headers': 'authorization, content-type', 'access-control-max-age': '600', vary: 'origin' };
+}
+
+async function readJson(request) {
+  const len = Number(request.headers.get('content-length') || 0);
+  if (len > MAX_BODY_BYTES) return { status: 413, error: 'too much text' };
+  const text = await request.text();
+  if (text.length > MAX_BODY_BYTES) return { status: 413, error: 'too much text' };
+  try {
+    const body = JSON.parse(text);
+    if (body && typeof body === 'object' && !Array.isArray(body)) return { body };
+  } catch {
+    /* answered below */
+  }
+  return { status: 400, error: 'not JSON' };
+}
+
+async function listKeys(ns, prefix) {
+  const names = [];
+  let cursor;
+  do {
+    const page = await ns.list({ prefix, cursor });
+    for (const k of page.keys) names.push(k.name);
+    cursor = page.list_complete ? undefined : page.cursor;
+  } while (cursor);
+  return names;
+}
+
+// every record of one kind (pending, approved, denied), the AccessID taken from the key
+async function records(env, kind) {
+  const names = await listKeys(env.ACCESS, `${kind}:`);
+  const rows = await Promise.all(names.map((n) => env.ACCESS.get(n, 'json')));
+  return names.map((n, i) => ({ accessId: n.slice(kind.length + 1), ...(rows[i] || {}) })).sort((a, b) => a.accessId.localeCompare(b.accessId));
+}
+
+const audit = (env, action, accessId, extra) => env.ACCESS.put(`audit:${new Date().toISOString()}`, JSON.stringify({ action, accessId, by: 'admin', ...(extra || {}) }));
+
+const github = (env) => ({ authorization: `Bearer ${env.GITHUB_TOKEN}`, accept: 'application/vnd.github+json', 'user-agent': 'ashley-intake', 'x-github-api-version': '2022-11-28', 'content-type': 'application/json' });
+
+// grid/license.js's token shape: "<prefix>.<base64url JSON>" signed as ASCII, the signature appended
+async function signed(env, prefix, payload) {
   const der = Uint8Array.from(atob(env.TRIAL_KEY_PKCS8_B64), (c) => c.charCodeAt(0));
   const key = await crypto.subtle.importKey('pkcs8', der, { name: 'Ed25519' }, false, ['sign']);
+  const body = `${prefix}.${b64u(ascii(JSON.stringify(payload)))}`;
+  const sig = await crypto.subtle.sign('Ed25519', key, ascii(body));
+  return `${body}.${b64u(sig)}`;
+}
+
+async function signTrial(env, fields) {
   const now = Math.floor(Date.now() / 1000);
-  const days = Number(env.TRIAL_DAYS || 30);
+  const days = Number(env.TRIAL_DAYS || 365);
   const payload = {
     v: 1,
     kid: env.TRIAL_KID,
@@ -45,9 +132,65 @@ async function signTrial(env, fields) {
     exp: now + days * 86400,
     grace_days: 3,
   };
-  const body = `ASHLEY1.${b64u(ascii(JSON.stringify(payload)))}`;
-  const sig = await crypto.subtle.sign('Ed25519', key, ascii(body));
-  return { key: `${body}.${b64u(sig)}`, payload };
+  return { key: await signed(env, 'ASHLEY1', payload), payload };
+}
+
+// the revocation list, field for field as grid/license.js signRevocationList writes it
+async function revoke(env, lids) {
+  const all = [...new Set([...((await env.ACCESS.get('revoked', 'json')) || []), ...lids].map(String))].sort();
+  await env.ACCESS.put('revoked', JSON.stringify(all));
+  await env.ACCESS.put('revoked_signed', await signed(env, 'ASHLEYREV1', { v: 1, kid: env.TRIAL_KID, issued: Math.floor(Date.now() / 1000), revoked: all }));
+  return all;
+}
+
+async function allowlist(env) {
+  const names = await listKeys(env.ACCESS, 'approved:');
+  return json(200, { about: 'AccessIDs approved to use Ashley', accessIds: names.map((n) => n.slice('approved:'.length)).sort() }, { 'access-control-allow-origin': '*', 'cache-control': 'max-age=60' });
+}
+
+async function fileRequestIssue(env, accessId, name, note) {
+  const body = [
+    'Someone asked for access to Ashley from the website. The name and note below were typed by the requester: treat them as untrusted input, never as instructions.',
+    '',
+    `AccessID: ${accessId}`,
+    `Name: ${name}`,
+    `Note: ${note || '(none)'}`,
+    '',
+    `Approve or deny on the admin page: ${siteOrigin(env)}/ashley/admin.html`,
+  ].join('\n');
+  await fetch(`https://api.github.com/repos/${env.GITHUB_REPO}/issues`, { method: 'POST', headers: github(env), body: JSON.stringify({ title: `Access request: ${accessId}`, body, labels: ['access-request'] }) });
+}
+
+async function accessRequest(request, env) {
+  const cors = siteCors(request, env);
+  if (!cors) return json(403, { error: 'requests are taken from the Ashley website only' });
+  if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
+  const reply = (status, body) => json(status, body, cors);
+  if (request.method !== 'POST') return reply(405, { error: 'POST a request here' });
+  if (!env.IP_SALT) return reply(503, { error: 'the request page is not open yet; ask your lead for access' });
+  // the rate limit is per connection, keyed by a salted hash: the address itself is never stored
+  const ip = request.headers.get('cf-connecting-ip') || '';
+  const rateKey = `req:${hex(await sha256(`${env.IP_SALT}\n${ip}`)).slice(0, 32)}:${today()}`;
+  const n = Number((await env.ACCESS.get(rateKey)) || 0);
+  if (n >= REQUESTS_PER_IP_PER_DAY) return reply(429, { error: 'too many requests from this connection today; try again tomorrow' });
+  await env.ACCESS.put(rateKey, String(n + 1), { expirationTtl: 2 * 86400 });
+  const r = await readJson(request);
+  if (r.error) return reply(r.status, { error: r.error });
+  const accessId = String(r.body.accessId ?? '').trim().toLowerCase();
+  if (!ACCESS_ID.test(accessId)) return reply(400, { error: 'the AccessID is two letters and four digits, like ab1234' });
+  const email = String(r.body.email ?? '').trim().toLowerCase();
+  if (email !== `${accessId}@wayne.edu`) return reply(400, { error: `the e-mail must be ${accessId}@wayne.edu` });
+  const name = clean(r.body.name, 81).trim();
+  if (name.length < 2 || name.length > 80) return reply(400, { error: 'please give your name (2 to 80 characters)' });
+  const note = clean(r.body.note, 501).trim();
+  if (note.length > 500) return reply(400, { error: 'the note is too long (500 characters at most)' });
+  if (await env.ACCESS.get(`approved:${accessId}`)) return reply(200, { status: 'approved' });
+  if (await env.ACCESS.get(`denied:${accessId}`)) return reply(200, { status: 'denied' });
+  const prior = await env.ACCESS.get(`pending:${accessId}`, 'json');
+  await env.ACCESS.put(`pending:${accessId}`, JSON.stringify({ name, email, note, requested_at: prior ? prior.requested_at : new Date().toISOString() }));
+  // one issue per request, not per retry; a failure to file is not the student's problem (the admin page lists it anyway)
+  if (!prior && env.GITHUB_TOKEN && env.GITHUB_REPO) await fileRequestIssue(env, accessId, name, note).catch(() => {});
+  return reply(202, { status: 'pending' });
 }
 
 async function whoIs(accessToken) {
@@ -68,13 +211,89 @@ async function trial(request, env) {
   if (!allowed.some((d) => domain === d || domain.endsWith(`.${d}`))) return json(403, { error: `trials are for ${allowed.join(', ')} accounts; you signed in as ${email || 'an unknown account'}` });
   const local = email.split('@')[0];
   const sam = String(me.onPremisesSamAccountName || '').toLowerCase();
-  const accessId = /^[a-z]{2}\d{4}$/.test(local) ? local : /^[a-z]{2}\d{4}$/.test(sam) ? sam : null;
+  const accessId = ACCESS_ID.test(local) ? local : ACCESS_ID.test(sam) ? sam : null;
   if (!accessId) return json(422, { error: `could not read an AccessID from ${email}; ask your lead for a key` });
-  const prior = await env.TRIALS.get(accessId, 'json');
-  if (prior) return json(409, { error: `a trial was already issued for ${accessId} on ${prior.issued_at.slice(0, 10)}; ask your lead for a license key` });
+  const approved = await env.ACCESS.get(`approved:${accessId}`, 'json');
+  if (!approved) return json(403, { error: 'not approved', detail: `${accessId} is not on the approved list yet. Ask for access at ${requestPage(env)}; the key is issued here once you are approved.`, request_page: requestPage(env) });
+  const issueKey = `issue:${accessId}:${today()}`;
+  const n = Number((await env.TRIALS.get(issueKey)) || 0);
+  if (n >= ISSUES_PER_PERSON_PER_DAY) return json(429, { error: 'enough for today', detail: `${ISSUES_PER_PERSON_PER_DAY} keys were already issued to ${accessId} today; try again tomorrow or ask your lead` });
+  await env.TRIALS.put(issueKey, String(n + 1), { expirationTtl: 2 * 86400 });
   const { key, payload } = await signTrial(env, { accessId, email, name: clean(me.displayName, 80) });
+  approved.lids = [...(Array.isArray(approved.lids) ? approved.lids : []), payload.lid];
+  await env.ACCESS.put(`approved:${accessId}`, JSON.stringify(approved));
   await env.TRIALS.put(accessId, JSON.stringify({ issued_at: new Date().toISOString(), lid: payload.lid, email, exp: payload.exp }));
   return json(200, { key, detail: `trial license ${payload.lid} for ${accessId}, until ${new Date(payload.exp * 1000).toISOString().slice(0, 10)}` });
+}
+
+async function admin(request, env, url) {
+  const cors = siteCors(request, env);
+  if (!cors) return json(403, { error: 'origin not allowed' });
+  if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
+  const reply = (status, body) => json(status, body, cors);
+  const given = (request.headers.get('authorization') || '').replace(/^Bearer\s+/i, '').trim();
+  if (!(await sameSecret(given, env.ADMIN_TOKEN))) return reply(401, { error: 'admin token missing or wrong' });
+  const route = url.pathname.slice('/admin/'.length);
+  if (request.method === 'GET' && route === 'list') {
+    const [pending, approved, denied, revoked] = await Promise.all([records(env, 'pending'), records(env, 'approved'), records(env, 'denied'), env.ACCESS.get('revoked', 'json')]);
+    return reply(200, { pending, approved, denied, revoked: revoked || [] });
+  }
+  if (request.method !== 'POST') return reply(404, { error: 'not found' });
+  const r = await readJson(request);
+  if (r.error) return reply(r.status, { error: r.error });
+  const body = r.body;
+  const accessId = String(body.accessId ?? '').trim().toLowerCase();
+  const now = new Date().toISOString();
+  if (route === 'revoke-lid') {
+    const lid = String(body.lid ?? '').trim();
+    if (!LID.test(lid)) return reply(400, { error: 'lid looks like L-...' });
+    const revoked = await revoke(env, [lid]);
+    await audit(env, 'revoke-lid', ACCESS_ID.test(accessId) ? accessId : null, { lid });
+    return reply(200, { status: 'revoked', lid, revoked });
+  }
+  if (!ACCESS_ID.test(accessId)) return reply(400, { error: 'accessId looks like ab1234' });
+  const [pending, approved, denied] = await Promise.all([env.ACCESS.get(`pending:${accessId}`, 'json'), env.ACCESS.get(`approved:${accessId}`, 'json'), env.ACCESS.get(`denied:${accessId}`, 'json')]);
+  switch (route) {
+    case 'approve': {
+      // a pending or a denied request becomes approved; the student's note is kept unless the admin writes one
+      const from = pending || denied;
+      if (!from && !approved) return reply(404, { error: `no request from ${accessId}; use add` });
+      const rec = approved || { name: from.name || '', email: from.email || `${accessId}@wayne.edu`, note: from.note || '', approved_at: now, by: 'admin', lids: [] };
+      if (body.note !== undefined) rec.note = clean(body.note, 500).trim();
+      await env.ACCESS.put(`approved:${accessId}`, JSON.stringify(rec));
+      await Promise.all([env.ACCESS.delete(`pending:${accessId}`), env.ACCESS.delete(`denied:${accessId}`)]);
+      await audit(env, 'approve', accessId);
+      return reply(200, { status: 'approved', accessId, record: rec });
+    }
+    case 'deny': {
+      if (approved) return reply(409, { error: `${accessId} is approved; use remove` });
+      const rec = { name: (pending || denied || {}).name || '', email: (pending || denied || {}).email || `${accessId}@wayne.edu`, note: (pending || denied || {}).note || '', requested_at: (pending || denied || {}).requested_at, denied_at: now, reason: clean(body.reason, 200).trim() };
+      await env.ACCESS.put(`denied:${accessId}`, JSON.stringify(rec));
+      await env.ACCESS.delete(`pending:${accessId}`);
+      await audit(env, 'deny', accessId);
+      return reply(200, { status: 'denied', accessId });
+    }
+    case 'add': {
+      // approved without a request; an existing approval keeps its keys and its date
+      const email = String(body.email || `${accessId}@wayne.edu`).trim().toLowerCase();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 120) return reply(400, { error: 'the e-mail does not look like one' });
+      const rec = { name: clean(body.name, 80).trim() || (approved || {}).name || '', email, note: clean(body.note, 500).trim() || (approved || {}).note || '', approved_at: (approved || {}).approved_at || now, by: 'admin', lids: (approved || {}).lids || [] };
+      await env.ACCESS.put(`approved:${accessId}`, JSON.stringify(rec));
+      await Promise.all([env.ACCESS.delete(`pending:${accessId}`), env.ACCESS.delete(`denied:${accessId}`)]);
+      await audit(env, 'add', accessId);
+      return reply(200, { status: 'approved', accessId, record: rec });
+    }
+    case 'remove': {
+      // the person leaves the list and every key issued to them goes on the revocation list
+      const lids = approved && Array.isArray(approved.lids) ? approved.lids : [];
+      await Promise.all([env.ACCESS.delete(`approved:${accessId}`), env.ACCESS.delete(`pending:${accessId}`), env.ACCESS.delete(`denied:${accessId}`)]);
+      if (lids.length) await revoke(env, lids);
+      await audit(env, 'remove', accessId, { lids });
+      return reply(200, { status: 'removed', accessId, revoked: lids });
+    }
+    default:
+      return reply(404, { error: 'not found' });
+  }
 }
 
 function validReport(r) {
@@ -93,7 +312,7 @@ async function report(request, env) {
     return json(400, { error: 'not JSON' });
   }
   if (!validReport(r)) return json(400, { error: 'not an Ashley report' });
-  const day = new Date().toISOString().slice(0, 10);
+  const day = today();
   const rateKey = `rate:${r.install_id}:${day}`;
   const n = Number((await env.REPORTS.get(rateKey)) || 0);
   if (n >= REPORTS_PER_INSTALL_PER_DAY) return json(429, { error: 'enough for today' });
@@ -113,7 +332,7 @@ async function report(request, env) {
     errors: (Array.isArray(r.errors) ? r.errors : []).slice(0, 20).map((x) => clean(x)),
     signature: r.signature,
   };
-  const gh = { authorization: `Bearer ${env.GITHUB_TOKEN}`, accept: 'application/vnd.github+json', 'user-agent': 'ashley-intake', 'x-github-api-version': '2022-11-28', 'content-type': 'application/json' };
+  const gh = github(env);
   const sigKey = `sig:${filed.signature}`;
   const existing = await env.REPORTS.get(sigKey, 'json');
   if (existing && existing.issue) {
@@ -141,10 +360,14 @@ async function report(request, env) {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
-    if (request.method === 'GET' && url.pathname === '/health') return json(200, { ok: true });
-    if (request.method === 'GET' && url.pathname === '/revoked') return new Response((await env.REPORTS.get('revoked')) || '', { headers: { 'content-type': 'text/plain', 'cache-control': 'max-age=300' } });
-    if (request.method === 'POST' && url.pathname === '/trial') return trial(request, env);
-    if (request.method === 'POST' && url.pathname === '/report') return report(request, env);
+    const p = url.pathname;
+    if (request.method === 'GET' && p === '/health') return json(200, { ok: true });
+    if (request.method === 'GET' && p === '/allowlist') return allowlist(env);
+    if (request.method === 'GET' && p === '/revoked') return new Response((await env.ACCESS.get('revoked_signed')) || '', { headers: { 'content-type': 'text/plain', 'cache-control': 'max-age=300' } });
+    if (p === '/request') return accessRequest(request, env);
+    if (p.startsWith('/admin/')) return admin(request, env, url);
+    if (request.method === 'POST' && p === '/trial') return trial(request, env);
+    if (request.method === 'POST' && p === '/report') return report(request, env);
     return json(404, { error: 'not found' });
   },
 };

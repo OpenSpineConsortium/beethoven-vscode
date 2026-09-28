@@ -4,7 +4,14 @@ compatibility_date = "2026-09-01"
 
 [vars]
 ALLOWED_DOMAINS = "wayne.edu"
-TRIAL_DAYS = "30"
+TRIAL_DAYS = "365"
+# the website the request and admin pages are served from: the only origin /request and /admin/* accept
+SITE_ORIGIN = "https://openspineconsortium.github.io"
+# where /trial sends a person who is not approved yet
+REQUEST_PAGE = "https://openspineconsortium.github.io/ashley/request.html"
+
+# secrets, never here: TRIAL_KEY_PKCS8_B64, TRIAL_KID, ADMIN_TOKEN, IP_SALT, GITHUB_TOKEN, GITHUB_REPO
+# (wrangler secret put, see README.md)
 
 # paste the ids that `wrangler kv namespace create` prints
 [[kv_namespaces]]
@@ -14,3 +21,8 @@ id = "REPLACE_WITH_TRIALS_ID"
 [[kv_namespaces]]
 binding = "REPORTS"
 id = "REPLACE_WITH_REPORTS_ID"
+
+# approved, pending and denied people, the revocation list and the audit lines
+[[kv_namespaces]]
+binding = "ACCESS"
+id = "REPLACE_WITH_ACCESS_ID"

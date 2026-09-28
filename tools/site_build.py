@@ -1,6 +1,8 @@
 """Build docs/site/: the public pages the Marketplace listing links to (homepage, support, privacy,
-license, third-party notices). index.html and support.html are hand-written; this copies the
-current LICENSE.txt and renders PRIVACY.md and THIRD_PARTY_NOTICES.md to HTML with pandoc.
+license, third-party notices, the access request page, the admin page). index.html, support.html,
+request.html, admin.html and services.json (the service addresses both pages and the extension read)
+are hand-written and left as they are; this copies the current LICENSE.txt and renders PRIVACY.md and
+THIRD_PARTY_NOTICES.md to HTML with pandoc.
 Publish the folder at https://openspineconsortium.github.io/ashley/ (copy into the site repository's
 ashley/ folder). Run: python tools/site_build.py
 """

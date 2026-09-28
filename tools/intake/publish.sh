@@ -1,8 +1,9 @@
 #!/bin/bash
-# Publish the current signed revocation list to the service (KV REPORTS, key "revoked").
+# Publish the maintainer's revocation list to the service. Every licence id in extension/media/revoked.txt
+# (written by ashley-license.mjs revoke, signed with the release key) is sent to POST /admin/revoke-lid; the
+# Worker re-signs the union of its own list and yours with the trial key, which every installation trusts.
+# The service address comes from docs/site/services.json (or the first argument); the admin token is read
+# from $ASHLEY_VENDOR_DIR/admin_token (default ~/.ashley-vendor), never from an argument.
 set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
-f="$here/../../extension/media/revoked.txt"
-[ -s "$f" ] || { echo "no revocation list at $f (nothing revoked yet)"; exit 0; }
-cd "$here" && wrangler kv key put --binding REPORTS revoked --path "$f"
-echo "published $(wc -c < "$f") bytes"
+exec node "$here/publish_revoked.mjs" "$@"
