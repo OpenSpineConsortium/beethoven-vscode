@@ -285,16 +285,21 @@ grid is last, because it happens inside the lab’s container.</p>
 </thead>
 <tbody>
 <tr>
-<td>1 License</td>
-<td>a field for your key, or a free-trial button</td>
-<td>paste the key your lead sent (copying it is enough), or start a
-trial: one per person, in your name, it ends by itself</td>
+<td>1 Sign in with Wayne State</td>
+<td>your browser opens the WSU sign-in</td>
+<td>sign in with AccessID@wayne.edu. Only AccessIDs the lab has approved
+continue; if yours is not, the next step sends you to the request
+page</td>
 </tr>
 <tr>
-<td>2 Sign in with Wayne State</td>
-<td>your browser opens the WSU sign-in</td>
-<td>sign in with AccessID@wayne.edu. Your license must name you; if your
-AccessID is not on the lab’s list either, ask your lead</td>
+<td>2 Access</td>
+<td>a spinner, then your key’s end date; or a button <em>Ask for
+access</em></td>
+<td>nothing, normally: Ashley asks the lab’s access service for a key in
+your name and keeps it. Not approved yet? <em>Ask for access</em> opens
+the lab’s page; when your lead approves you, run this step again. A key
+your lead sent can be pasted here too (a Full Edition key opens its own
+agreement)</td>
 </tr>
 <tr>
 <td>3 GitHub</td>
@@ -360,26 +365,37 @@ sees this sign-in</td>
 </tr>
 </tbody>
 </table>
-<p>The first time Ashley runs it shows the license agreement and the
-privacy statement in a signing dialog. You read the full text (scroll to
-its end), tick four statements that must be true, choose whether Ashley
-may send its maintainer error reports, type your name, and choose
-<strong>Accept and Continue</strong>. That click forms the agreement;
-nothing happens before it. Ashley keeps a record of what you accepted
-(the version, the text, what you ticked, your name, the time) in
-<code>~/.ashley-local</code>, where you can read, copy and print it, and
-<strong>Ashley: License</strong> opens the text again at any time. The
+<p>The first time Ashley runs it shows the Trial Edition license
+agreement and the privacy statement in a signing dialog. You read the
+full text (scroll to its end), tick four statements that must be true,
+choose whether Ashley may send its maintainer error reports, type your
+name, and choose <strong>Accept and Continue</strong>. That click forms
+the agreement; nothing happens before it. Ashley keeps a record of what
+you accepted (the version, the text, what you ticked, your name, the
+time) in <code>~/.ashley-local</code>, where you can read, copy and
+print it, and <strong>Ashley: License</strong> opens the text again at
+any time. The Trial Edition is free: nothing is paid, nothing converts
+to a paid license, and it can be withdrawn or ended with notice. The
 agreement sends disputes to Michigan courts after 60 days of written
-notice, with a class-action waiver and a jury waiver, and gives a 14-day
-refund on request for a paid key. An error report says which check
-failed and why, with names, paths and anything secret replaced; never
-your prompts, files, tokens or AccessID. Say no in the dialog, or later
-in Settings, and nothing is ever sent. <strong>Ashley: Error
-reports</strong> shows exactly what a report contains.</p>
+notice, with a class-action waiver and a jury waiver. If a paid Full
+Edition is offered later, registering its key shows its own agreement in
+the same dialog; nothing obliges you to buy it. An error report says
+which check failed and why, with names, paths and anything secret
+replaced; never your prompts, files, tokens or AccessID. Say no in the
+dialog, or later in Settings, and nothing is ever sent. <strong>Ashley:
+Error reports</strong> shows exactly what a report contains.</p>
 <p>Every step has a button next to it. <strong>Renew</strong> next to a
 token signs you in again and updates the grid copy in the same click;
 Ashley checks your tokens once a day and offers Renew when one stops
 working. <strong>Run again</strong> reruns any other step.</p>
+<p>The Ashley view (the Ashley icon in the activity bar) shows the same
+things as rows: your tokens under <em>Tokens on this laptop</em>,
+<em>Claude on this laptop</em>, <em>Claude on the grid</em>, and
+<em>Wayne State sign-in</em> when that is what is missing. When a row
+says <strong>missing</strong>, <strong>expired</strong> or <strong>not
+signed in</strong>, click it: the same sign-in the wizard runs for that
+step opens, and nothing else changes. The troubleshooter offers the same
+button next to a failing check.</p>
 <h3 id="your-first-worker-and-your-first-question">Your first worker and
 your first question</h3>
 <ol type="1">
@@ -870,14 +886,26 @@ sign-in and the pre-approved list</h3>
 Microsoft account through VS Code’s built-in Microsoft sign-in (work or
 school accounts only; only the account’s e-mail is used). The AccessID
 is the part before <code>@wayne.edu</code>, and the student continues
-only if it is on the lab’s pre-approved list:
-<code>extension/media/allowlist.json</code>, shipped in the VSIX
-(<code>python tools/allow.py add ab1234</code>, then rebuild), or a
-newer copy published at the URL in <code>ashley.allowlistUrl</code>.
-This is a gate for honest users; the enforceable boundary is still the
-grid (the student’s own account and the admin’s approval). The lab
-assumes the student’s Claude, GitHub and Hugging Face accounts were made
-with AccessID@wayne.edu.</p>
+only if it is on the lab’s approved list. That list lives in the access
+service (<code>tools/intake/worker.js</code>, a Cloudflare Worker):
+students ask for access on the website
+(<code>docs/site/request.html</code>: AccessID, name, e-mail, what for),
+the maintainer approves, denies, adds or removes people on
+<code>docs/site/admin.html</code> (admin token plus Cloudflare Access),
+and the extension fetches the current list from the service’s
+<code>/allowlist</code>, in the same shape as the bundled file. An
+approved person’s trial button asks the service’s <code>/trial</code>
+for a key, issued after the service has asked Microsoft who they are;
+removing a person puts every key issued to them on the signed revocation
+list the service serves at <code>/revoked</code>. The service’s
+addresses are in <code>docs/site/services.json</code>. The bundled list,
+<code>extension/media/allowlist.json</code>
+(<code>python tools/allow.py add ab1234</code>, then rebuild), is the
+fallback when no service is configured there or in
+<code>ashley.allowlistUrl</code>. This is a gate for honest users; the
+enforceable boundary is still the grid (the student’s own account and
+the admin’s approval). The lab assumes the student’s Claude, GitHub and
+Hugging Face accounts were made with AccessID@wayne.edu.</p>
 <h3 id="phone-access">Phone access</h3>
 <p>Claude Code’s Remote Control lets the Claude app (or claude.ai/code)
 drive a session running elsewhere, over outbound HTTPS only. On the grid
@@ -911,20 +939,28 @@ stored on Anthropic’s servers; confidential data stays out of phone
 sessions.</p>
 <h3 id="terms-and-the-signing-dialog">Terms and the signing dialog</h3>
 <p>Before anything else runs, <code>vscode/termsPanel.ts</code> shows
-the agreement and the privacy statement in a webview: the full text must
-be scrolled to its end, four un-prechecked statements (each names the
-button) must be ticked, a name typed, and “I agree” chosen. The record
-(<code>core/terms.ts</code>: terms version, SHA-256 of both texts, each
-statement’s wording and state, the typed name, the surface, the host and
-product versions, the locale, the install id, the time) is written to
+the Trial Edition agreement (<code>LICENSE.txt</code>) and the privacy
+statement in a webview: the full text must be scrolled to its end
+(opening it in an editor also counts), four un-prechecked statements
+(each names the button) must be ticked, a name typed, and “Accept and
+Continue” chosen. The record (<code>core/terms.ts</code>: terms version,
+edition, SHA-256 of both texts, each statement’s wording and state, the
+typed name, the surface, the host and product versions, the locale, the
+install id, the time) is written to
 <code>~/.ashley-local/terms.json</code> with the exact texts beside it,
 so the person can store and print them (Michigan UETA, MCL 450.838(3)),
 and the CLI (<code>ashley-cli terms</code>) and the MCP server refuse to
-work without it. A changed terms version asks again; dispute terms never
-take effect by posting. This is the assent pattern the click-through
-cases enforce (Berman, Chabolla, In re StockX): conspicuous notice, an
-affirmative act whose label names the agreement, and a record of what
-was shown.</p>
+work without it.</p>
+<p>The paid Full Edition has its own agreement
+(<code>LICENSE-FULL.txt</code>), shown by the same dialog when a key
+whose edition is not <code>trial</code> is registered
+(<code>licenseGate.set</code> calls <code>requireFullTerms</code>; the
+CLI refuses such a key until the record exists); its record is
+<code>terms-full.json</code>, and from that moment it governs. A changed
+terms version asks again; dispute terms never take effect by posting.
+This is the assent pattern the click-through cases enforce (Berman,
+Chabolla, In re StockX): conspicuous notice, an affirmative act whose
+label names the agreement, and a record of what was shown.</p>
 <h3 id="licenses">Licenses</h3>
 <p>Every copy of Ashley needs a license key for the person using it
 (<code>docs/LICENSING.md</code>). Keys are offline, Ed25519-signed
@@ -1398,10 +1434,11 @@ pre-filled</td>
 <td>paste it into the field; the check is the same</td>
 </tr>
 <tr>
-<td>A token shows <em>no longer accepted</em></td>
+<td>A token shows <em>no longer accepted</em>, or its row in the Ashley
+view says <em>expired</em></td>
 <td>it expired or was revoked</td>
-<td>press <strong>Renew</strong> next to it: one click in the browser,
-and the grid copy is updated too</td>
+<td>press <strong>Renew</strong> next to it, or click the row: one click
+in the browser, and the grid copy is updated too</td>
 </tr>
 <tr>
 <td><code>no matching MAC found. Their offer: hmac-sha1</code></td>

@@ -1,12 +1,42 @@
-# CHECKPOINT 2026-09-28 (updated 15:45 UTC, version 2.0.0: licensed, terms version 3 with the signing dialog, listing-ready) — Ashley, the grid + Claude Code extension
+# CHECKPOINT 2026-09-28 (updated 20:30 UTC, version 3.0.0: Trial and Full Edition agreements, access by approval, click-to-fix, sandbox kit) — Ashley, the grid + Claude Code extension
 
 ## CURRENT STATE: read this first
 
-Version 2.0.0 of the extension (`openspineconsortium.ashley`, installed in Greg's VS Code; 1.0.0
-uninstalled), grid scripts version 4 deployed to go2432; workers `default` (job 40487595) and `peer`
+Version 3.0.0 of the extension (`openspineconsortium.ashley`, installed in Greg's VS Code), grid
+scripts version 4 deployed to go2432 (plus `login_relay.sh`, a maintainer tool); workers `default` (job 40487595) and `peer`
 (40487596) on asx1, both reporting a valid license and "not signed in" for Claude (expected until
-Greg signs in). Release in `dist/release/2.0.0/` (VSIX, changelog, licence, privacy, notices,
+Greg signs in). Release in `dist/release/3.0.0/` (VSIX, changelog, both agreements, privacy, notices,
 SHA256SUMS signed by k1). Committed and pushed as this checkpoint says below.
+
+### What version 3 changed (pass 18)
+
+- **Two agreements, one dialog.** `LICENSE.txt` is the free **Trial Edition** agreement (terms
+  version 4): approved Wayne State AccessIDs only, no payment, converts to nothing, withdrawable, may
+  end with 30 days' notice. `LICENSE-FULL.txt` is the **Full Edition** agreement (fees, 14-day refund,
+  outage extension); the same signing dialog shows it when a non-trial key is registered
+  (`licenseGate.set` -> `requireFullTerms`; the CLI refuses a full key without `terms-full.json`).
+  `core/terms.ts` is edition-aware (`affirmationsFor`, `readTermsRecord(edition)`); the Full Edition
+  text names Gregory Schwing trading as OpenSpineConsortium until the LLC exists (then a version bump).
+- **Access by approval.** Wizard order: Wayne State sign-in first, then *Access*: Ashley asks the
+  lab's access service for a key in the person's name; not approved -> "Ask for access" opens the
+  request page. Service addresses come from `services.json` on the support site
+  (`ashley.servicesUrl`; settings win). Access service = `tools/intake/worker.js` (Cloudflare Worker,
+  12 tests): KV `ACCESS`, `/allowlist`, `/request`, `/trial` (approval required, 365-day keys),
+  `/admin/*` (bearer secret: list, approve, deny, add, remove -> revoke + re-sign the revocation list
+  with the trial key), `/revoked`; `docs/site/request.html` (students), `docs/site/admin.html`
+  (Greg, token in sessionStorage), `services.json`. Bundled `allowlist.json` (go2432 only) is the
+  fallback while no service is configured.
+- **Click-to-fix.** Tree rows for tokens (missing / expired: click to renew), Claude on this laptop,
+  Claude on the grid, Wayne State sign-in; commands `ashley.renewToken`, `ashley.claudeLocalSignIn`,
+  `ashley.wsuSignIn`; diagnostic nodes carry `fixCommand` and the troubleshooter shows the button.
+- **Sandbox kit** `tools/sandbox/` (Windows Sandbox, nothing but VS Code; `make_wsb.py`,
+  `bootstrap.ps1` with hash-checked installer, `enable_sandbox.ps1`, README). Not yet run: the
+  feature is not enabled on this machine (needs admin + restart).
+- **Marketplace:** `pricing: Free`, `docs/MARKETPLACE.md`, `tools/publish_marketplace.sh` (PAT via
+  `VSCE_PAT` from `~/.ashley-vendor/vsce.pat`). Publisher `openspineconsortium` not created yet.
+- **Grid sign-in from a phone:** `grid/login_relay.sh start|screen|send <file>|stop` runs
+  `claude auth login` in tmux inside the worker allocation (socket under /dev/shm); a session was
+  started on asx1 and is waiting for Greg's code.
 
 ### What version 2 changed (passes 13 to 17)
 
@@ -74,13 +104,23 @@ SHA256SUMS signed by k1). Committed and pushed as this checkpoint says below.
 | Suite | Result |
 |---|---|
 | Laptop unit tests | 49 pass, 7 skip on Windows (container-only) |
-| VS Code integration (`--label unit`) | 13 pass (terms, gate, license, graph rule) |
+| VS Code integration (`--label unit`) | 14 pass (terms both editions, gate, license, graph rule, commands) |
+| Access service (`node --test tools/intake/worker.test.mjs`) | 12 pass |
 | Packaged extension (`--label package`, unpacked release) | 4 pass (release-key check with a one-day trial key, revoked afterwards) |
 | Live troubleshooter (`--label live`) | pass; license nodes green on laptop and both workers |
 | Inside the lab container on asx1 (`tools/grid_tests.sh`) | 17 of 17 |
 | Release check + signed checksums | pass; signature by k1 verified |
 
 ### Open
+
+0. **Greg, in this order:** (a) send the grid sign-in code (open the link Claude printed, on the
+   phone; Authorize; paste the code here); (b) enable Windows Sandbox once as admin
+   (`tools\sandbox\enable_sandbox.ps1`), restart, `python tools/sandbox/make_wsb.py`, double-click
+   the `.wsb`, read `sandbox-report.txt`; (c) Cloudflare: `wrangler login`, KV namespaces, secrets,
+   `wrangler deploy` per `tools/intake/README.md`, then fill `docs/site/services.json`, add the
+   notice address to `support.html`, publish the site (pages are staged in
+   `openspineconsortium.github.io/ashley/`, not committed); (d) Marketplace publisher
+   `openspineconsortium` + PAT, then `bash tools/publish_marketplace.sh` (`docs/MARKETPLACE.md`).
 
 1. **Greg:** `Ashley: Sign in to Claude on the grid` (or `ssh -t wsu-grid ~/.ashley/bin/ashley claude
    login`), then `Ashley: Phone access` (asks him to answer Remote Control's consent in a terminal).

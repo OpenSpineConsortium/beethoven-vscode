@@ -9,7 +9,7 @@ $feature = 'Containers-DisposableClientVM'
 
 $me = [Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()
 if (-not $me.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-  Write-Output 'This needs an elevated PowerShell. Run this one line (it asks for consent, then does the rest):'
+  Write-Output 'This needs an elevated PowerShell. Open a PowerShell window (not cmd or Git Bash) and paste this one line; it asks for consent, then does the rest:'
   Write-Output ('  Start-Process powershell -Verb RunAs -ArgumentList ''-NoProfile -ExecutionPolicy Bypass -NoExit -File "{0}"''' -f $PSCommandPath)
   exit 1
 }

@@ -61,7 +61,8 @@ the report and printed; the script goes on to the next step so the report is alw
   AccessID and e-mail come back and the pre-approval check answers plainly.
 - **GitHub and Hugging Face.** The GitHub sign-in through VS Code, the Hugging Face token page
   and the clipboard pick-up. Check `Ashley: Manage stored tokens` afterwards: the tokens should
-  be in Windows Credential Manager and nowhere else.
+  be in VS Code's secret store (DPAPI-encrypted, inside VS Code's own state database) and nowhere
+  else: not in a file on the desktop, not in the sandbox's Credential Manager.
 - **The grid steps.** The SSH key, the SSH configuration block and the one login to the grid.
   Whether `ssh.exe` and `ssh-keygen` exist in the sandbox varies with the host's Windows image;
   the report says which. When they are absent the wizard must say so in plain words and say what

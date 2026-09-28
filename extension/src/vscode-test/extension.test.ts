@@ -142,6 +142,23 @@ suite('Ashley extension', () => {
   });
 
   test('a valid key is kept; the gate opens only once the Wayne State sign-in names the same person', async () => {
+    // the test keys are Full Edition keys (edition 'student'): they are kept only once the Full Edition
+    // agreement is on record, and the dialog that shows it cannot be clicked here
+    const ext = vscode.extensions.getExtension(EXT_ID)!;
+    const internal = (ext.exports as any)._internal;
+    const ask = gate().requireFullTerms;
+    gate().requireFullTerms = async () => false; // the person declined the Full Edition agreement
+    const declined = await gate().set(issue('ab1234'));
+    assert.equal(declined.ok, false);
+    assert.match(declined.detail, /Full Edition agreement/);
+    assert.equal(gate().key(), undefined, 'a declined Full Edition key is not stored');
+    gate().requireFullTerms = ask;
+    assert.equal(internal.terms.record('full'), undefined);
+    const full = await internal.terms.accept('off', 'Test Person', 'full');
+    assert.equal(full.edition, 'full');
+    assert.match(full.affirmations[0].label, /Full Edition License Agreement/);
+    assert.ok(require('node:fs').existsSync(require('node:path').join(process.env.ASHLEY_LICENSE_DIR!, 'terms-full.json')), 'the Full Edition record is on disk for the CLI');
+    assert.ok(internal.terms.record(), 'the Trial Edition record is untouched');
     const c = await gate().set(`Your key:\n${issue('ab1234')}\n`);
     assert.equal(c.status, 'valid', c.detail);
     assert.equal(gate().allowed('ashley.workerStop').ok, false, 'nobody signed in yet');
