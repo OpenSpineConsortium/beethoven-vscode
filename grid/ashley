@@ -47,6 +47,8 @@ cmd_install() {
   local root="" pass=()
   while [ $# -gt 0 ]; do case "$1" in --root) root="$2"; shift 2;; --partition|--qos) pass+=("$1" "$2"); shift 2;; *) shift;; esac; done
   mkdir -p "$ASHLEY_HOME"/{bin,log,accounts,workers,sessions} && chmod 700 "$ASHLEY_HOME" "$ASHLEY_HOME/accounts"
+  # scripts uploaded from a Windows checkout may carry CR line endings, which break bash and sbatch
+  for f in "$BIN"/ashley "$BIN"/*.sbatch "$BIN"/*.tpl "$BIN"/*.js "$BIN"/*.block; do [ -f "$f" ] && sed -i 's/\r$//' "$f"; done
   chmod +x "$BIN"/ashley "$BIN"/*.sbatch 2>/dev/null
   load_cfg
   [ -n "$root" ] && set_cfg ROOT "$root"

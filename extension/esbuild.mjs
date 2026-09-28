@@ -2,7 +2,7 @@
 // Everything the extension needs at run time ends up under dist/, so the .vsix
 // carries no node_modules ("vsce package --no-dependencies").
 import * as esbuild from 'esbuild';
-import { readdirSync, statSync, mkdirSync, cpSync, existsSync } from 'node:fs';
+import { readdirSync, statSync, mkdirSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const watch = process.argv.includes('--watch');
@@ -48,10 +48,17 @@ if (tests) {
   builds.push({ ...common, entryPoints: integ, outdir: 'dist-test/vscode', external: ['vscode', 'mocha'], outbase: 'src' });
 }
 
-// The grid-side scripts ship inside the extension so the wizard can upload them.
+// The grid-side scripts ship inside the extension so the wizard can upload them. They are
+// copied with LF line endings whatever the checkout did: CR breaks bash and sbatch on the grid.
 mkdirSync('dist/grid', { recursive: true });
 const gridSrc = join('..', 'grid');
-if (existsSync(gridSrc)) cpSync(gridSrc, 'dist/grid', { recursive: true });
+if (existsSync(gridSrc)) {
+  for (const f of readdirSync(gridSrc)) {
+    const src = join(gridSrc, f);
+    if (!statSync(src).isFile()) continue;
+    writeFileSync(join('dist/grid', f), readFileSync(src, 'utf8').replace(/\r\n/g, '\n'));
+  }
+}
 
 for (const cfg of builds) {
   if (watch) {
