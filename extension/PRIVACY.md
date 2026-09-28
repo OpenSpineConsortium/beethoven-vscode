@@ -38,6 +38,12 @@ session transcript is stored on Anthropic's servers), GitHub, Hugging Face, Micr
 institutional sign-in), and your institution's grid. Those parties' privacy terms apply to that data,
 not this statement.
 
+**Address lookups.** About once an hour Ashley reads `services.json` from the Ashley support site
+(GitHub Pages), and about once a day the signed list of withdrawn keys and the list of approved
+AccessIDs from the lab's access service. These requests carry nothing about you beyond what any
+web request carries (your network address); the files hold addresses and lists only, and Ashley
+makes none of these requests before you have accepted the agreement.
+
 ## What may go to Licensor
 
 **Error reports, only if you allow them.** When one of Ashley's own checks fails or is repaired, and
