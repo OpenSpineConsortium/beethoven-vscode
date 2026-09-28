@@ -76,6 +76,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<{ _int
   reg('ashley.openManual', () => commandOpenManual(context));
   reg('ashley.openTerminal', () => commandOpenTerminal());
   reg('ashley.reset', () => commandReset(context));
+  reg('ashley.access', () => commandAccess(context, grid()));
   reg('ashley.refresh', () => tree.refresh());
 
   const s = store.settings();
@@ -456,6 +457,45 @@ async function commandReset(context: vscode.ExtensionContext): Promise<void> {
   output.appendLine(`reset: ${done.join('; ')}`);
   const reload = await vscode.window.showInformationMessage(`Reset done: ${done.join('; ')}. Reload the window to see Ashley as a new student would.`, 'Reload window');
   if (reload) void vscode.commands.executeCommand('workbench.action.reloadWindow');
+}
+
+async function commandAccess(context: vscode.ExtensionContext, grid: GridApi): Promise<void> {
+  const who = await grid.accessWhoami();
+  if (!who) return void vscode.window.showWarningMessage('Ashley is not installed on the grid yet, or the grid did not answer.');
+  if (who.admin) {
+    for (;;) {
+      const rows = await grid.accessList();
+      const order = { pending: 0, approved: 1, denied: 2, removed: 3 } as Record<string, number>;
+      rows.sort((a, b) => (order[a.state] ?? 9) - (order[b.state] ?? 9) || a.user.localeCompare(b.user));
+      const items = rows.map((r) => ({ label: `${r.state === 'pending' ? '$(bell) ' : r.state === 'approved' ? '$(pass) ' : '$(circle-slash) '}${r.user}`, description: r.state, detail: [r.note ? `note: ${r.note}` : '', r.requested ? `requested ${r.requested}` : '', r.message ? `message: ${r.message}` : ''].filter(Boolean).join('   '), user: r.user }));
+      items.push({ label: '$(add) Grant a user directly', description: 'no request needed', detail: 'setfacl on the shared library for an AccessID you type', user: '' });
+      const pick = await vscode.window.showQuickPick(items, { title: `Shared library access: ${rows.filter((r) => r.state === 'pending').length} pending, ${rows.filter((r) => r.state === 'approved').length} approved (lab admin ${who.user})`, matchOnDetail: true });
+      if (!pick) return;
+      let user = pick.user;
+      if (!user) {
+        user = (await vscode.window.showInputBox({ title: 'AccessID to grant', validateInput: (v) => (/^[a-z]{2}\d{4}$/.test(v) ? undefined : 'ab1234') })) ?? '';
+        if (!user) continue;
+        output.appendLine(await grid.access(['admin', 'approve', user]));
+        continue;
+      }
+      const action = await vscode.window.showQuickPick(['Approve', 'Deny', 'Deny with message', 'Remove access', 'Reset (may ask again)', 'Back'], { title: user });
+      if (!action || action === 'Back') continue;
+      let msg = '';
+      if (action === 'Deny with message' || action === 'Remove access') msg = (await vscode.window.showInputBox({ title: `Message to ${user}`, prompt: 'shown to the student in their status' })) ?? '';
+      const args = action === 'Approve' ? ['admin', 'approve', user] : action.startsWith('Deny') ? ['admin', 'deny', user, '--message', msg] : action === 'Remove access' ? ['admin', 'remove', user, '--message', msg] : ['admin', 'reset', user];
+      const out = await grid.access(args);
+      output.appendLine(out);
+      void vscode.window.showInformationMessage(out.split('\n').pop() ?? out);
+    }
+  }
+  // a student: the request is the wizard's last step; run it (it refuses until everything works)
+  const p = openPanel(context, 'Ashley: join the lab');
+  const env = store.wizardEnv(p);
+  const reports = await runWizard(env, { only: ['labAccess'], onStep: (rs, cur) => p.setSteps(rs, cur) });
+  const r = reports[0];
+  output.appendLine(format(reports));
+  p.finish(r ? `${r.title}: ${r.detail}` : 'nothing to do', r?.status === 'done');
+  tree.refresh();
 }
 
 async function commandOpenManual(context: vscode.ExtensionContext): Promise<void> {

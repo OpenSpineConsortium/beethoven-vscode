@@ -6,6 +6,7 @@ import * as path from 'node:path';
 import { SecretId, SERVICES, localEnvironment } from '../core/services';
 import { WizardEnv, WizardSettings, WizardUI } from '../core/wizard';
 import { installPublicKey } from '../core/sshInstall';
+import { isMcpRegistered, registerMcp } from './mcpRegister';
 
 const SECRET_PREFIX = 'ashley.';
 export const GITHUB_SCOPES = ['repo', 'workflow', 'read:org', 'gist'];
@@ -101,6 +102,16 @@ export class AshleyStore {
         await this.hydrateEnvironment();
       },
       signInGitHub: () => this.signInGitHub(),
+      extraRequirements: async () => {
+        const m: string[] = [];
+        if (!vscode.extensions.getExtension('anthropic.claude-code')) m.push('the Claude Code extension (signed in to Claude Pro or Max)');
+        if (!vscode.extensions.getExtension('ms-vscode-remote.remote-ssh')) m.push('the Remote-SSH extension');
+        if (!(await isMcpRegistered())) {
+          const r = await registerMcp(this.context.extensionPath, s.sshAlias, () => {});
+          if (!r.ok) m.push(`the Claude Code bridge (${r.detail})`);
+        }
+        return m;
+      },
       installKeyWithPassword: (pub) =>
         installPublicKey({
           host: s.loginHost,

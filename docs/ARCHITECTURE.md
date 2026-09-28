@@ -165,8 +165,30 @@ own home), so one copy serves the whole lab. `/rs/rs_grp_oschome/shared/ashley/`
   [--gpu] [--purpose "..."]`: a job builds the sandbox, installs the pinned Claude Code, merges the
   entry into `library.json` and makes the tree group-readable. Entries are pinned by image and
   Claude Code version, so every student runs the same bits; an update is a new entry.
-- Access: membership of the `oschome` group (the lab asks the HPC admins). Without it, the wizard
-  falls back to building in the student's own storage, so nothing blocks.
+- **Lab access is one folder, self-service for the lab admin, no HPC ticket.** The lab folder is
+  `/rs/rs_grp_oschome/shared` (the containers now, anything the lab adds later). Only its
+  `access/` sub-folder is open to everyone: `inbox/` (1733, a sticky drop-box: a student creates
+  their own request file and cannot list or touch others'), `status/` (711: each student reads
+  `status/<own id>.json`, nobody can list), `requests/` (700, the admin's archive). Approving runs
+  `setfacl` (CephFS honours POSIX ACLs and the admin owns the volume): `r-x` plus a default ACL on
+  `shared/`, and `r-X` recursively with default ACLs on everything under it except `access/`, so
+  folders the admin adds later are covered too. Deny, remove and reset take it away; the student
+  never joins the `oschome` unix group. The admin's own tree (`/rs/rs_grp_oschome/<admin>`, 2750)
+  stays private.
+- **The request is the wizard's last step (`labAccess`) and is refused until the environment works
+  the way the lab works:** every earlier step done; the Claude Code and Remote-SSH extensions and
+  the bridge present; and, checked on the grid by `ashley access requirements`, a Claude
+  subscription token that the API accepts (one `GET /v1/models` with the OAuth token: 200 = valid,
+  401 = invalid or revoked; `claude setup-token` only issues tokens to Pro/Max and above), and
+  GitHub and Hugging Face tokens that verify. The shared container is **not** a requirement: it is
+  what access gives. Until approval `ashley install` does not build a private copy (it marks
+  `awaiting_access`); `ashley install --build-own` is the escape hatch. After approval, the next
+  `worker start` or wizard run adopts the lab container in a second.
+- Integrity of the drop-box: the admin's ingest (run as the admin) accepts a request only if it is
+  a regular file, not a symlink, under 4 KB, and owned by the user it names; anything else is moved
+  to the archive as rejected. One request per student until the admin resets it. Token checks pass
+  tokens to `curl` on stdin (`-K -`), never as arguments, so they never appear in the login node's
+  process list.
 
 Because every worker of an account shares `~/.ashley`, a worker Claude can hand work to another
 worker with `ashley send --worker <name>` from its shell; the daemon tells each worker who it is,

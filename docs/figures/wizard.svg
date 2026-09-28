@@ -1,19 +1,20 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 300" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="13">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 390" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="13">
   <defs>
     <marker id="c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#555"/></marker>
     <style>
       .st{fill:#fff;stroke:#333;stroke-width:1.4;rx:8}
       .you{fill:#fff8e1;stroke:#b8860b;stroke-width:1.4;rx:8}
+      .lab{fill:#e8f5e9;stroke:#2e7d32;stroke-width:1.6;rx:8}
       .n{font-weight:600;fill:#222}.s{fill:#555;font-size:11.5px}
       .a{stroke:#555;stroke-width:1.3;fill:none;marker-end:url(#c)}
       .legend{fill:#555;font-size:12px}
     </style>
   </defs>
-  <text x="20" y="26" font-size="15" font-weight="600" fill="#222">The wizard: ten steps in one panel, each skipped when already done</text>
-  <text x="20" y="46" class="legend">white = automatic; gold = you do one thing (never in a terminal)</text>
+  <text x="20" y="26" font-size="15" font-weight="600" fill="#222">The wizard: eleven steps in one panel, each skipped when already done</text>
+  <text x="20" y="46" class="legend">white = automatic; gold = you do one thing (never in a terminal); green = the gate to the lab, last</text>
   <g transform="translate(20,70)">
     <rect class="you" x="0" y="0" width="140" height="70"/><text x="10" y="22" class="n">1 AccessID</text><text x="10" y="40" class="s">type ab1234</text>
-    <rect class="you" x="160" y="0" width="200" height="70"/><text x="170" y="22" class="n">2 Grid account, Authenticator</text><text x="170" y="40" class="s">VPN check, OnDemand 2FA Setup,</text><text x="170" y="55" class="s">scan one QR code</text>
+    <rect class="you" x="160" y="0" width="200" height="70"/><text x="170" y="22" class="n">2 Grid account, Authenticator</text><text x="170" y="40" class="s">campus Wi-Fi or VPN, OnDemand</text><text x="170" y="55" class="s">2FA Setup, scan one QR code</text>
     <rect class="st" x="380" y="0" width="130" height="70"/><text x="390" y="22" class="n">3 SSH key</text><text x="390" y="40" class="s">ed25519, no passphrase</text>
     <rect class="st" x="530" y="0" width="140" height="70"/><text x="540" y="22" class="n">4 SSH config</text><text x="540" y="40" class="s">jump host block</text>
     <rect class="you" x="690" y="0" width="150" height="70"/><text x="700" y="22" class="n">5 Log in once</text><text x="700" y="40" class="s">password + code,</text><text x="700" y="55" class="s">in the panel</text>
@@ -22,10 +23,18 @@
   <g transform="translate(20,170)">
     <rect class="you" x="0" y="0" width="140" height="70"/><text x="10" y="22" class="n">6 GitHub</text><text x="10" y="40" class="s">browser sign-in;</text><text x="10" y="55" class="s">token arrives itself</text>
     <rect class="you" x="160" y="0" width="150" height="70"/><text x="170" y="22" class="n">7 Hugging Face</text><text x="170" y="40" class="s">create, copy; the panel</text><text x="170" y="55" class="s">picks it up</text>
-    <rect class="you" x="330" y="0" width="170" height="70"/><text x="340" y="22" class="n">8 Claude token</text><text x="340" y="40" class="s">claude setup-token; approve;</text><text x="340" y="55" class="s">copy; the panel picks it up</text>
+    <rect class="you" x="330" y="0" width="170" height="70"/><text x="340" y="22" class="n">8 Claude token</text><text x="340" y="40" class="s">press Authorize on claude.ai;</text><text x="340" y="55" class="s">Ashley reads the token</text>
     <rect class="st" x="520" y="0" width="130" height="70"/><text x="530" y="22" class="n">9 API key</text><text x="530" y="40" class="s">optional overflow</text>
-    <rect class="st" x="670" y="0" width="170" height="70"/><text x="680" y="22" class="n">10 Grid install</text><text x="680" y="40" class="s">adopt the shared container,</text><text x="680" y="55" class="s">or build (5 to 15 min)</text>
+    <rect class="st" x="670" y="0" width="170" height="70"/><text x="680" y="22" class="n">10 Grid install</text><text x="680" y="40" class="s">scripts, tokens (600),</text><text x="680" y="55" class="s">bashrc block</text>
     <path class="a" d="M140 35 L160 35"/><path class="a" d="M310 35 L330 35"/><path class="a" d="M500 35 L520 35"/><path class="a" d="M650 35 L670 35"/>
   </g>
+  <g transform="translate(20,280)">
+    <rect class="lab" x="330" y="0" width="510" height="80"/>
+    <text x="345" y="24" class="n">11 Join the lab (last)</text>
+    <text x="345" y="44" class="s">allowed only when steps 1 to 10 are green and the Claude (Pro at the minimum), GitHub and</text>
+    <text x="345" y="60" class="s">Hugging Face tokens verify; one request; your lead approves in Ashley; the lab folder and its</text>
+    <text x="345" y="75" class="s">shared containers open to you (nothing to build)</text>
+  </g>
   <path class="a" d="M860 105 C 930 105, 930 205, 860 205"/>
+  <path class="a" d="M860 205 C 930 205, 930 320, 860 320"/>
 </svg>

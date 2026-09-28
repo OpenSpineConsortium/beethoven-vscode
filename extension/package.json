@@ -89,6 +89,12 @@
         "icon": "$(cloud-upload)"
       },
       {
+        "command": "ashley.access",
+        "title": "Lab access to the shared library (request or manage)",
+        "category": "Ashley",
+        "icon": "$(organization)"
+      },
+      {
         "command": "ashley.registerMcp",
         "title": "Connect the Claude Code extension to the grid (MCP)",
         "category": "Ashley",

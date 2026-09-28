@@ -1,4 +1,4 @@
-// The Ashley setup panel: a webview that shows the ten steps with their state, asks its
+// The Ashley setup panel: a webview that shows the wizard's steps with their state, asks its
 // questions inline (text, password, buttons), watches the clipboard for a token the student
 // just copied, and keeps the log one click away. It implements the wizard's UI contract, so
 // the step logic in core/wizard.ts does not know it is talking to a webview.
@@ -97,6 +97,71 @@ export class SetupPanel implements WizardUI, vscode.Disposable {
   progress(message: string): void {
     this.appendLog(message);
     this.post({ type: 'progress', message });
+  }
+  /**
+   * Shell integration lets the extension read what a command prints in the terminal, so the token
+   * that `claude setup-token` prints is captured without the student copying it. If the shell has
+   * no integration within a few seconds, falls back to the plain terminal (clipboard capture).
+   */
+  async runCapturing(title: string, command: string, args: string[], pattern: RegExp): Promise<{ code: number | null; match?: string }> {
+    const term = vscode.window.createTerminal({ name: title, isTransient: true });
+    term.show(false);
+    const si = await new Promise<vscode.TerminalShellIntegration | undefined>((resolve) => {
+      if (term.shellIntegration) return resolve(term.shellIntegration);
+      const d = vscode.window.onDidChangeTerminalShellIntegration((e) => {
+        if (e.terminal === term) {
+          d.dispose();
+          resolve(e.shellIntegration);
+        }
+      });
+      setTimeout(() => {
+        d.dispose();
+        resolve(undefined);
+      }, 6000);
+    });
+    if (!si) {
+      term.dispose();
+      this.post({ type: 'toast', message: 'This terminal has no shell integration; the token will be picked up from your clipboard instead.', level: 'info' });
+      const code = await this.runInteractive(title, command, args);
+      return { code };
+    }
+    this.post({ type: 'toast', message: `Follow the terminal "${title}" below (approve in the browser). Ashley reads the token when it is printed.`, level: 'info' });
+    const exec = si.executeCommand(command, args);
+    let text = '';
+    let match: string | undefined;
+    const done = new Promise<number | null>((resolve) => {
+      const d = vscode.window.onDidEndTerminalShellExecution((e) => {
+        if (e.execution === exec) {
+          d.dispose();
+          resolve(e.exitCode ?? null);
+        }
+      });
+      setTimeout(() => {
+        d.dispose();
+        resolve(null);
+      }, 15 * 60_000);
+    });
+    (async () => {
+      try {
+        for await (const chunk of exec.read()) {
+          text += chunk.replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, '');
+          const m = pattern.exec(text);
+          if (m && !match) {
+            match = m[0];
+            this.post({ type: 'toast', message: 'Token captured from the terminal.', level: 'info' });
+          }
+        }
+      } catch {
+        /* stream closed */
+      }
+    })();
+    const code = await done;
+    if (!match) {
+      const m = pattern.exec(text);
+      if (m) match = m[0];
+    }
+    if (match) setTimeout(() => term.dispose(), 2000);
+    return { code, match };
   }
   async askToken(prompt: string, opts: TokenAskOptions): Promise<string | undefined> {
     this.startClipboard(opts.pattern);
@@ -230,7 +295,7 @@ export class SetupPanel implements WizardUI, vscode.Disposable {
   .finish.ok { display: block; background: rgba(46,125,50,.15); border: 1px solid #2e7d32; }
   .finish.bad { display: block; background: rgba(183,28,28,.12); border: 1px solid #b71c1c; }
 </style></head><body><div class="wrap">
-<header><h1>Ashley setup</h1><span class="sub">Ten steps. Finished ones are skipped; rerun any time.</span></header>
+<header><h1>Ashley setup</h1><span class="sub">${STEPS.length} steps. Finished ones are skipped; rerun any time.</span></header>
 <div class="bar" id="bar"></div>
 <div class="grid">
   <ol class="steps" id="steps"></ol>

@@ -66,6 +66,12 @@ export interface WizardUI {
   askToken?(prompt: string, opts: TokenAskOptions): Promise<string | undefined>;
   /** A menu of buttons; resolves with the index, or undefined on cancel. Falls back to confirm() pairs. */
   choose?(message: string, buttons: string[]): Promise<number | undefined>;
+  /**
+   * Run an interactive command in a terminal AND read its output (VS Code shell integration), so a
+   * value it prints (a token) can be captured without the student copying it. Resolves with the exit
+   * code and the first match of `pattern` in the output, if any. Falls back to runInteractive().
+   */
+  runCapturing?(title: string, command: string, args: string[], pattern: RegExp): Promise<{ code: number | null; match?: string }>;
 }
 
 async function choose(ui: WizardUI, message: string, buttons: string[]): Promise<number | undefined> {
@@ -105,6 +111,8 @@ export interface WizardEnv {
   onTokensChanged?(): Promise<void>;
   /** Sign in to GitHub through the host (VS Code's GitHub authentication). Returns the OAuth token. */
   signInGitHub?(): Promise<{ token: string; login?: string } | undefined>;
+  /** Host-specific requirements for joining the lab (VS Code: the Claude Code and Remote-SSH extensions, the bridge). */
+  extraRequirements?(): Promise<string[]>;
   /** Install the public key with a password + code typed in the UI (ssh2). */
   installKeyWithPassword?(pub: string): Promise<{ ok: boolean; detail: string; authFailure?: boolean }>;
 }
@@ -175,7 +183,7 @@ export const stepAccessId: WizardStep = {
 export const stepTwoFactor: WizardStep = {
   id: 'gridTwoFactor',
   title: 'Grid account and Authenticator',
-  blurb: 'A grid account, and Google Authenticator set up once on OnDemand (needs the WSU VPN).',
+  blurb: 'A grid account, and Google Authenticator set up once on OnDemand (campus Wi-Fi or the WSU VPN).',
   async check(env) {
     if (env.settings.twoFactorDone) return report(this.id, this.title, 'done', 'confirmed');
     const t = await testConnection(env.settings.sshAlias);
@@ -195,7 +203,7 @@ export const stepTwoFactor: WizardStep = {
         const vpn = await onDemandReachable();
         const menu = [
           'Open the grid account request page',
-          vpn.ok ? 'Open OnDemand (VPN is on) for 2FA Setup' : 'Check the VPN again (OnDemand not reachable: connect the WSU VPN)',
+          vpn.ok ? 'Open OnDemand (campus network reached) for 2FA Setup' : 'Check again (OnDemand not reachable: join the WSU Wi-Fi on campus, or connect the WSU VPN)',
           'Open the C&IT guide with screenshots',
           'Google Authenticator for iPhone',
           'Google Authenticator for Android',
@@ -207,7 +215,7 @@ export const stepTwoFactor: WizardStep = {
           [
             'Three things only you can do, in order:',
             '1. A grid account: apply with your AccessID, naming your lead as sponsor (about two business days; hpc@wayne.edu, 313-577-4743).',
-            `2. The WSU VPN: OnDemand only answers through it. Right now: ${vpn.ok ? 'reachable, VPN is on' : 'NOT reachable, connect the VPN (GlobalProtect) first'}.`,
+            `2. The campus network: OnDemand answers only from the WSU Wi-Fi on campus or through the WSU VPN (GlobalProtect) from anywhere else. Right now: ${vpn.ok ? 'reachable' : 'NOT reachable: join the campus Wi-Fi or connect the VPN, then choose "Check again"'}.`,
             '3. On OnDemand: sign in with your AccessID and password, open Interactive Apps, choose 2FA Setup, press Launch, then Launch 2FA Setup; a QR code appears. In Google Authenticator press + and Scan a QR code. The app now shows a six-digit code that changes every 30 seconds.',
             'The grid asks for that code and your password exactly once more, in the next steps; after that this laptop is trusted and nothing prompts again.',
           ].join('\n'),
@@ -323,6 +331,7 @@ export async function validateToken(svc: ServiceConfig, token: string): Promise<
     if (svc.validate.header === 'Authorization') headers.Authorization = `Bearer ${token}`;
     else headers['X-Api-Key'] = token;
     if (svc.id === 'anthropicApiKey') headers['anthropic-version'] = '2023-06-01';
+    Object.assign(headers, svc.validate.extraHeaders ?? {});
     const ctl = new AbortController();
     const t = setTimeout(() => ctl.abort(), 15_000);
     const res = await fetch(svc.validate.url, { headers, signal: ctl.signal });
@@ -364,8 +373,26 @@ function tokenStep(svc: ServiceConfig, blurb: string): WizardStep {
         }
       }
       if (!token && svc.id === 'claudeOauth') {
-        const go = await env.ui.confirm(`${svc.instructions}\n\nRun "claude setup-token" now? A terminal opens, your browser asks you to approve, the terminal prints the token; copy it and the panel picks it up.`, 'Run it', 'I already have a token');
-        if (go) await env.ui.runInteractive('Ashley: claude setup-token', env.settings.claudeExecutable, ['setup-token']);
+        const go = await env.ui.confirm(
+          [
+            'Claude token for the grid: what happens.',
+            '1. A terminal opens and runs "claude setup-token" (a command of the Claude Code you already use).',
+            '2. Your browser opens claude.ai; sign in if asked and press Authorize. If the page shows a code, paste it into that terminal.',
+            '3. The terminal prints a long token that starts with sk-ant-oat. Ashley reads it from the terminal itself and stores it; if it cannot, copy the token and the panel picks it up.',
+            'The token lets the grid worker use YOUR subscription for a year; you can revoke it any time at claude.ai (Settings, Integrations).',
+          ].join('\n'),
+          'Run it',
+          'I already have a token',
+        );
+        if (go) {
+          if (env.ui.runCapturing) {
+            const r = await env.ui.runCapturing('Ashley: claude setup-token', env.settings.claudeExecutable, ['setup-token'], svc.pattern!);
+            if (r.match) {
+              token = r.match;
+              via = 'captured from the terminal';
+            }
+          } else await env.ui.runInteractive('Ashley: claude setup-token', env.settings.claudeExecutable, ['setup-token']);
+        }
       }
       if (!token) {
         const v = await askToken(env.ui, svc.prompt, { pattern: svc.pattern!, instructions: svc.instructions, url: svc.tokenUrl, optional: svc.optional });
@@ -412,7 +439,8 @@ export const stepGridInstall: WizardStep = {
       if ((await env.getSecret('claudeOauth')) && !gridAccounts.includes('default')) missing.push('Claude token');
       if ((await env.getSecret('anthropicApiKey')) && !gridAccounts.includes('apikey')) missing.push('Anthropic API key');
       if (missing.length) return report(this.id, this.title, 'todo', `grid is missing: ${missing.join(', ')}`);
-      if (j.ready) return report(this.id, this.title, 'done', `ready (Claude Code ${j.claude_version ?? '?'}, scripts v${j.version ?? '?'})`);
+      if (j.ready) return report(this.id, this.title, 'done', `ready (Claude Code ${j.claude_version ?? '?'}${j.source === 'shared' ? `, the lab's shared container ${j.container}` : ''}, scripts v${j.version ?? '?'})`);
+      if (j.awaiting_access) return report(this.id, this.title, 'done', `installed (scripts v${j.version ?? '?'}); the lab's container comes with lab access, the last step`);
       if (j.bootstrap_job) return report(this.id, this.title, 'todo', `bootstrap job ${j.bootstrap_job} is ${j.bootstrap_state ?? 'queued'}`);
       return report(this.id, this.title, 'todo', 'scripts present, container not built');
     } catch {
@@ -451,13 +479,79 @@ export const stepGridInstall: WizardStep = {
     if (r.code !== 0) return report(this.id, this.title, 'failed', `ashley install: ${(r.stderr || r.stdout).trim()}`);
     const jobId = parseSbatchId(r.stdout) ?? (/bootstrap job (\d+)/.exec(r.stdout)?.[1] ?? null);
     const already = /already ready/i.test(r.stdout);
+    const awaiting = /comes with lab access/i.test(r.stdout);
+    const adopted = /adopted shared container/i.test(r.stdout);
     const verify = await ssh(alias, ['~/.ashley/bin/ashley', 'verify-tokens'], { timeoutMs: 90_000 });
     const verified = verify.code === 0 ? verify.stdout.trim().split('\n').filter(Boolean).join('; ') : '';
-    return report(this.id, this.title, 'done', (already ? 'grid already ready' : jobId ? `bootstrap job ${jobId} submitted (5 to 15 minutes)` : r.stdout.trim().split('\n').pop() ?? 'submitted') + (verified ? `; tokens on the grid: ${verified}` : ''));
+    const head = already ? 'grid already ready' : adopted ? "adopted the lab's shared container (nothing to build)" : awaiting ? "installed; the lab's container comes with lab access, the last step" : jobId ? `bootstrap job ${jobId} submitted (5 to 15 minutes)` : r.stdout.trim().split('\n').pop() ?? 'submitted';
+    return report(this.id, this.title, 'done', head + (verified ? `; tokens on the grid: ${verified}` : ''));
   },
 };
 
-export const STEPS: WizardStep[] = [stepAccessId, stepTwoFactor, stepSshKey, stepSshConfig, stepInstallKey, stepGithub, stepHuggingFace, stepClaudeToken, stepAnthropicKey, stepGridInstall];
+
+/**
+ * The LAST step: ask the lab admin for access to the lab folder (shared containers and anything the
+ * lab adds). Refused until every other step is done and the tokens verify on the grid, so only
+ * working environments join; the shared container is what access gives, not a precondition.
+ */
+export const stepLabAccess: WizardStep = {
+  id: 'labAccess',
+  title: 'Join the lab (shared folder and containers)',
+  blurb: 'Last: one request to your lead once everything above works; approval opens the lab folder.',
+  async check(env) {
+    const r = await ssh(env.settings.sshAlias, ['~/.ashley/bin/ashley', 'access', 'whoami', '--json'], { timeoutMs: 60_000 });
+    if (r.code !== 0) return report(this.id, this.title, 'todo', 'the grid part is not installed yet');
+    let j: { admin?: boolean; granted?: boolean; state?: string; lab_admin?: string } = {};
+    try {
+      j = JSON.parse(r.stdout.trim().split('\n').pop() ?? '{}');
+    } catch {
+      return report(this.id, this.title, 'todo', 'no answer');
+    }
+    if (j.admin) return report(this.id, this.title, 'done', 'you are the lab admin');
+    if (j.granted) {
+      // access arrived since the last install: adopt the lab's container now (a second, nothing to build)
+      await ssh(env.settings.sshAlias, ['~/.ashley/bin/ashley', 'install'], { timeoutMs: 120_000 });
+      return report(this.id, this.title, 'done', "granted; you use the lab's shared container");
+    }
+    if (j.state === 'pending') return report(this.id, this.title, 'done', `requested; waiting for ${j.lab_admin ?? 'your lead'} to decide`);
+    if (j.state === 'denied' || j.state === 'removed') {
+      const s = await ssh(env.settings.sshAlias, ['~/.ashley/bin/ashley', 'access', 'status', '--json'], { timeoutMs: 60_000 });
+      const msg = /"message":"([^"]*)"/.exec(s.stdout)?.[1];
+      return report(this.id, this.title, 'failed', `${j.state}${msg ? `: ${msg}` : ''}; ask your lead to reset your request to ask again`);
+    }
+    return report(this.id, this.title, 'todo', 'not requested yet');
+  },
+  async run(env) {
+    // every earlier step must be done (the optional API key excepted)
+    const missing: string[] = [];
+    for (const s of STEPS) {
+      if (s.id === 'labAccess' || s.id === 'anthropicApiKey') continue;
+      const c = await s.check(env);
+      if (c.status !== 'done') missing.push(`${s.title}: ${c.detail}`);
+    }
+    if (env.extraRequirements) missing.push(...(await env.extraRequirements()));
+    if (!missing.length) {
+      const r = await ssh(env.settings.sshAlias, ['~/.ashley/bin/ashley', 'access', 'requirements', '--json'], { timeoutMs: 120_000 });
+      try {
+        const j = JSON.parse(r.stdout.trim().split('\n').pop() ?? '{}');
+        if (Array.isArray(j.missing)) missing.push(...j.missing);
+      } catch {
+        missing.push('the grid did not answer the requirements check');
+      }
+    }
+    if (missing.length) {
+      await env.ui.warn(`Lab access is requested last, once your environment works the way the lab works. Still missing: ${missing.join('; ')}`);
+      return report(this.id, this.title, 'skipped', `not yet: ${missing.join('; ')}`);
+    }
+    const note = await env.ui.ask('Everything checks out. One request to your lead (you can ask once). A note for them: your project and lead, or anything they should know.', { placeholder: 'e.g. pelvic width project, lead: Ashley' });
+    if (note === undefined) return report(this.id, this.title, 'skipped', 'cancelled');
+    const r = await ssh(env.settings.sshAlias, ['~/.ashley/bin/ashley', 'access', 'request', '--note', note], { timeoutMs: 120_000 });
+    if (r.code !== 0) return report(this.id, this.title, 'failed', (r.stderr || r.stdout).trim());
+    return report(this.id, this.title, 'done', 'requested; your lead approves it in Ashley, and your next worker uses the lab container');
+  },
+};
+
+export const STEPS: WizardStep[] = [stepAccessId, stepTwoFactor, stepSshKey, stepSshConfig, stepInstallKey, stepGithub, stepHuggingFace, stepClaudeToken, stepAnthropicKey, stepGridInstall, stepLabAccess];
 
 export interface RunOptions {
   force?: boolean;

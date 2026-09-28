@@ -1,6 +1,6 @@
 # The setup wizard
 
-Ten steps, each one skipped if it is already done, so you can rerun it any time.
+Eleven steps, each one skipped if it is already done, so you can rerun it any time.
 
 1. **AccessID** (your grid username, e.g. `ab1234`).
 2. **Grid account and Authenticator**: the panel checks whether you are on the WSU VPN, opens the account request page, OnDemand's 2FA Setup and the C&IT guide, and links the Authenticator app; you scan one QR code.
@@ -10,6 +10,7 @@ Ten steps, each one skipped if it is already done, so you can rerun it any time.
 6. **GitHub**: sign in in the browser; the token arrives by itself. 7. **Hugging Face token**: the token page opens pre-filled; copy the token and the panel picks it up.
 8. **Claude token for the grid**: `claude setup-token` opens the browser; you approve; copy the printed token and the panel picks it up.
 9. **Anthropic API key** (optional overflow).
-10. **Grid install**: uploads the scripts, writes the tokens to your grid home (mode 600), patches `~/.bashrc` for VS Code, and submits a job that builds the container (5 to 15 minutes).
+10. **Grid install**: uploads the scripts, writes the tokens to your grid home (mode 600), patches `~/.bashrc` for VS Code.
+11. **Join the lab**: once everything above works and your tokens verify, one request to your lead; approval gives you the lab folder and its shared containers (nothing to build).
 
 Nothing is typed on a command line where it would land in a history file.

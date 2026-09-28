@@ -15,7 +15,7 @@ export interface ServiceConfig {
   instructions: string;
   prompt: string;
   /** A cheap authenticated request that proves the token works (GET, bearer). */
-  validate?: { url: string; header: 'Authorization' | 'X-Api-Key'; expectField?: string };
+  validate?: { url: string; header: 'Authorization' | 'X-Api-Key'; expectField?: string; extraHeaders?: Record<string, string> };
   /** Injected into local integrated terminals? ANTHROPIC_API_KEY deliberately is not. */
   injectLocally: boolean;
   /** Pushed to the grid worker's private env file? */
@@ -62,10 +62,12 @@ export const SERVICES: ServiceConfig[] = [
     instructions:
       'This is how your Claude Pro/Max subscription is used on the grid without your password: the terminal command "claude setup-token" opens a browser, you approve, and it prints a long-lived token. Paste that token here. It is stored in your OS keychain and copied, with permissions 600, to your grid home only.',
     prompt: 'Paste the token printed by "claude setup-token" (starts with sk-ant-oat)',
+    // one small authenticated request: 200 = a valid subscription token, 401 = invalid or revoked
+    validate: { url: 'https://api.anthropic.com/v1/models', header: 'Authorization', expectField: 'data', extraHeaders: { 'anthropic-beta': 'oauth-2025-04-20', 'anthropic-version': '2023-06-01' } },
     injectLocally: false,
     pushToGrid: true,
     optional: false,
-    pattern: /^sk-ant-oat[A-Za-z0-9_\-]{20,}$/,
+    pattern: /sk-ant-oat[A-Za-z0-9_\-]{20,}/,
   },
   {
     id: 'anthropicApiKey',

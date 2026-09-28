@@ -106,6 +106,20 @@ export class AshleyTree implements vscode.TreeDataProvider<Item> {
     items.push(new Item('Claude accounts on the grid', 'root', { icon: 'key', description: accounts.length ? '' : 'none', children: accounts }));
     const jobs = (st.jobs ?? []).filter((j) => !j.name.startsWith('ashley_')).slice(0, 15).map((j) => new Item(`${j.jobId} ${j.name}`, 'job', { description: `${j.state} ${j.node} ${j.elapsed}/${j.timeLimit}`, icon: j.state === 'RUNNING' ? 'play' : 'clock' }));
     items.push(new Item('Other Slurm jobs', 'root', { icon: 'list-ordered', description: `${jobs.length}`, children: jobs }));
+    try {
+      const who = await this.grid().accessWhoami();
+      if (who) {
+        if (who.admin) {
+          const rows = await this.grid().accessList();
+          const pending = rows.filter((r) => r.state === 'pending').length;
+          items.push(new Item('Shared library access (you are the lab admin)', 'root', { description: `${pending} pending, ${rows.filter((r) => r.state === 'approved').length} approved`, icon: pending ? 'bell-dot' : 'organization', command: { command: 'ashley.access', title: 'Manage' } }));
+        } else {
+          items.push(new Item('Shared library access', 'root', { description: who.granted ? 'granted' : who.state === 'none' ? 'request it once everything else is set up' : who.state, icon: who.granted ? 'pass' : who.state === 'pending' ? 'clock' : 'organization', command: { command: 'ashley.access', title: 'Request' } }));
+        }
+      }
+    } catch {
+      /* grid did not answer */
+    }
     const secrets = await this.store.secretSummary();
     items.push(
       new Item('Tokens on this laptop', 'root', {

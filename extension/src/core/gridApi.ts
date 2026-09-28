@@ -65,6 +65,26 @@ export class GridApi {
     return { available: true, root: j.root, default: j.library?.default, containers: j.library?.containers ?? {} };
   }
 
+  async accessWhoami(): Promise<{ user: string; admin: boolean; lab_admin: string; granted: boolean; state: string } | null> {
+    const r = await this.ashley(['access', 'whoami', '--json'], { timeoutMs: 60_000 });
+    return r.code === 0 ? parseLastJson(r.stdout) : null;
+  }
+
+  async accessList(): Promise<Array<{ user: string; state: string; note?: string; message?: string; requested?: string; decided?: string }>> {
+    const r = await this.ashley(['access', 'admin', 'list', '--json'], { timeoutMs: 60_000 });
+    return (r.code === 0 && parseLastJson<{ requests: any[] }>(r.stdout)?.requests) || [];
+  }
+
+  async accessRequirements(): Promise<{ ok: boolean; missing: string[] }> {
+    const r = await this.ashley(['access', 'requirements', '--json'], { timeoutMs: 120_000 });
+    return parseLastJson<{ ok: boolean; missing: string[] }>(r.stdout) ?? { ok: false, missing: ['the grid did not answer'] };
+  }
+
+  async access(args: string[]): Promise<string> {
+    const r = await this.ashley(['access', ...args], { timeoutMs: 120_000 });
+    return (r.stdout + r.stderr).trim();
+  }
+
   async workers(): Promise<WorkerState[]> {
     const r = await this.ashley(['worker', 'list', '--json'], { timeoutMs: 60_000 });
     return (r.code === 0 && parseLastJson<{ workers: WorkerState[] }>(r.stdout)?.workers) || [];

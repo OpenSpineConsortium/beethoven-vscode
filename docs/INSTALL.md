@@ -92,8 +92,28 @@ ssh wsu-grid "ashley library publish --name claude-cuda --image docker://nvidia/
 
 Each publish is a job (5 to 15 minutes) that builds the sandbox, installs the pinned Claude Code
 (the image must be able to run Node 22: Debian 12 / Ubuntu 22.04 or newer), merges the entry into
-`library.json` and makes the tree group-readable. Students need the `oschome` group (request it from
-the HPC admins with the student's AccessID). Without it the wizard builds in the student's own space.
+`library.json` and makes the tree group-readable.
+
+Who may read it is yours to decide, inside Ashley, with no HPC ticket. Run once:
+
+```bash
+ssh wsu-grid "ashley access init"
+```
+
+It makes `shared/` closed except the drop-box `shared/access/`. A student reaches **Join the lab**,
+the wizard's last step, only when everything else works and their Claude (Pro at the minimum),
+GitHub and Hugging Face tokens verify; the step files one request with a note. **Ashley: Lab access
+to the shared library** shows you the queue (pending first) with Approve, Deny, Deny with message,
+Remove, Reset and a direct Grant; the Ashley view shows the pending count. Approve is a POSIX ACL
+over the whole lab folder, instantly effective and revocable; the student's next worker uses the lab
+container without building anything. The command line equivalents:
+
+```bash
+ssh wsu-grid "ashley access admin list"
+ssh wsu-grid "ashley access admin approve ab1234"
+ssh wsu-grid "ashley access admin deny ab1234 --message 'finish the onboarding first'"
+ssh wsu-grid "ashley access admin reset ab1234"      # lets them ask again
+```
 
 ## Updating
 

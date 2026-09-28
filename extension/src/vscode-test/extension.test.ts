@@ -7,7 +7,7 @@ import * as vscode from 'vscode';
 const EXT_ID = 'openspineconsortium.ashley-wsu';
 const COMMANDS = [
   'ashley.setup', 'ashley.doctor', 'ashley.connect', 'ashley.workerStart', 'ashley.workerStop', 'ashley.workerLogs', 'ashley.ask',
-  'ashley.gridStatus', 'ashley.gridBootstrap', 'ashley.registerMcp', 'ashley.claudeToken', 'ashley.manageTokens', 'ashley.openManual', 'ashley.openTerminal', 'ashley.reset', 'ashley.refresh',
+  'ashley.gridStatus', 'ashley.gridBootstrap', 'ashley.access', 'ashley.registerMcp', 'ashley.claudeToken', 'ashley.manageTokens', 'ashley.openManual', 'ashley.openTerminal', 'ashley.reset', 'ashley.refresh',
 ];
 
 suite('Ashley extension', () => {
@@ -36,7 +36,7 @@ suite('Ashley extension', () => {
   test('the wizard exports its steps in order', () => {
     const ext = vscode.extensions.getExtension(EXT_ID)!;
     const steps = (ext.exports as any)._internal.STEPS.map((s: any) => s.id);
-    assert.deepEqual(steps, ['accessId', 'gridTwoFactor', 'sshKey', 'sshConfig', 'installKey', 'github', 'huggingface', 'claudeOauth', 'anthropicApiKey', 'gridInstall']);
+    assert.deepEqual(steps, ['accessId', 'gridTwoFactor', 'sshKey', 'sshConfig', 'installKey', 'github', 'huggingface', 'claudeOauth', 'anthropicApiKey', 'gridInstall', 'labAccess']);
   });
 
   test('refresh and openManual run without throwing', async () => {

@@ -17,7 +17,7 @@ Ctrl/Cmd+Shift+P and type **Ashley: Set up my research environment**.
 
 ## The setup panel
 
-Everything happens in one panel: the ten steps on the left with their state, the current
+Everything happens in one panel: the eleven steps on the left with their state, the current
 question on the right, a progress bar on top, the log one click away. Finished steps are skipped,
 so the wizard can be rerun at any time. Nothing is typed into a terminal.
 
@@ -34,7 +34,12 @@ so the wizard can be rerun at any time. Nothing is typed into a terminal.
 | 7 Hugging Face | a button *Open the page in my browser*; the token page opens pre-filled (name `wsu-grid`, type Write) | press *Create token*, then *Copy*; the panel notices the copied token and offers *Use it* |
 | 8 Claude token | a terminal titled *claude setup-token* opens below; the browser asks you to approve | approve, copy the printed `sk-ant-oat...` token; the panel notices it and offers *Use it* |
 | 9 API key | a field | leave it empty and press *Skip* unless your lead gave you a key |
-| 10 Install on the grid | a progress line; then either "adopted shared container" (a second, when your lead has given you the `oschome` group) or "bootstrap job N submitted" | nothing, or wait 5 to 15 minutes; the Ashley view turns to *Grid ready* |
+| 10 Install on the grid | a progress line; "installed; the lab's container comes with lab access" (or "adopted the lab's shared container" once you have access) | nothing |
+| 11 Join the lab | a note field, only once every step above is green and your tokens verify | write your project and lead; one request goes to your lead, who approves it in Ashley. From then on your workers use the lab's shared container, nothing to build |
+
+The last step is refused until everything above works, on purpose: the lab admits working
+environments. **Ashley: Lab access to the shared library** shows the state of your request
+afterwards (pending, approved, or denied with your lead's message).
 
 If a token cannot be checked from your laptop's network (some campus Wi-Fi blocks it), the
 panel keeps it and the grid verifies it a moment later; a token the service actually rejects
@@ -45,8 +50,8 @@ OS keychain; on the grid `~/.ashley/`, a block in `~/.bashrc`, and a container i
 
 ## Your first worker and your first question
 
-1. **Ashley: Start a Claude worker on the grid**: name `default`, CPU node, 24 hours, and, when the
-   lab library is readable, which container (the lab default is right for most work). A Slurm
+1. **Ashley: Start a Claude worker on the grid** (after your lead approved step 11): name `default`,
+   CPU node, 24 hours, and which lab container (the default is right for most work). A Slurm
    job is submitted. When it starts, the Ashley view shows `Worker default  <node> idle`.
 2. **Ashley: Ask the grid Claude**: type *"Create a folder hello in my home with a README that
    says which node you are on and what Python version you have."* The answer streams into an

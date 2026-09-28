@@ -1,4 +1,36 @@
-# CHECKPOINT 2026-09-28 (updated 03:50 UTC, fifth pass: the Authenticator step) — Ashley, the WSU grid + Claude Code extension
+# CHECKPOINT 2026-09-28 (updated 04:05 UTC, sixth pass: access requests, token capture, campus Wi-Fi) — Ashley, the WSU grid + Claude Code extension
+
+## Sixth pass (Greg's message at 23:45 local)
+
+1. **Campus Wi-Fi**: the Authenticator step now says OnDemand answers from the WSU Wi-Fi on campus or
+   the VPN elsewhere; the reachability check is the same.
+2. **`claude setup-token` explained and captured.** It is the Claude Code command that mints a
+   one-year subscription token after the account holder presses Authorize on claude.ai; only Greg
+   can press it. The panel now explains the three moves in plain words and, when the terminal has
+   VS Code shell integration, runs the command through `TerminalShellIntegration.executeCommand()`
+   and reads its output (`execution.read()`), so the printed `sk-ant-oat...` token is captured and
+   stored without copying (`SetupPanel.runCapturing`, `WizardUI.runCapturing`, token pattern no
+   longer anchored). Falls back to the clipboard path. Untested with a real approval (needs Greg).
+3. **Shared-library access requests, managed on the grid, admin page in Ashley.** Findings: the
+   CephFS volume root is owned by go2432 and honours POSIX ACLs (`setfacl` works); Panasas homes do
+   not, and Greg's home is traversable only by group `advcomp` (8 members), so the request area lives
+   on the volume. `ashley access init` (run 03:53 UTC) set: `/rs/rs_grp_oschome` 2771 (traverse only),
+   `go2432/` 2750 (private), `shared/` 2771, `shared/ashley` 2770 (group + approved users),
+   `shared/access/{inbox 1733, status 755, requests 700}`. Commands: `access whoami|status|request
+   [--note]`, `access admin list|approve|grant|deny [--message]|remove [--message]|reset`. Approve =
+   `setfacl -m u:ID:--x` on `shared/` + `setfacl -R -m u:ID:r-X` and default ACLs on `shared/ashley`;
+   deny/remove/reset revoke. One request per student until reset. `ashley install` files the request
+   itself when the library is not readable, then builds the student's own container so nothing waits.
+   Tested as go2432: approve added `user:go2432:r-x` + default ACL, deny wrote the message, reset
+   removed both. Extension: command `Ashley: Lab access to the shared library` (admin: queue with
+   Approve / Deny / Deny with message / Remove / Reset / direct Grant; student: state or a one-time
+   request with a note), an "Shared library access" node in the tree (admin sees the pending count).
+   Not simulated: a real second user filing a request (needs another grid account).
+
+The fifth pass follows.
+
+---
+
 
 ## Fifth pass: 2FA setup inside the wizard (Greg's question at 23:40 local)
 
