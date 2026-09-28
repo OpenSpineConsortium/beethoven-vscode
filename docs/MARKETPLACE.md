@@ -10,8 +10,12 @@ the account requirement and the data access to be disclosed up front; both are).
    the listing (a personal account, not the university tenant, so the listing survives a change of
    affiliation).
 2. Create the publisher with id `openspineconsortium` (the id in `extension/package.json`); display
-   name "OpenSpineConsortium"; add the support site as its website. Verified-domain status takes
-   about six months and is optional.
+   name "OpenSpineConsortium"; add the support site as its website. Leave **Verified domain** empty
+   for now: verification is optional, the field takes the bare domain (`openspineconsortium.com`, no
+   path), and Microsoft only grants it once the publisher has had an extension listed for six months
+   and the domain registration is six months old; it then needs a DNS TXT record and a five-business-day
+   review (Publishing Extensions, "Verify a publisher"). Set a reminder for six months after the first
+   publish.
 3. Make a Personal Access Token at https://dev.azure.com (any organisation; User settings, Personal
    access tokens): organisation **All accessible organizations**, expiry up to a year, scope
    **Marketplace > Manage** only. Store it once, mode 600, and never put it on a command line:
@@ -19,6 +23,18 @@ the account requirement and the data access to be disclosed up front; both are).
    ```bash
    umask 077; cat > ~/.ashley-vendor/vsce.pat     # paste, Enter, Ctrl-D
    ```
+
+## Publishing without a token: the web upload
+
+Since 2026 a **new** Azure DevOps organization must be linked to an Azure subscription (a credit card
+and identity check), so the Personal Access Token in step 3 is not available until an Azure
+subscription exists. The Marketplace does not need it: on the publisher's management page
+(https://marketplace.visualstudio.com/manage/publishers/openspineconsortium) choose **+ New
+extension → Visual Studio Code**, drop `dist/release/<version>/ashley-<version>.vsix` on the upload
+box, and wait for the validation (a few minutes; the page e-mails the result). Updates go through the
+**…** menu → **Update** on the extension's row, with the next integer version's VSIX. Everything
+below (the script, the token) is the automation for later, once an Azure subscription exists; the
+uploaded file is the same checked, signed release either way.
 
 ## Every release
 
