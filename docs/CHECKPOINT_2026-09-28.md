@@ -12,7 +12,7 @@ Measured (Windows laptop, grid clock skew corrected, `docs/research/latency_*.cs
 | relay round trip (PING/PONG over the open session) | 20 ms | 18 to 23 ms |
 | relay: QUEUED ack back on the laptop | 37 ms | 35 to 43 ms |
 | **prompt received by the worker via the relay** | **193 ms** | 53 to 275 ms |
-| ssh straight to the compute node through the jump host | about 25 s | node sshd delay, measured earlier (26.8 s, 38 s) |
+| ssh straight to the compute node through the jump host | 81 s (two samples: 62 s, 101 s; earlier 27 s and 38 s) | the node's sshd, not our config; never on the prompt path |
 
 Decision: switched to the relay everywhere. Design: `ashley relay` (grid CLI, bash `read -t 0.25`
 loop) speaks a line protocol (SEND/QUEUED, RESULT/PENDING, PING/PONG, pushed EVENT/RESULT lines);
@@ -24,10 +24,13 @@ unnecessary; the remaining time to first token is Claude Code's ~5 s start-up (n
 `--input-format stream-json` process per session). Interactive ssh/Remote-SSH remain as before.
 
 Worker now: job 40486562 on asx1 (secp/secondary, 6 h from 02:53 UTC), 250 ms poll.
-GitHub: private repository https://github.com/GregorySchwing/ashley created with the `repo`-scoped
-token that lives in Greg's grid environment (the token never left the grid; the push goes through a
-git bundle uploaded to the grid). Move it to OpenSpineConsortium when Greg wants (his grid token is
-not an org member).
+GitHub: private repository https://github.com/GregorySchwing/ashley created and **pushed** (branch
+`main`) with the `repo`-scoped token that lives in Greg's grid environment; the token never left the
+grid: the laptop makes a `git bundle`, scp's it to `~/ashley.bundle`, the grid clones it into
+`~/ashley-repo` and pushes with an in-memory credential helper (`username=x-access-token`,
+`password=$GITHUB_TOKEN`; a bearer `http.extraheader` is refused by git-over-HTTPS). To push again:
+repeat those three steps (see the command in the session log or write `tools/push_via_grid.sh`).
+Move the repository to OpenSpineConsortium when Greg wants (his grid token is not an org member).
 
 The second pass follows.
 
