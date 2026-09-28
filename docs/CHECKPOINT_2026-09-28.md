@@ -10,6 +10,16 @@ SHA256SUMS signed by k1). Committed and pushed as this checkpoint says below.
 
 ### What version 3 changed (pass 18)
 
+- **Marketplace (pass 21, 2026-09-28 evening).** Publisher `openspineconsortium` created under the
+  personal Microsoft account gregoryamdg@gmail.com (verified-domain badge impossible before
+  2026-12-21: the domain is 3 months old and the rule is 6 months for both the domain and the
+  listing). A new Azure DevOps organization now requires an Azure subscription, so no PAT yet:
+  `ashley-3.0.0.vsix` was uploaded through the web management page; validation pending at the time
+  of writing (the listing answered 404 and the gallery API had no entry minutes after upload).
+  Publisher logo: the folder `OpenSpineConsortium-logo` on the Desktop (VS Code blue tile, white
+  Ashley mark; scratch source in the session scratchpad `logo/`).
+- The grid worker that hosted the phone sign-in relay ended with its wall time; the Claude sign-in on
+  the grid is still not done. Restart: `ashley worker start` then `login_relay.sh start`.
 - **Access service DEPLOYED (pass 20, 2026-09-28 ~19:25 UTC).** Cloudflare account: go2432@wayne.edu
   (account id 66f368d9f6e408c98d7f0547bcd94303; wrangler OAuth login on this laptop and in WSL, config
   `~/.config/.wrangler/config/default.toml`). Worker `ashley-service` at
