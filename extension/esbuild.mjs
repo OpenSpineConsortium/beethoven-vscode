@@ -29,9 +29,10 @@ const common = {
   platform: 'node',
   target: 'node20',
   format: 'cjs',
-  // releases ship minified code and no source maps (a map carries the whole source)
+  // releases ship readable (unminified) code and no source maps: the Marketplace's scanners have
+  // removed minified bundles before, and a map would carry the whole TypeScript source
   sourcemap: !production,
-  minify: production,
+  minify: false,
   legalComments: 'eof',
   logLevel: 'info',
   metafile: true,

@@ -8,7 +8,8 @@ import { resolveExecutable } from './vscode/ui';
 import { SetupPanel } from './vscode/panel';
 import { Troubleshooter } from './vscode/diagnosticsUi';
 import { LicenseGate, REFUSED, UNGATED } from './vscode/licenseGate';
-import { ensureTermsAccepted, termsRecord, TERMS_VERSION, TermsRecord } from './vscode/terms';
+import { ensureTermsAccepted, termsRecord, TERMS_VERSION, TermsRecord, openTerms, supportUrl } from './vscode/terms';
+import { AFFIRMATIONS, AGREE_BUTTON, writeTermsRecord, sha256 } from './core/terms';
 import { DiagSharer } from './vscode/diagShare';
 import { buildGraph, makeCtx } from './vscode/diagNodes';
 import { VsCodeUI as SetupPanelFreeUI } from './vscode/ui';
@@ -93,7 +94,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<{ _int
       vscode.commands.registerCommand(id, async (...a: any[]) => {
         // the terms first (a person-run command, never a background one), then the license gate;
         // reading the manual and the log needs neither
-        if (!TERMS_EXEMPT.has(id) && !(await ensureTermsAccepted(context, output))) return REFUSED;
+        if (!TERMS_EXEMPT.has(id) && !(await ensureTermsAccepted(context, output, () => sharer.installId()))) return REFUSED;
         const gate = license.allowed(id);
         if (!gate.ok) return license.refuse(id, gate.reason);
         try {
@@ -109,6 +110,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<{ _int
   troubleshooter = new Troubleshooter(context, store, output, (rep, gridVersion) => sharer.maybeSend(rep, gridVersion, output ? [] : []));
   context.subscriptions.push(troubleshooter);
   reg('ashley.license', () => license.manage());
+  reg('ashley.terms', () => openTerms(context, 'license'));
+  reg('ashley.support', () => vscode.env.openExternal(vscode.Uri.parse(supportUrl(context))));
   reg('ashley.errorReports', () => sharer.manage());
   reg('ashley.claudeSignIn', () => commandStepOnly(context, 'claudeGrid', 'Ashley: sign in to Claude on the grid'));
   reg('ashley.troubleshoot', () => troubleshooter!.run({ repair: true, quick: false, quiet: false }));
@@ -655,7 +658,19 @@ const _internal = {
   makeCtx: (s: AshleyStore, withNodeProbe: boolean, log: (l: string) => void) => makeCtx(s, s.wizardEnv(new SetupPanelFreeUI(output)), s.context.extensionPath, withNodeProbe, log),
   licenseGate: () => license,
   sharer: () => sharer,
-  terms: { record: () => termsRecord(context0!), accept: async (diagnostics: 'on' | 'off' = 'off') => context0!.globalState.update('ashley.terms', { version: TERMS_VERSION, acceptedAt: new Date().toISOString(), diagnostics } as TermsRecord) },
+  terms: {
+    record: () => termsRecord(context0!),
+    version: TERMS_VERSION,
+    /** what the dialog writes, for tests that cannot click it */
+    accept: async (diagnostics: 'on' | 'off' = 'off', signedName = 'Test Person') => {
+      const license = fs.readFileSync(path.join(context0!.extensionPath, 'LICENSE.txt'), 'utf8');
+      const privacy = fs.readFileSync(path.join(context0!.extensionPath, 'PRIVACY.md'), 'utf8');
+      const rec: TermsRecord = { v: 1, terms_version: TERMS_VERSION, license_sha256: sha256(license), privacy_sha256: sha256(privacy), accepted_at: new Date().toISOString(), surface: 'dialog', button_label: AGREE_BUTTON, affirmations: AFFIRMATIONS.map((a) => ({ ...a, checked: true })), signed_name: signedName, scrolled_to_end: true, diagnostics, product_version: context0!.extension.packageJSON.version, host: vscode.env.appName, host_version: vscode.version, platform: process.platform, locale: vscode.env.language, install_id: sharer.installId() };
+      writeTermsRecord(rec, { license, privacy });
+      await context0!.globalState.update('ashley.terms', rec);
+      return rec;
+    },
+  },
   REFUSED,
   UNGATED,
 };

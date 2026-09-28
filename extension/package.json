@@ -7,7 +7,7 @@
   "license": "SEE LICENSE IN LICENSE.txt",
   "repository": {
     "type": "git",
-    "url": "https://github.com/GregorySchwing/ashley"
+    "url": "https://openspineconsortium.github.io/ashley"
   },
   "icon": "media/icon.png",
   "engines": {
@@ -17,16 +17,14 @@
     "ui"
   ],
   "categories": [
-    "Other",
-    "Machine Learning",
-    "Education"
+    "Other"
   ],
   "keywords": [
-    "wayne state",
     "hpc",
     "slurm",
-    "claude code",
-    "remote-ssh"
+    "remote-ssh",
+    "claude-code",
+    "research"
   ],
   "activationEvents": [
     "onStartupFinished"
@@ -51,6 +49,18 @@
         "title": "Error reports",
         "category": "Ashley",
         "icon": "$(report)"
+      },
+      {
+        "command": "ashley.support",
+        "title": "Support page",
+        "category": "Ashley",
+        "icon": "$(question)"
+      },
+      {
+        "command": "ashley.terms",
+        "title": "Read the license terms",
+        "category": "Ashley",
+        "icon": "$(law)"
       },
       {
         "command": "ashley.doctor",
@@ -447,7 +457,7 @@
     "test:vscode": "node esbuild.mjs --tests && vscode-test --label unit",
     "test": "npm run test:unit && npm run test:vscode",
     "notices": "node ../tools/third_party_notices.mjs",
-    "package": "node esbuild.mjs --production && node ../tools/third_party_notices.mjs && vsce package --no-dependencies --out ../dist/ && node ../tools/release_check.mjs ../dist/ashley-wsu-2.0.0.vsix",
+    "package": "node esbuild.mjs --production && node ../tools/third_party_notices.mjs && vsce package --no-dependencies --out ../dist/ && node ../tools/release_check.mjs ../dist/ashley-2.0.0.vsix",
     "vscode:prepublish": "node esbuild.mjs --production"
   },
   "dependencies": {
@@ -469,7 +479,22 @@
   },
   "capabilities": {
     "untrustedWorkspaces": {
-      "supported": true
+      "supported": true,
+      "description": "Ashley reads no workspace files. It opens terminals that run ssh to your own grid account, installs its scripts there, starts Slurm jobs, and registers an MCP server with Claude Code; see What Ashley accesses in the README."
+    },
+    "virtualWorkspaces": {
+      "supported": "limited",
+      "description": "Grid features need a local terminal and the OS keychain; they do not run in a virtual workspace."
     }
+  },
+  "pricing": "Trial",
+  "homepage": "https://openspineconsortium.github.io/ashley/",
+  "bugs": {
+    "url": "https://openspineconsortium.github.io/ashley/support.html"
+  },
+  "qna": "https://openspineconsortium.github.io/ashley/support.html",
+  "galleryBanner": {
+    "color": "#1f3b2e",
+    "theme": "dark"
   }
 }

@@ -185,7 +185,9 @@ export class LicenseGate implements vscode.Disposable {
     const items: Array<vscode.QuickPickItem & { id: string }> = [
       { id: 'info', label: c.ok ? '$(pass) ' + describeLicense(c) : '$(error) ' + c.detail, description: c.payload?.name ?? '' },
       { id: 'enter', label: c.ok ? 'Replace the license key' : 'Enter a license key', description: 'paste the key you received (it starts with ASHLEY1.)' },
-      { id: 'terms', label: 'Read the license terms', description: 'LICENSE.txt' },
+      { id: 'terms', label: 'Read the license terms', description: 'LICENSE.txt (plain text, printable)' },
+      { id: 'privacy', label: 'Read the privacy statement', description: 'PRIVACY.md' },
+      { id: 'support', label: 'Support page and notice address', description: 'contact; where a notice of dispute goes (section 19)' },
     ];
     if (c.payload?.lid) items.push({ id: 'copy', label: 'Copy the license id', description: c.payload.lid });
     if (readLicenseKey()) items.push({ id: 'remove', label: 'Remove the license key from this computer' });
@@ -194,6 +196,8 @@ export class LicenseGate implements vscode.Disposable {
     if (pick.id === 'enter') await this.enter();
     else if (pick.id === 'terms') await vscode.commands.executeCommand('markdown.showPreview', vscode.Uri.file(path.join(this.context.extensionPath, 'LICENSE.txt'))).then(undefined, () => vscode.env.openExternal(vscode.Uri.file(path.join(this.context.extensionPath, 'LICENSE.txt'))));
     else if (pick.id === 'copy' && c.payload?.lid) await vscode.env.clipboard.writeText(c.payload.lid);
+    else if (pick.id === 'privacy') await vscode.commands.executeCommand('ashley.errorReports');
+    else if (pick.id === 'support') await vscode.commands.executeCommand('ashley.support');
     else if (pick.id === 'remove') {
       const sure = await vscode.window.showWarningMessage('Remove the Ashley license key from this computer? Ashley stops working until a key is entered again.', { modal: true }, 'Remove');
       if (sure) await this.remove();

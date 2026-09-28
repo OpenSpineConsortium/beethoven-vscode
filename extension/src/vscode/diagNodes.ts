@@ -10,6 +10,8 @@ import { WizardEnv, stepWsuSignIn, stepGithub, stepHuggingFace, stepSshKey, step
 import { GridRelay } from '../core/relay';
 import { AshleyStore, findClaudeExecutable } from './store';
 import { isMcpRegistered, registerMcp } from './mcpRegister';
+import { TERMS_VERSION } from '../core/terms';
+import { termsRecord } from './terms';
 
 interface GridDiagNode { id: string; ok: boolean; warn: boolean; skip: boolean; detail: string; repaired: string }
 interface GridDiag { version: string; host: string; user: string; nodes: GridDiagNode[] }
@@ -197,7 +199,19 @@ export function buildGraph(): DiagNode<DiagCtx>[] {
 
   // ---------------------------------------------------------------- the license (everything personal waits on it)
   add({
-    id: 'laptop.license', title: 'Ashley license', layer: 'account', dependsOn: ['vscode.version'],
+    id: 'laptop.terms', title: 'License terms accepted', layer: 'account', dependsOn: ['vscode.version'],
+    assumption: 'the current version of the agreement and privacy statement was accepted in the signing dialog, and the record with the texts is on this laptop',
+    manualFix: 'run any Ashley command: the signing dialog appears; Ashley: Read the license terms shows the text',
+    futureRisk: 'a new terms version (every installation is asked again); the record folder deleted by hand',
+    source: 'extension/src/core/terms.ts, extension/src/vscode/termsPanel.ts',
+    async check(ctx) {
+      const r = termsRecord(ctx.store.context);
+      if (!r) return fail(`the terms (version ${TERMS_VERSION}) have not been accepted on this laptop`);
+      return ok(`version ${r.terms_version} accepted ${r.accepted_at.slice(0, 10)} by ${r.signed_name}`);
+    },
+  });
+  add({
+    id: 'laptop.license', title: 'Ashley license', layer: 'account', dependsOn: ['laptop.terms'],
     assumption: 'a license key signed by a key this release trusts, in date (or in its grace period), not withdrawn',
     manualFix: 'Ashley: License, then paste the key your lead sent; a new key if it ended or was withdrawn',
     futureRisk: 'the signing key rotating (a new release trusts the new key); the revocation list address moving',

@@ -274,6 +274,19 @@ Students are told, in the terminal and in the manual, that while the phone is co
 transcript, tool activity included, is stored on Anthropic's servers; confidential data stays out of
 phone sessions.
 
+## Terms and the signing dialog
+
+Before anything else runs, `vscode/termsPanel.ts` shows the agreement and the privacy statement in
+a webview: the full text must be scrolled to its end, four un-prechecked statements (each names the
+button) must be ticked, a name typed, and "I agree" chosen. The record (`core/terms.ts`: terms
+version, SHA-256 of both texts, each statement's wording and state, the typed name, the surface, the
+host and product versions, the locale, the install id, the time) is written to
+`~/.ashley-local/terms.json` with the exact texts beside it, so the person can store and print them
+(Michigan UETA, MCL 450.838(3)), and the CLI (`ashley-cli terms`) and the MCP server refuse to work
+without it. A changed terms version asks again; dispute terms never take effect by posting. This is
+the assent pattern the click-through cases enforce (Berman, Chabolla, In re StockX): conspicuous
+notice, an affirmative act whose label names the agreement, and a record of what was shown.
+
 ## Licenses
 
 Every copy of Ashley needs a license key for the person using it (`docs/LICENSING.md`). Keys are

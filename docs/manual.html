@@ -360,13 +360,22 @@ sees this sign-in</td>
 </tr>
 </tbody>
 </table>
-<p>The first time Ashley runs it shows the license terms and asks one
-question: whether it may send its maintainer an error report when one of
-its checks fails. A report says which check failed and why, with names,
-paths and anything secret replaced; never your prompts, files, tokens or
-AccessID. Say no there, or later in Settings, and nothing is ever sent.
-<strong>Ashley: Error reports</strong> shows exactly what a report
-contains and every report kept on your laptop.</p>
+<p>The first time Ashley runs it shows the license agreement and the
+privacy statement in a signing dialog. You read the full text (scroll to
+its end), tick four statements that must be true, choose whether Ashley
+may send its maintainer error reports, type your name, and choose
+<strong>Accept and Continue</strong>. That click forms the agreement;
+nothing happens before it. Ashley keeps a record of what you accepted
+(the version, the text, what you ticked, your name, the time) in
+<code>~/.ashley-local</code>, where you can read, copy and print it, and
+<strong>Ashley: License</strong> opens the text again at any time. The
+agreement sends disputes to Michigan courts after 60 days of written
+notice, with a class-action waiver and a jury waiver, and gives a 14-day
+refund on request for a paid key. An error report says which check
+failed and why, with names, paths and anything secret replaced; never
+your prompts, files, tokens or AccessID. Say no in the dialog, or later
+in Settings, and nothing is ever sent. <strong>Ashley: Error
+reports</strong> shows exactly what a report contains.</p>
 <p>Every step has a button next to it. <strong>Renew</strong> next to a
 token signs you in again and updates the grid copy in the same click;
 Ashley checks your tokens once a day and offers Renew when one stops
@@ -900,6 +909,22 @@ inside the daemon.</p>
 phone is connected the session transcript, tool activity included, is
 stored on Anthropic’s servers; confidential data stays out of phone
 sessions.</p>
+<h3 id="terms-and-the-signing-dialog">Terms and the signing dialog</h3>
+<p>Before anything else runs, <code>vscode/termsPanel.ts</code> shows
+the agreement and the privacy statement in a webview: the full text must
+be scrolled to its end, four un-prechecked statements (each names the
+button) must be ticked, a name typed, and “I agree” chosen. The record
+(<code>core/terms.ts</code>: terms version, SHA-256 of both texts, each
+statement’s wording and state, the typed name, the surface, the host and
+product versions, the locale, the install id, the time) is written to
+<code>~/.ashley-local/terms.json</code> with the exact texts beside it,
+so the person can store and print them (Michigan UETA, MCL 450.838(3)),
+and the CLI (<code>ashley-cli terms</code>) and the MCP server refuse to
+work without it. A changed terms version asks again; dispute terms never
+take effect by posting. This is the assent pattern the click-through
+cases enforce (Berman, Chabolla, In re StockX): conspicuous notice, an
+affirmative act whose label names the agreement, and a record of what
+was shown.</p>
 <h3 id="licenses">Licenses</h3>
 <p>Every copy of Ashley needs a license key for the person using it
 (<code>docs/LICENSING.md</code>). Keys are offline, Ed25519-signed

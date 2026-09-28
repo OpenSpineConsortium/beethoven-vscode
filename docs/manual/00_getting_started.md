@@ -49,11 +49,16 @@ sign-in on the grid is last, because it happens inside the lab's container.
 | 11 Join the lab | a note field, only when everything above is green | a sentence for your lead (project, lead). One request; your lead approves it in Ashley, and from then on you read the lab folder and your workers use the lab's Claude container |
 | 12 Sign in to Claude on the grid | a terminal on the grid | Claude Code signs you in inside your own grid account: click the link it prints, sign in with the same Claude account, press Authorize, paste the code back. Once a month or so; Ashley says when. Ashley never sees this sign-in |
 
-The first time Ashley runs it shows the license terms and asks one question: whether it may send
-its maintainer an error report when one of its checks fails. A report says which check failed and
-why, with names, paths and anything secret replaced; never your prompts, files, tokens or AccessID.
-Say no there, or later in Settings, and nothing is ever sent. **Ashley: Error reports** shows exactly
-what a report contains and every report kept on your laptop.
+The first time Ashley runs it shows the license agreement and the privacy statement in a signing
+dialog. You read the full text (scroll to its end), tick four statements that must be true, choose
+whether Ashley may send its maintainer error reports, type your name, and choose **Accept and
+Continue**. That click forms the agreement; nothing happens before it. Ashley keeps a record of what you accepted
+(the version, the text, what you ticked, your name, the time) in `~/.ashley-local`, where you can
+read, copy and print it, and **Ashley: License** opens the text again at any time. The agreement sends
+disputes to Michigan courts after 60 days of written notice, with a class-action waiver and a jury
+waiver, and gives a 14-day refund on request for a paid key. An error report says which check failed and why, with names, paths and anything secret
+replaced; never your prompts, files, tokens or AccessID. Say no in the dialog, or later in Settings,
+and nothing is ever sent. **Ashley: Error reports** shows exactly what a report contains.
 
 Every step has a button next to it. **Renew** next to a token signs you in again and updates the
 grid copy in the same click; Ashley checks your tokens once a day and offers Renew when one stops

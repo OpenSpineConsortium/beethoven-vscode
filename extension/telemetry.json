@@ -1,0 +1,46 @@
+{
+ "ashley": {
+  "error_report": {
+   "description": "Sent only when an Ashley check fails or is repaired, only if ashley.diagnostics.share is on AND VS Code telemetry is enabled AND ashley.diagnostics.endpoint is configured; at most one per distinct failure per day; a copy is kept locally (Ashley: Error reports).",
+   "install_id": {
+    "classification": "EndUserPseudonymizedInformation",
+    "purpose": "FeatureInsight",
+    "comment": "a random UUID made on this laptop; not derived from the person or the machine"
+   },
+   "version": {
+    "classification": "SystemMetaData",
+    "purpose": "FeatureInsight"
+   },
+   "grid_scripts_version": {
+    "classification": "SystemMetaData",
+    "purpose": "FeatureInsight"
+   },
+   "vscode": {
+    "classification": "SystemMetaData",
+    "purpose": "FeatureInsight"
+   },
+   "os": {
+    "classification": "SystemMetaData",
+    "purpose": "FeatureInsight"
+   },
+   "arch": {
+    "classification": "SystemMetaData",
+    "purpose": "FeatureInsight"
+   },
+   "nodes": {
+    "classification": "SystemMetaData",
+    "purpose": "PerformanceAndHealth",
+    "comment": "check ids, verdicts, durations; detail strings scrubbed of e-mails, AccessIDs, paths, hostnames, addresses, job ids and token-shaped strings"
+   },
+   "errors": {
+    "classification": "CallstackOrException",
+    "purpose": "PerformanceAndHealth",
+    "comment": "the last ERROR lines of Ashley's own log, scrubbed the same way"
+   },
+   "signature": {
+    "classification": "SystemMetaData",
+    "purpose": "PerformanceAndHealth"
+   }
+  }
+ }
+}

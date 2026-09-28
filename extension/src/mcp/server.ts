@@ -17,6 +17,7 @@ import { PermissionMode } from '../core/protocol';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { checkLicense, readIdentity, unlicensedMessage } from '../core/license';
+import { readTermsRecord, TERMS_REFUSAL } from '../core/terms';
 
 const alias = process.env.ASHLEY_GRID || 'wsu-grid';
 const defaultWorker = process.env.ASHLEY_WORKER || 'default';
@@ -37,6 +38,7 @@ function bundledRevoked(): string {
   }
 }
 function licenseRefusal(): string | null {
+  if (!readTermsRecord()) return TERMS_REFUSAL;
   const c = checkLicense({ identity: readIdentity(), bundledRevoked: bundledRevoked() });
   if (!c.ok) return unlicensedMessage(c);
   if (c.identity === null) return 'Ashley is licensed on this computer, but the setup is not finished: run the Ashley setup in VS Code (Sign in with Wayne State).';

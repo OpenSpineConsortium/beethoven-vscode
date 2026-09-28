@@ -1,5 +1,5 @@
 // The packaged extension, as a student receives it: unpacked from the .vsix (tools/release.mjs),
-// minified, trusting only the release signing keys. Run: npx vscode-test --label package
+// readable but without source maps, trusting only the release signing keys. Run: npx vscode-test --label package
 import * as assert from 'node:assert/strict';
 import * as vscode from 'vscode';
 import * as crypto from 'node:crypto';
@@ -15,7 +15,7 @@ suite('Ashley as packaged', () => {
   const ext = () => vscode.extensions.getExtension(EXT_ID)!;
   const internal = () => (ext().exports as any)._internal;
 
-  test('activates from the minified bundle, with the notice and without source maps', async () => {
+  test('activates from the release bundle, with the notice and without source maps', async () => {
     assert.ok(ext(), 'installed');
     await ext().activate();
     assert.ok(ext().isActive);
@@ -23,7 +23,6 @@ suite('Ashley as packaged', () => {
     const js = fs.readFileSync(path.join(ext().extensionPath, 'dist', 'extension.js'), 'utf8');
     assert.match(js.slice(0, 300), /Licensed software/);
     assert.ok(!/sourceMappingURL/.test(js), 'no source map reference');
-    assert.ok(js.length / js.split('\n').length > 200, `minified (average line length ${Math.round(js.length / js.split('\n').length)})`);
     for (const f of ['LICENSE.txt', 'THIRD_PARTY_NOTICES.md', 'dist/grid/license.js', 'dist/grid/license_keys.json']) assert.ok(fs.existsSync(path.join(ext().extensionPath, f)), `${f} shipped`);
     assert.ok(!fs.existsSync(path.join(ext().extensionPath, 'test-fixtures')), 'no test fixtures');
     assert.ok(!fs.readdirSync(path.join(ext().extensionPath, 'dist')).some((f) => f.endsWith('.map')), 'no .map files');

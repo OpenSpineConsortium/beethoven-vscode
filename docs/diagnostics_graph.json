@@ -52,6 +52,7 @@
    "grid.accounts"
   ],
   "licensing": [
+   "laptop.terms",
    "laptop.license",
    "account.license-identity",
    "grid.license"
@@ -141,7 +142,7 @@
    "dependsOn": [
     "vscode.version"
    ],
-   "assumption": "anthropic.claude-code installed (the local Claude, setup-token, the bridge)",
+   "assumption": "anthropic.claude-code installed (the local Claude, its own sign-in, the bridge)",
    "manualFix": "install anthropic.claude-code from the Extensions view",
    "futureRisk": "the extension renamed or its commands changed",
    "source": "extension/src/extension.ts",
@@ -219,11 +220,25 @@
    "slow": false
   },
   {
+   "id": "laptop.terms",
+   "title": "License terms accepted",
+   "layer": "account",
+   "dependsOn": [
+    "vscode.version"
+   ],
+   "assumption": "the current version of the agreement and privacy statement was accepted in the signing dialog, and the record with the texts is on this laptop",
+   "manualFix": "run any Ashley command: the signing dialog appears; Ashley: Read the license terms shows the text",
+   "futureRisk": "a new terms version (every installation is asked again); the record folder deleted by hand",
+   "source": "extension/src/core/terms.ts, extension/src/vscode/termsPanel.ts",
+   "autoRepair": false,
+   "slow": false
+  },
+  {
    "id": "laptop.license",
    "title": "Ashley license",
    "layer": "account",
    "dependsOn": [
-    "vscode.version"
+    "laptop.terms"
    ],
    "assumption": "a license key signed by a key this release trusts, in date (or in its grace period), not withdrawn",
    "manualFix": "Ashley: License, then paste the key your lead sent; a new key if it ended or was withdrawn",

@@ -23,11 +23,16 @@ The format follows Keep a Changelog; versions follow Semantic Versioning.
   (no AccessID, e-mail, path, hostname, prompt, file, token or environment value), honouring VS
   Code's telemetry setting, kept on the laptop for inspection; nothing sent without a configured
   address.
-- Release builds are minified without source maps, carry the licence notice, third-party notices,
+- Release builds are readable, ship no source maps, carry the licence notice, third-party notices,
   a privacy statement and a release check that refuses maps, fixtures, the test signing key and
   copyleft dependencies.
 
 ### Added
+- A signing dialog for the license agreement (version 3) and privacy statement: full text, four
+  statements to tick, a typed name, "Accept and Continue"; the acceptance record is kept on the
+  laptop with the texts; `Ashley: Read the license terms`, `Ashley: Support page`; `ashley-cli terms`
+  for the terminal. Disputes go to Michigan courts after notice and cure (no arbitration); a 14-day
+  refund on request for paid keys.
 - `Ashley: License`, `Ashley: Error reports`, `Ashley: Sign in to Claude on the grid`.
 - Grid: `ashley claude login|status|remote-consent|forget`; the worker heartbeat reports the
   sign-in; diagnostics nodes for the license, the sign-in and error reports.

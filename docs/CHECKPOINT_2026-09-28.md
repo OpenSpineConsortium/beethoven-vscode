@@ -1,4 +1,4 @@
-# CHECKPOINT 2026-09-28 (updated 13:45 UTC, version 2.0.0: licensed, compliant credential path) — Ashley, the grid + Claude Code extension
+# CHECKPOINT 2026-09-28 (updated 15:45 UTC, version 2.0.0: licensed, terms version 3 with the signing dialog, listing-ready) — Ashley, the grid + Claude Code extension
 
 ## CURRENT STATE: read this first
 
@@ -8,7 +8,7 @@ uninstalled), grid scripts version 4 deployed to go2432; workers `default` (job 
 Greg signs in). Release in `dist/release/2.0.0/` (VSIX, changelog, licence, privacy, notices,
 SHA256SUMS signed by k1). Committed and pushed as this checkpoint says below.
 
-### What version 2 changed (passes 13 to 16)
+### What version 2 changed (passes 13 to 17)
 
 - **13: licensing.** Ed25519 keys (`grid/license.js`, one implementation for extension, CLI, MCP
   server, daemon); issuer `tools/license/ashley-license.mjs` (init, issue, list, revoke, verify,
@@ -39,21 +39,43 @@ SHA256SUMS signed by k1). Committed and pushed as this checkpoint says below.
   Greg's own API key, write-access trigger, draft PR on `claude/`, label `ai-generated`,
   `Assisted-by` trailer). Repo baseline: `ci.yml`, CODEOWNERS, PR template, dependabot,
   CONTRIBUTING, `docs/ENGINEERING.md`, SECURITY, PRIVACY.
-- **16: release.** `esbuild --production` (minified, no maps, notice banner, test key excluded),
+- **16: release.** `esbuild --production` (readable, no maps, notice banner, test key excluded),
   `tools/third_party_notices.mjs` (13 packages, all permissive), `tools/release_check.mjs` (zip
-  reader; refuses maps, fixtures, test key, copyleft, wrong licence field, unminified, any
-  setup-token string), `tools/release.mjs`. Extension renamed (APPM 10.12). Docs: LICENSE.txt v2.0
+  reader; refuses maps, fixtures, test key, copyleft, wrong licence field, run-time code
+  construction outside two known dependency uses, any setup-token string), `tools/release.mjs`. Extension renamed (APPM 10.12). Docs: LICENSE.txt v2.0
   (21 sections per the report's clause spec), PRIVACY.md, LICENSING.md, ANTHROPIC_REQUEST.md,
   manual (34 pp, 12-step table, new wizard figure via `tools/wizard_figure.py`), ARCHITECTURE,
   DIAGNOSTICS (45 nodes), README, CHANGELOG.
+- **17: terms version 3, the signing dialog, and the listing.** Second deep-research report
+  `docs/research/reports/Ashley liability shield and Marketplace.md` (Checklist A: 32 clause and
+  dialog items; Checklist B: 22 outside-the-software items). Implemented: `LICENSE.txt` v3, 23
+  sections; disputes go to Michigan courts after a signed 60-day notice-and-cure (condition
+  precedent), individual claims only (stand-alone severable class waiver), small claims where the
+  student lives, a separately headed jury waiver (s. 20), one year for contract and warranty claims
+  only, mutual reasonable fees, exclusive remedy, cap = greater of 12 months' fees or $100, 14-day
+  refund on request, outage extension instead of refunds, E-SIGN consent (22(f)), state riders (NJ,
+  CA 1670.8/CLRA/17500.6, TX, MA), age 18 with parent acceptance. **No arbitration** (the AAA cost
+  floor exceeds the MCPA class ceiling at this scale; `docs/legal/ARBITRATION_OPTION.md` keeps the
+  clause and the threshold; the opt-out command was removed). Dialog (`core/terms.ts`,
+  `vscode/termsPanel.ts`): scroll-to-end or "Open in editor" counts as reading, "Save a copy", four
+  un-prechecked boxes whose exact labels are recorded (agree-by-button, dispute terms, known risks,
+  age and own accounts), typed name, error-report choice, button **"Accept and Continue"**; the
+  record (`~/.ashley-local/terms.json` + the texts) is what the daemon, MCP server and CLI gate on;
+  `laptop.terms` diagnostic node ahead of `laptop.license` (46 nodes). Listing readiness:
+  `pricing: "Trial"`, homepage/bugs/qna on the consortium site, `telemetry.json`, untrusted-workspace
+  description, README "What Ashley accesses and does", absolute links; production bundles readable
+  (unminified) with no source maps, because the Marketplace's scanners have pulled minified
+  extensions. Site pages (`docs/site/`, `tools/site_build.py`) copied to
+  `openspineconsortium.github.io/ashley/` and staged there, not committed: the support page still
+  carries the notice-address placeholder.
 
 ### Tests (all run today)
 
 | Suite | Result |
 |---|---|
-| Laptop unit tests | 46 pass, 7 skip on Windows (container-only) |
+| Laptop unit tests | 49 pass, 7 skip on Windows (container-only) |
 | VS Code integration (`--label unit`) | 13 pass (terms, gate, license, graph rule) |
-| Packaged extension (`--label package`, unpacked release) | 3 pass, 1 pending (release-key trial, needs ASHLEY_RELEASE_TEST_LICENSE) |
+| Packaged extension (`--label package`, unpacked release) | 4 pass (release-key check with a one-day trial key, revoked afterwards) |
 | Live troubleshooter (`--label live`) | pass; license nodes green on laptop and both workers |
 | Inside the lab container on asx1 (`tools/grid_tests.sh`) | 17 of 17 |
 | Release check + signed checksums | pass; signature by k1 verified |
@@ -67,6 +89,17 @@ SHA256SUMS signed by k1). Committed and pushed as this checkpoint says below.
    `ashley.diagnostics.endpoint`, `ashley.licenseRevocationUrl` defaults before the student release.
 3. **Written answers before paid keys:** Anthropic (`docs/ANTHROPIC_REQUEST.md`), WSU OTC, counsel
    (licensor entity, Tenet clause). Commercial build/test off the Grid.
+3a. **Before the first paid key or the public listing (Checklist B of the second report):** the
+   notice address on `docs/site/support.html` (replace the placeholder, rebuild, publish the site:
+   the pages are staged in `openspineconsortium.github.io/ashley/`); an LLC as licensor (then
+   "Gregory Schwing, trading as OpenSpineConsortium" becomes the entity and `TERMS_VERSION` bumps);
+   E&O/cyber insurance; copyright registration of the bundle; Michigan 6 % sales tax on prewritten
+   software (or a merchant of record such as Paddle, which also gives the checkout disclosures);
+   EAR self-classification (5D992 mass-market note / ECCN NLR) for the SSH and signature code;
+   WSU conflict-of-interest disclosure; the workflows in branch `workflows-pending` need a GitHub
+   token with the `workflow` scope; deploy the intake Worker; then `vsce publish` under the
+   `openspineconsortium` publisher with the same first-run dialog (the Marketplace records no
+   acceptance; the dialog is the assent).
 4. GitHub plan: branch protection and CODEOWNERS enforcement on a private repo need Pro;
    `tools/repo_settings.sh` not written; apply by hand in Settings when the plan allows.
 5. Status calls still open one ssh each (relay routing planned); the claude-swap next-release plan

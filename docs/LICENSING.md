@@ -63,7 +63,9 @@ ASHLEY_PACKAGED_EXT=../dist/unpacked/extension npx vscode-test --label package  
 ```
 
 `tools/release_check.mjs` refuses a build that ships source maps, fixtures, the test signing key, a
-copyleft dependency, the wrong licence field, an unminified bundle, or the old credential capture.
+copyleft dependency, the wrong licence field, run-time code construction outside two known dependency
+uses, or the old credential capture. Bundles are readable on purpose (the Marketplace has removed
+minified extensions); source maps never ship.
 `dist/release/<version>/` holds the `.vsix`, the changelog, the licence, the privacy statement, the
 notices, `SHA256SUMS` and `SHA256SUMS.sig`; `ashley-license.mjs verify-release <dir>` checks them.
 Only the `.vsix` is committed (`dist/`), so students can install from the repository.
@@ -74,3 +76,28 @@ The licensor named in `LICENSE.txt` should be confirmed by counsel (a legal pers
 recommended before charging); the university's technology office should be told about the software;
 Anthropic should be asked in writing about the orchestration pattern (`docs/ANTHROPIC_REQUEST.md`).
 Paid keys come after those answers; trials can run before them.
+
+## Changing the terms
+
+`extension/LICENSE.txt` and `extension/PRIVACY.md` are the texts; `TERMS_VERSION` in
+`extension/src/core/terms.ts` is an integer that every substantive change bumps (no fractional
+versions). A bump makes every installation show the signing dialog again before the next command,
+and the old record stays on disk under `terms/<old version>/`. Keep every published version of both
+texts (the repository history does; `docs/site/license.txt` shows the current one). A change to the
+dispute section applies only to disputes that arise after the person accepts it; say so in the
+changelog. The affirmation wording in `AFFIRMATIONS` is part of the record: change it only with the
+texts, and never pre-tick a box. Arbitration is deliberately absent from version 3;
+`docs/legal/ARBITRATION_OPTION.md` holds the clause and the threshold for adopting it.
+
+## Before a public listing or a paid key
+
+At checkout (a merchant of record's page or your own): the legal name and street address of the
+seller and the refund policy before payment (California B&P 17538); the sentence "you are buying a
+license to use Ashley, not the software" beside the price (B&P 17500.6); a separate age statement
+with date and typed name; the trial sentence (free, no card, ends by itself) beside the word Trial.
+
+The support page must carry a real notice address (not a university or hospital one); the licensor
+should be the entity counsel confirms (an LLC was recommended); the university's technology office
+should have been told; Anthropic's written answer should be on file; the copyright registered; a
+technology errors-and-omissions policy in place. `docs/research/reports/` has the two reports behind
+this list.

@@ -1,51 +1,70 @@
-# Ashley: Wayne State Research Environment
+# Ashley: grid research environment
 
-Ashley sets up a medical student's laptop for computational research on the Wayne State
-HPC grid and keeps a Claude Code worker running there, on the student's own Claude
-subscription, reachable from the Claude Code extension in VS Code.
+**Licensed software. A free 30-day trial, one per person, then a license key from your lab. Ashley
+is licensed, not sold: you receive a license to use it under the [Ashley Software License
+Agreement](https://openspineconsortium.github.io/ashley/license.txt) and the [Privacy Statement](https://openspineconsortium.github.io/ashley/privacy.html), accepted in a signing dialog before
+first use.** Support: [the Ashley support page](https://openspineconsortium.github.io/ashley/support.html). Nothing renews by itself
+and no payment details are taken for a trial.
 
-**One wizard**: AccessID, an SSH key installed on the grid with a single password-and-code
-login, GitHub and Hugging Face tokens in the OS keychain, a Claude subscription token for
-the grid, and a Slurm job that builds the Claude Code container in your grid space.
+Ashley sets up a medical student's laptop for a university HPC grid and keeps a Claude Code worker
+running there, on the student's own Claude subscription, reachable from the Claude Code extension
+and from the Claude app on a phone. One wizard, twelve steps, a troubleshooter that names the
+broken piece and repairs what is safe.
 
-**Then**
+## What Ashley accesses and does
 
-- *Start a Claude worker*: a Slurm job (CPU or GPU) that runs Claude Code in a Singularity
-  container and answers prompts from your laptop. Conversations are named and resumable.
-  Close the laptop; the job keeps working until its wall time ends.
-- *Open my grid files on a compute node*: VS Code Remote-SSH through the login node to the
-  node where your job runs. Browse, edit, run, and click a PNG to see it.
-- *Ask the grid Claude*: a prompt box; the answer streams into an output channel.
-- *Connect the Claude Code extension to the grid*: registers an MCP server so the local
-  Claude gets `ashley_ask`, `ashley_status`, `ashley_worker_start`, `ashley_sbatch` and
-  friends, and can delegate heavy work to the grid worker.
+Read this before installing. It is the complete list.
 
-## What it never does
+- **Sign-ins through VS Code's own providers.** The Microsoft provider (your institutional account,
+  to check your license names you) and the GitHub provider (a token with the scopes repo, workflow,
+  read:org and gist). Ashley never sees passwords.
+- **Tokens.** Your GitHub token, your Hugging Face token (which you paste) and an optional Anthropic
+  Console key are stored in the operating system's credential store through VS Code SecretStorage
+  and, with your consent in each wizard step, copied over SSH into a file readable only by you in
+  your own grid account. Delete them any time with `Ashley: Manage stored tokens`.
+- **No Claude credential.** Ashley never reads, stores or copies a Claude credential. You sign in to
+  Claude Code yourself, on the laptop and once in a terminal on the grid; Ashley only reads Claude
+  Code's yes-or-no answer about whether it is signed in.
+- **Terminals and SSH.** Ashley writes a managed block in `~/.ssh/config`, creates an SSH key, opens
+  terminals that run `ssh` to your grid account, and installs its scripts there (`~/.ashley/bin`). It
+  starts Slurm jobs in your account: a persistent worker that runs the unmodified Claude Code binary
+  in the lab's container, and, if you turn it on, Claude Code's Remote Control for your phone.
+- **Remote-SSH.** Ashley sets `remote.SSH.connectTimeout` and `remote.SSH.remotePlatform` for the
+  node it connects you to.
+- **MCP.** Ashley registers an MCP server with the Claude Code extension (`claude mcp add-json`,
+  user scope) so the Claude on your laptop can hand work to the worker.
+- **License check.** Ashley verifies your license key offline against signing keys shipped with
+  it, and, if your lab configures `ashley.licenseRevocationUrl`, fetches a signed list of withdrawn
+  keys from that address once a day. A trial request sends the licence service (`ashley.licenseServiceUrl`)
+  the Microsoft sign-in token VS Code holds, so the service can ask Microsoft who you are.
+- **Error reports, opt-out.** When one of Ashley's checks fails or is repaired, and only if
+  `ashley.diagnostics.share` is on, VS Code's own telemetry is enabled and your lab has configured
+  `ashley.diagnostics.endpoint`, Ashley sends one report per distinct failure per day: versions,
+  operating system, which checks failed and their messages with e-mails, AccessIDs, paths,
+  hostnames, addresses, job numbers and anything token-shaped replaced. Never prompts, files, tokens
+  or your AccessID. Reports are kept 365 days. Every report is also kept on your laptop
+  (`Ashley: Error reports`). You choose in the signing dialog and can change it any time.
+- **No code is downloaded and run.** Ashley ships everything it runs; the grid scripts are inside the
+  package (`dist/grid`).
 
-- It never runs anything heavy on the login node (C&IT forbids it; VS Code itself connects
-  only to compute nodes).
-- It never puts a token on a command line, in a job log or in `sbatch --export`.
-- It never puts `ANTHROPIC_API_KEY` in your laptop terminals: that would switch the local
-  Claude Code from your subscription to pay-per-use without telling you.
-- It never shares an account: each student's worker uses that student's token, in that
-  student's grid home.
+## Quick start
 
-## Requirements
+1. Install, accept the terms in the signing dialog, enter your key or start a trial.
+2. `Ashley: Set up my research environment (wizard)`: twelve steps in a fixed order.
+3. `Ashley: Start a Claude worker on the grid`, then ask the Claude Code panel to "check the grid
+   status", or open `Ashley: Phone access` for your phone.
 
-VS Code 1.100+, the Remote-SSH extension (offered on first use), the Claude Code extension
-(for the MCP bridge), an OpenSSH client (built into Windows 10/11, macOS, Linux), a Wayne
-State grid account with Google Authenticator set up, and a Claude Pro or Max subscription.
+`Ashley: Open the manual` has the full manual (also HTML and PDF in the repository).
 
-## Commands
+## Outside dependencies
 
-All under the `Ashley:` prefix in the Command Palette, and in the Ashley view in the
-activity bar. `Ashley: Check everything (doctor)` explains anything that is not working.
+Ashley works only while your institution's grid, network and account, Anthropic's services and terms,
+Microsoft's VS Code and Marketplace, and GitHub's and Hugging Face's services allow what it does.
+Any of them can stop it working; section 7 of the agreement names each, and that is not refunded
+(a long outage extends a paid license). Ashley is a research and teaching tool, not a medical device.
 
-The manual, the pitch and the design notes are in the repository's `docs/` folder and
-under `Ashley: Open the manual`.
+## Licence
 
-## Privacy and licences
-
-Tokens live in the VS Code SecretStorage (Windows Credential Manager, macOS Keychain, or
-libsecret) and, for the grid, in files with mode 600 in your grid home. Nothing is sent
-anywhere but GitHub, Hugging Face, Anthropic and the Wayne State grid. Apache-2.0.
+Proprietary: [LICENSE.txt](https://openspineconsortium.github.io/ashley/license.txt). Bundled open-source packages keep their own licences:
+[THIRD_PARTY_NOTICES.md](https://openspineconsortium.github.io/ashley/third_party_notices.html). Ashley runs Claude Code; it is not an Anthropic
+product, and it is not provided by or on behalf of any university.

@@ -1,9 +1,12 @@
 # Ashley privacy statement
 
-Version 2.0, 2026-09-28. Part of the Ashley Software License Agreement (LICENSE.txt).
+Version 3, 2026-09-28. Part of the Ashley Software License Agreement (LICENSE.txt). You can save
+and print this text; it is also on the Ashley support page.
 
 Who collects: Gregory Schwing, trading as OpenSpineConsortium ("Licensor"), the maintainer of
-Ashley. Questions: the contact address stated where you obtained Ashley.
+Ashley. Questions and requests: the notice address on the Ashley support page (in VS Code:
+Ashley: Support page). Ashley is sold to individuals; it is not provided by or on behalf of any
+school, and Licensor is not acting for one.
 
 ## What stays on your laptop
 
@@ -12,6 +15,7 @@ Ashley. Questions: the contact address stated where you obtained Ashley.
 | Ashley settings (AccessID, hostnames, worker defaults) | VS Code settings | to reach your grid account | editing Settings, or Ashley: Reset |
 | Your GitHub and Hugging Face tokens, and an optional Anthropic Console key | your operating system's credential store (VS Code SecretStorage) | so your own tools can use them on your laptop and, copied, in your grid account | Ashley: Manage stored tokens; revoking the token at the service |
 | Your license key and the institutional identity you signed in with (AccessID, e-mail) | `~/.ashley-local` and VS Code's state | to check that the license names you | Ashley: License (remove the key); Ashley: Reset |
+| Your acceptance of the agreement: its version and text hashes, the statements you ticked with their wording, your typed name, the time, and the exact texts shown | `~/.ashley-local/terms.json` and `terms/<version>/`; VS Code's state | to prove the agreement and its terms, for you and for Licensor | it is yours to read, copy and print; Ashley: Reset removes it |
 | Copies of every error report Ashley prepared, sent or not | the extension's storage folder | so you can read exactly what left your laptop | Ashley: Error reports |
 | Troubleshooter reports and the Ashley log | the extension's storage folder; the Output panel | diagnosis | Ashley: Reset |
 
@@ -59,15 +63,19 @@ issue one trial per person. The service records your AccessID, your e-mail, the 
 and the time of the request.
 
 **License records.** When Licensor issues you a key, the record holds your name as given, AccessID,
-e-mail, edition, dates and the key itself.
+e-mail, edition, dates and the key itself. When you accept the agreement, the acceptance record
+described above is kept with your license record.
+
+**A notice under the agreement**, if you send one (a dispute notice, a refund request, an outage
+claim): what you write in it, kept with your license record.
 
 ## How Licensor uses and keeps it
 
 Error reports are used to find and fix defects in Ashley and to decide what to build next. Reviewing
 them and drafting fixes is assisted by AI tools running on Licensor's own accounts; every change
 proposed that way is reviewed by a person and tested before release. Reports are kept for at most
-365 days. License and trial records are kept for the life of the license and six years after, for
-accounting and disputes. Nothing is sold or used for advertising. Processors acting for Licensor
+365 days. License, trial and acceptance records are kept for the life of the license and six years
+after, to prove the agreement and for accounting and disputes. Nothing is sold or used for advertising. Processors acting for Licensor
 (hosting, the licence service) see only what they need to run the service.
 
 ## Security and breaches

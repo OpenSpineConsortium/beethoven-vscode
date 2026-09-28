@@ -11,7 +11,7 @@ import * as L from '../../../grid/license.js';
 const EXT_ID = 'openspineconsortium.ashley';
 const COMMANDS = [
   'ashley.setup', 'ashley.license', 'ashley.doctor', 'ashley.troubleshoot', 'ashley.showLog', 'ashley.investigate', 'ashley.healthMenu', 'ashley.connect', 'ashley.workerStart', 'ashley.workerStop', 'ashley.workerLogs', 'ashley.ask',
-  'ashley.gridStatus', 'ashley.gridBootstrap', 'ashley.access', 'ashley.phone', 'ashley.registerMcp', 'ashley.claudeSignIn', 'ashley.errorReports', 'ashley.manageTokens', 'ashley.openManual', 'ashley.openTerminal', 'ashley.reset', 'ashley.refresh',
+  'ashley.gridStatus', 'ashley.gridBootstrap', 'ashley.access', 'ashley.phone', 'ashley.registerMcp', 'ashley.claudeSignIn', 'ashley.errorReports', 'ashley.terms', 'ashley.support', 'ashley.manageTokens', 'ashley.openManual', 'ashley.openTerminal', 'ashley.reset', 'ashley.refresh',
 ];
 
 suite('Ashley extension', () => {
@@ -65,7 +65,7 @@ suite('Ashley extension', () => {
     claude_bridge: ['vscode.claude-code', 'vscode.claude-binary', 'vscode.mcp-bridge'],
     phone: ['grid.phone'],
     accounts: ['grid.accounts'],
-    licensing: ['laptop.license', 'account.license-identity', 'grid.license'],
+    licensing: ['laptop.terms', 'laptop.license', 'account.license-identity', 'grid.license'],
     claude_signin: ['account.claude', 'grid.claude-login'],
     token_capture: ['vscode.shell-integration', 'vscode.secret-storage'],
   };
@@ -100,8 +100,20 @@ suite('Ashley extension', () => {
     const ext = vscode.extensions.getExtension(EXT_ID)!;
     assert.equal((ext.exports as any)._internal.terms.record(), undefined, 'fresh profile: no acceptance recorded');
     // the dialog cannot be answered by a test: accept the way the dialog does
-    await (ext.exports as any)._internal.terms.accept('off');
+    const rec = await (ext.exports as any)._internal.terms.accept('off', 'Test Person');
     assert.equal((ext.exports as any)._internal.terms.record().diagnostics, 'off');
+    // the record proves what was accepted: version, text hashes, every affirmation's exact wording, the name, the button
+    assert.equal(rec.terms_version, (ext.exports as any)._internal.terms.version);
+    assert.match(rec.license_sha256, /^[0-9a-f]{64}$/);
+    assert.equal(rec.affirmations.length, 4);
+    assert.ok(rec.affirmations.every((a: any) => a.checked && /I /.test(a.label)));
+    assert.equal(rec.button_label, 'Accept and Continue');
+    assert.equal(rec.signed_name, 'Test Person');
+    const fs = require('node:fs');
+    const path = require('node:path');
+    const dir = process.env.ASHLEY_LICENSE_DIR!;
+    assert.ok(fs.existsSync(path.join(dir, 'terms.json')), 'the record is on disk for the CLI and MCP server');
+    assert.ok(fs.existsSync(path.join(dir, 'terms', String(rec.terms_version), 'LICENSE.txt')), 'the accepted text is kept beside the record');
     assert.equal(vscode.workspace.getConfiguration('ashley').get('diagnostics.share'), 'on', 'the setting is what the dialog writes; the test wrote the record only');
   });
 

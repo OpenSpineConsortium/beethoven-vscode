@@ -15,6 +15,8 @@ import { renderBlock } from '../core/sshConfig';
 import { installPublicKey, probeWithKey } from '../core/sshInstall';
 import { expandHome } from '../core/shell';
 import { checkLicense, readIdentity, unlicensedMessage, readLicenseKey, writeLicenseKey, removeLicenseKey, writeIdentity, findKey, describeLicense, LicenseCheck, Identity, cachedRevocationText } from '../core/license';
+import { AFFIRMATIONS, AGREE_BUTTON, TERMS_VERSION, TERMS_REFUSAL, acceptanceComplete, readTermsRecord, sha256, writeTermsRecord } from '../core/terms';
+import * as crypto from 'node:crypto';
 
 const LOCAL = path.join(os.homedir(), '.ashley-local');
 const SETTINGS = path.join(LOCAL, 'settings.json');
@@ -124,8 +126,13 @@ function print(reports: StepReport[]) {
 async function main(argv: string[]): Promise<number> {
   const cmd = argv[0] ?? 'help';
   const ui = new TerminalUI();
+  // the terms come first: nothing but help and the terms themselves works before they are accepted
+  if (!['help', '-h', '--help', 'terms'].includes(cmd) && !readTermsRecord()) {
+    console.error(TERMS_REFUSAL);
+    return 3;
+  }
   // the license gate: without a valid license only help, license, setup (it starts with the license) and ssh-config work
-  if (!['help', '-h', '--help', 'license', 'setup', 'ssh-config'].includes(cmd)) {
+  if (!['help', '-h', '--help', 'license', 'setup', 'ssh-config', 'terms'].includes(cmd)) {
     const c = licenseNow();
     if (!c.ok) {
       console.error(unlicensedMessage(c));
@@ -140,6 +147,47 @@ async function main(argv: string[]): Promise<number> {
   const relay = new GridRelay(s.sshAlias);
   const grid = new GridApi(s.sshAlias, () => {}, ['ask', 'latency', 'send', 'result'].includes(cmd) ? relay : undefined);
   switch (cmd) {
+    case 'terms': {
+      // text-mode signing: the same record the dialog writes, from a terminal
+      const here = path.dirname(process.argv[1] ?? __filename);
+      const root = [here, path.join(here, '..')].find((d) => fs.existsSync(path.join(d, 'LICENSE.txt'))) ?? here;
+      const license = fs.readFileSync(path.join(root, 'LICENSE.txt'), 'utf8');
+      const privacy = fs.readFileSync(path.join(root, 'PRIVACY.md'), 'utf8');
+      const have = readTermsRecord();
+      if (argv[1] === 'status' || (have && argv[1] !== 'accept')) {
+        console.log(have ? `terms version ${have.terms_version} accepted ${have.accepted_at} by "${have.signed_name}" (${have.surface})` : 'the terms have not been accepted on this computer (ashley-cli terms accept)');
+        return have ? 0 : 2;
+      }
+      if (!process.stdin.isTTY) {
+        console.error('ashley-cli terms accept needs a terminal: the agreement is read and signed by a person');
+        return 3;
+      }
+      console.log(license + '\n\n==================== PRIVACY STATEMENT ====================\n\n' + privacy);
+      console.log('\nThat was the full text (also in LICENSE.txt and PRIVACY.md beside this program). Answer each statement with y if it is true; any other answer stops here.');
+      const affirmations = [];
+      for (const a of AFFIRMATIONS) {
+        const ans = await ui.ask(`${a.label}\n[y/N]`);
+        affirmations.push({ id: a.id, label: a.label, checked: /^y(es)?$/i.test((ans ?? '').trim()) });
+      }
+      const name = (await ui.ask('Type your full name as your signature')) ?? '';
+      const diag = await ui.ask('Send the maintainer scrubbed error reports when a check fails? (you can change this later) [Y/n]');
+      const done = acceptanceComplete(affirmations, name, true);
+      if (!done.ok) {
+        console.log(`not accepted (${done.missing.join(', ')}); nothing was recorded`);
+        return 2;
+      }
+      const go = await ui.ask(`Type the words "${AGREE_BUTTON}" to form the agreement, or anything else to stop`);
+      if ((go ?? '').trim() !== AGREE_BUTTON) {
+        console.log('not accepted; nothing was recorded');
+        return 2;
+      }
+      const rec = writeTermsRecord(
+        { v: 1, terms_version: TERMS_VERSION, license_sha256: sha256(license), privacy_sha256: sha256(privacy), accepted_at: new Date().toISOString(), surface: 'terminal', button_label: AGREE_BUTTON, affirmations, signed_name: name.trim(), scrolled_to_end: true, diagnostics: /^n/i.test((diag ?? '').trim()) ? 'off' : 'on', product_version: '2.0.0', host: 'ashley-cli', host_version: process.version, platform: `${os.platform()} ${os.release()} ${os.arch()}`, locale: Intl.DateTimeFormat().resolvedOptions().locale, install_id: crypto.randomUUID() },
+        { license, privacy },
+      );
+      console.log(`accepted; record ${rec}`);
+      return 0;
+    }
     case 'license': {
       const sub = argv[1] ?? 'status';
       if (sub === 'set') {
@@ -226,6 +274,7 @@ async function main(argv: string[]): Promise<number> {
     case '-h':
     case '--help':
       console.log(`ashley-cli <command>
+  terms [status|accept]               the license terms: read and sign them in the terminal (once per version)
   license [status|set <key>|remove]   the Ashley license on this computer (a key can also come on stdin)
   setup [--force] [--only step,step]   the wizard in the terminal (license, wsuSignIn, github, huggingface, claudeLocal, gridTwoFactor, sshKey, sshConfig, installKey, gridInstall, labAccess, claudeGrid)
   doctor               every check, laptop and grid

@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // Checks a built .vsix the way a student would receive it. Fails (exit 2) on anything that must not
 // ship: source maps, test fixtures, the test signing key, a missing licence or notices file, the
-// wrong licence field, an unminified bundle, a copyleft dependency, or the old credential capture.
+// wrong licence field, a copyleft dependency, run-time code construction outside two known
+// dependency uses, or the old credential capture.
 // Usage: node tools/release_check.mjs dist/ashley-2.0.0.vsix [--unpack dist/unpacked]
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -83,9 +84,19 @@ export function checkVsix(file, opts = {}) {
     if (/sourceMappingURL/.test(js)) problems.push(`${b} references a source map`);
     if (!/Licensed software/.test(js.slice(0, 600))) problems.push(`${b} lacks the licence notice`);
     if (testRaw && js.includes(testRaw)) problems.push(`${b} embeds the TEST signing key`);
-    if (js.length / js.split('\n').length < 200) problems.push(`${b} is not minified (average line length ${Math.round(js.length / js.split('\n').length)})`);
     if (/\bsetup-token\b/.test(js)) problems.push(`${b} still contains the setup-token capture (Ashley must not handle Claude credentials)`);
     if (/sk-ant-oat01-[A-Za-z0-9_-]{30,}/.test(js)) problems.push(`${b} contains a token-shaped string`);
+    // the patterns the Marketplace's scanners and reviewers treat as loaders: none of them ship
+    for (const [re, why] of [[/\beval\s*\(/, 'eval('], [/require\s*\(\s*["']inspector["']\s*\)/, 'require("inspector")'], [/child_process[^\n]{0,80}(curl|wget)\s/, 'a curl/wget download']]) {
+      if (re.test(js)) problems.push(`${b} contains ${why}`);
+    }
+    // new Function(): two bundled dependencies use it on their own constant strings, never on
+    // anything fetched: ssh2's BigInt feature test and ajv's JSON-schema compiler (MCP SDK). Anything else fails.
+    const dyn = js.match(/new\s+Function\s*\([^)]{0,120}/g) ?? [];
+    const known = [/new Function\(\s*['"`]return 2n \*\* 32n['"`]/, /new Function\(\s*`\$\{[A-Za-z0-9_$.]+\.self\}`\s*,\s*`\$\{[A-Za-z0-9_$.]+\.scope\}`/];
+    const unknown = dyn.filter((d) => !known.some((k) => k.test(d)));
+    if (unknown.length) problems.push(`${b} constructs code at run time in an unexpected place: ${unknown[0].slice(0, 80)}`);
+    else if (dyn.length) notes.push(`${path.basename(b)}: ${dyn.length} known new Function() use(s) (ssh2 BigInt test, ajv schema compiler)`);
   }
   if (has('extension/THIRD_PARTY_NOTICES.md')) {
     const rows = text('extension/THIRD_PARTY_NOTICES.md').split('\n').filter((l) => /^\| [^|]+ \| [^|]+ \| [^|]+ \| [^|]+ \|$/.test(l) && !/^\| Package/.test(l) && !/^\|---/.test(l));
