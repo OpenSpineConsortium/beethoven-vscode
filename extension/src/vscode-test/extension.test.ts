@@ -81,6 +81,7 @@ suite('Ashley extension', () => {
     licensing: ['laptop.terms', 'laptop.license', 'account.license-identity', 'grid.license'],
     claude_signin: ['account.claude', 'grid.claude-login'],
     token_capture: ['vscode.shell-integration', 'vscode.secret-storage'],
+    grid_etiquette: ['grid.login-tmp', 'grid.home-quota'],
   };
   test('every feature keeps its diagnostic nodes (pre-integration rule)', () => {
     const ext = vscode.extensions.getExtension(EXT_ID)!;

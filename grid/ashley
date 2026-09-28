@@ -800,6 +800,11 @@ cmd_diag() {
   # tools and network from the login node
   local code; code=$(printf 'url = "https://api.anthropic.com/"\n' | curl -s -m 12 -o /dev/null -w '%{http_code}' -K - 2>/dev/null)
   if [ -n "$code" ] && [ "$code" != 000 ]; then diag_emit grid.internet true false false "api.anthropic.com answers (HTTP $code); curl reads secrets from stdin"; else diag_emit grid.internet false false false "no HTTPS from the login node, or curl -K - unsupported"; fi
+  # /tmp on the login node is not for user files (C&IT, 2026-09-28); container builds left rootfs-* there once.
+  local leftovers; leftovers=$(find /tmp -maxdepth 1 -user "$USER" \( -name 'rootfs-*' -o -name 'build-temp-*' -o -name 'apptainer*' -o -name 'singularity*' -o -name 'sbuild-*' -o -size +50M \) 2>/dev/null | head -8 | tr '\n' ' ')
+  if [ -z "$leftovers" ]; then diag_emit grid.login-tmp true false false "nothing of yours left under /tmp on $(hostname -s)"
+  elif [ $repair = 1 ] && rm -rf $leftovers 2>/dev/null && [ -z "$(find /tmp -maxdepth 1 -user "$USER" \( -name 'rootfs-*' -o -name 'build-temp-*' -o -name 'apptainer*' -o -name 'singularity*' -o -name 'sbuild-*' -o -size +50M \) 2>/dev/null)" ]; then diag_emit grid.login-tmp true false true "removed your container leftovers from /tmp on $(hostname -s): $leftovers"
+  else diag_emit grid.login-tmp false false false "files of yours under /tmp on the login node: $leftovers (C&IT asks that /tmp here stays free; repair removes them)"; fi
   if command -v setfacl >/dev/null && command -v getfacl >/dev/null; then diag_emit grid.acl-tools true false false "setfacl/getfacl present"; else diag_emit grid.acl-tools false false false "setfacl/getfacl missing"; fi
   read -r used soft < <(home_quota)
   if [ -n "${soft:-}" ] && [ "${soft%.*}" -gt 0 ] 2>/dev/null; then
@@ -917,6 +922,8 @@ cmd_diag() {
 }
 cmd_diag_node() { # runs on the compute node inside a worker allocation
   load_cfg
+  # container commands never run on the login node (C&IT); this is only ever reached through srun
+  [ -n "${SLURM_JOB_ID:-}" ] || { echo "NODE-FAIL container commands run only inside a Slurm job, not on $(hostname -s)"; return 1; }
   local S=/dev/shm/${USER}_diag_$$; mkdir -p "$S" || { echo "NODE-FAIL /dev/shm not writable"; return 1; }; trap 'rm -rf "$S"' RETURN
   # shellcheck disable=SC2086
   local out; out=$("$RUNTIME" exec $BINDS -B "$S:/tmp" "$SANDBOX" bash -c "node --version && '$CLAUDE_BIN' --version && command -v script >/dev/null && echo script-ok && curl -s -m 10 -o /dev/null -w '%{http_code}' https://api.anthropic.com/" 2>&1)

@@ -64,6 +64,10 @@
   "token_capture": [
    "vscode.shell-integration",
    "vscode.secret-storage"
+  ],
+  "grid_etiquette": [
+   "grid.login-tmp",
+   "grid.home-quota"
   ]
  },
  "nodes": [
@@ -461,6 +465,21 @@
    "assumption": "/wsu/apps/vscode sysroot and patchelf exist at the paths in the block",
    "manualFix": "ask hpc@wayne.edu where the VS Code sysroot moved",
    "futureRisk": "Wayne State moving or upgrading the sysroot (repair rediscovers it)",
+   "source": "grid/ashley (cmd_diag)",
+   "autoRepair": true,
+   "fixCommand": null,
+   "slow": false
+  },
+  {
+   "id": "grid.login-tmp",
+   "title": "Nothing of yours left under /tmp on the login node",
+   "layer": "grid-login",
+   "dependsOn": [
+    "grid.scripts"
+   ],
+   "assumption": "no container build leftovers (rootfs-*, build-temp-*, apptainer*) or files over 50 MB of yours under /tmp on the login node, which C&IT keeps free of user files; Ashley builds containers only inside Slurm jobs with node-local temp and cache",
+   "manualFix": "ssh wsu-grid and remove your files under /tmp (repair removes the recognisable leftovers)",
+   "futureRisk": "a container command run by hand on the login node; a build job killed before its cleanup trap",
    "source": "grid/ashley (cmd_diag)",
    "autoRepair": true,
    "fixCommand": null,

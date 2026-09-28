@@ -24,6 +24,10 @@ The format follows Keep a Changelog; versions follow Semantic Versioning.
   the wizard uses runs for that item alone. The diagnostics panel offers the same fix beside each
   failing cause.
 - A virgin-Windows test kit (Windows Sandbox with nothing but VS Code) under `tools/sandbox/`.
+- Grid etiquette (C&IT, 2026-09-28): container builds run only inside Slurm jobs with temp and
+  cache on the compute node's local disk and a cleanup trap; nothing container-related on the login
+  node; a diagnostic (`grid.login-tmp`) finds and removes leftovers under the login node's `/tmp`.
+  Grid scripts version 5. `docs/MAC.md`: continuing on a Mac and the Xcode route.
 - `grid/login_relay.sh` (maintainer tool): runs Claude Code's own grid sign-in in a tmux session
   inside the worker allocation so it can be completed from a phone.
 

@@ -181,6 +181,15 @@ and why. The diagnostics node `grid.slurm-in-worker` reads that answer.
 job and starts it again from the current template with those settings, so an upgrade of the
 template reaches running workers.
 
+Grid etiquette, as C&IT stated it on 2026-09-28: nothing container-related runs on the login node,
+and nothing of ours is left under its `/tmp` (a build there once left 7 GB of `rootfs-*`).
+`bootstrap.sbatch` refuses to run outside a Slurm job and puts `APPTAINER_TMPDIR`,
+`APPTAINER_CACHEDIR` and their `SINGULARITY_` twins on the compute node's local disk
+(`$SLURM_TMPDIR` or `/tmp`), removed by a trap however the job ends; the worker template points the
+runtime's temp and cache at its `/dev/shm` scratch; `cmd_diag_node` refuses off a job; the diagnostic
+`grid.login-tmp` finds leftovers under the login node's `/tmp` and removes the recognisable ones on
+repair. Temp that must be shared between nodes goes under `/wsu/tmp`.
+
 ## The shared container library
 
 Containers are read-only at run time (every account's sessions, settings and caches live in its

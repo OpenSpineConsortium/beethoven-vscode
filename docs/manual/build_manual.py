@@ -79,7 +79,8 @@ print("copied to", media)
 
 # PDF via Edge (or Chrome) headless
 pdf = os.path.join(DOCS, "manual.pdf")
-browsers = [r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe", r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+browsers = [os.environ.get("BROWSER_BIN", ""),  # a Mac or Linux: BROWSER_BIN=/Applications/Google Chrome.app/Contents/MacOS/Google Chrome
+            r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe", r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
             r"C:\Program Files\Google\Chrome\Application\chrome.exe", shutil.which("msedge") or "", shutil.which("google-chrome") or "", shutil.which("chromium") or ""]
 browser = next((b for b in browsers if b and os.path.exists(b)), None)
 if browser:

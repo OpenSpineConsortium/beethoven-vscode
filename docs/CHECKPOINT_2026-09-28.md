@@ -10,6 +10,17 @@ SHA256SUMS signed by k1). Committed and pushed as this checkpoint says below.
 
 ### What version 3 changed (pass 18)
 
+- **Grid etiquette (C&IT e-mail, 2026-09-28, pass 19).** A 6.9 GB Apptainer `rootfs-*` from a
+  build run on warrior sat under `/tmp` there; removed (91 % -> 63 %). Now enforced: `bootstrap.sbatch`
+  refuses outside a Slurm job and keeps temp and cache on the compute node's local disk with a trap;
+  the worker template points the runtime's temp/cache at its `/dev/shm` scratch; `cmd_diag_node`
+  refuses off a job; new diagnostic `grid.login-tmp` (finds and removes leftovers; feature rule
+  `grid_etiquette`). Grid scripts **version 5**, deployed to go2432; the running worker (started under
+  v4) keeps hosting the sign-in relay until its wall time ends. `CLAUDE.md` added to this repo;
+  `docs/MAC.md` (continuing on a Mac; the Xcode route = CLI + MCP server, first verify Xcode 26.3's
+  MCP registration); the dataset repo's CLAUDE.md carries the same grid rule. One VS Code suite run
+  failed two gate tests by timeout while a push and a grid deploy ran in parallel; two later runs
+  passed 14/14 and the cause was not established.
 - **Two agreements, one dialog.** `LICENSE.txt` is the free **Trial Edition** agreement (terms
   version 4): approved Wayne State AccessIDs only, no payment, converts to nothing, withdrawable, may
   end with 30 days' notice. `LICENSE-FULL.txt` is the **Full Edition** agreement (fees, 14-day refund,
@@ -104,7 +115,7 @@ SHA256SUMS signed by k1). Committed and pushed as this checkpoint says below.
 | Suite | Result |
 |---|---|
 | Laptop unit tests | 49 pass, 7 skip on Windows (container-only) |
-| VS Code integration (`--label unit`) | 14 pass (terms both editions, gate, license, graph rule, commands) |
+| VS Code integration (`--label unit`) | 14 pass (terms both editions, gate, license, graph rule, commands); 47 nodes |
 | Access service (`node --test tools/intake/worker.test.mjs`) | 12 pass |
 | Packaged extension (`--label package`, unpacked release) | 4 pass (release-key check with a one-day trial key, revoked afterwards) |
 | Live troubleshooter (`--label live`) | pass; license nodes green on laptop and both workers |

@@ -39,9 +39,17 @@ NPM_PREFIX="$ROOT/npm"
 [ "$LIBRARY" = "1" ] && NPM_PREFIX="$ROOT/npm-$LIB_NAME"
 say() { echo "$(date -u +%FT%TZ) $*"; }
 say "bootstrap job ${SLURM_JOB_ID:-local} on $(hostname); ROOT=$ROOT; LIBRARY=$LIBRARY; name=$LIB_NAME; image=$IMAGE"
-mkdir -p "$ROOT"/{containers,cache,tmp,npm-cache,workspaces} "$NPM_PREFIX" || { echo "REFUSING: cannot write $ROOT"; exit 1; }
-SCR=/dev/shm/${USER}_ashley_boot_${SLURM_JOB_ID:-x}; mkdir -p "$SCR"; trap 'rm -rf "$SCR"' EXIT
-export TMPDIR="$ROOT/tmp" APPTAINER_CACHEDIR="$ROOT/cache" SINGULARITY_CACHEDIR="$ROOT/cache" APPTAINER_TMPDIR="$ROOT/tmp" SINGULARITY_TMPDIR="$ROOT/tmp"
+# Container commands run only inside a Slurm job on a compute node, never on the login node (C&IT,
+# 2026-09-28: a build there left 7 GB of rootfs-* under /tmp on warrior, which is not for user files).
+if [ -z "${SLURM_JOB_ID:-}" ]; then echo "REFUSING: this builds a container and must run as a Slurm job (ashley grid-install submits it), not on $(hostname)"; exit 1; fi
+mkdir -p "$ROOT"/{containers,npm-cache,workspaces} "$NPM_PREFIX" || { echo "REFUSING: cannot write $ROOT"; exit 1; }
+# Temporary and cache files stay on the compute node's local disk (never a shared filesystem, never the
+# login node) and are removed when the job ends, whatever way it ends.
+SCR=/dev/shm/${USER}_ashley_boot_${SLURM_JOB_ID:-x}; mkdir -p "$SCR"
+NODE_TMP="${SLURM_TMPDIR:-/tmp}/${USER}_ashley_build_${SLURM_JOB_ID:-x}"; mkdir -p "$NODE_TMP/tmp" "$NODE_TMP/cache" || { echo "REFUSING: no local scratch at ${SLURM_TMPDIR:-/tmp}"; exit 1; }
+trap 'rm -rf "$SCR" "$NODE_TMP"' EXIT
+export TMPDIR="$NODE_TMP/tmp" APPTAINER_TMPDIR="$NODE_TMP/tmp" SINGULARITY_TMPDIR="$NODE_TMP/tmp" APPTAINER_CACHEDIR="$NODE_TMP/cache" SINGULARITY_CACHEDIR="$NODE_TMP/cache"
+say "temp and cache on $(hostname -s):$NODE_TMP (local disk, removed at exit)"
 
 # ---- 0. find a container runtime that can EXEC on a compute node ---------------------
 # ~/.local/bin/singularity on this grid is a partial install ("starter not found"); skip it.

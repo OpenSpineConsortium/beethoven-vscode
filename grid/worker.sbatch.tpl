@@ -57,6 +57,8 @@ if [ -x /usr/bin/sbatch ] && [ -d /usr/lib64/slurm ] && [ -d /etc/slurm ] && [ -
 #!/bin/sh
 # host Slurm client, written by worker job ${SLURM_JOB_ID:-x}; a submitted job gets the host PATH, not the container's
 for v in \$(env | sed -n 's/^\\(APPTAINER_[A-Za-z_]*\\|SINGULARITY_[A-Za-z_]*\\)=.*/\\1/p'); do unset "\$v"; done
+# the runtime's own temporary and cache files: node-local (the worker's /dev/shm scratch), never a shared filesystem
+export APPTAINER_TMPDIR="$SCR" SINGULARITY_TMPDIR="$SCR" APPTAINER_CACHEDIR="$SCR/cache" SINGULARITY_CACHEDIR="$SCR/cache"; mkdir -p "$SCR/cache"
 PATH='$PATH' exec /opt/host/bin/$c "\$@"
 EOW
     chmod 755 "$SB/bin/$c"
