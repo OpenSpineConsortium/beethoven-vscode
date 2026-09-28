@@ -27,6 +27,10 @@ runs until its wall time (24 h by default, 30 days maximum on the `primary` QoS)
 **Images.** Open your grid files with **Ashley: Open my grid files on a compute node**; click a PNG.
 No X server.
 
+**Containers.** Workers run the lab's shared container by default (no build, same for everyone); a lead can publish
+others (a CUDA one for training, an R/Bioconductor one) and you pick per worker. Two workers of yours can run
+different containers at once and hand work to each other.
+
 **GPUs.** Start a worker with one GPU when the task trains or infers; the grid has H200, L40S, A30
 and V100-class nodes. Ask for a GPU only for that worker; CPU workers start sooner.
 

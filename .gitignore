@@ -3,6 +3,7 @@ dist/
 dist-test/
 out/
 *.vsix
+!dist/ashley-wsu-*.vsix
 .vscode-test/
 *.log
 .DS_Store

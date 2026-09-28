@@ -57,6 +57,14 @@ export class GridApi {
     return r.code === 0 ? parseSqueue(r.stdout) : [];
   }
 
+  /** The lab's shared container library, if this account can read it. */
+  async library(): Promise<{ available: boolean; root?: string; default?: string; containers: Record<string, { purpose?: string; claude_version?: string; gpu?: boolean; image?: string; built?: string }> }> {
+    const r = await this.ashley(['library', '--json'], { timeoutMs: 60_000 });
+    const j = r.code === 0 ? parseLastJson<any>(r.stdout) : null;
+    if (!j || !j.available) return { available: false, containers: {} };
+    return { available: true, root: j.root, default: j.library?.default, containers: j.library?.containers ?? {} };
+  }
+
   async workers(): Promise<WorkerState[]> {
     const r = await this.ashley(['worker', 'list', '--json'], { timeoutMs: 60_000 });
     return (r.code === 0 && parseLastJson<{ workers: WorkerState[] }>(r.stdout)?.workers) || [];

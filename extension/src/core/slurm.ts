@@ -51,6 +51,8 @@ export interface WorkerJobSpec {
   memory: string;
   gpus: number;
   concurrency: number;
+  /** A shared-library container name; empty = the account's configured container. */
+  container?: string;
 }
 
 /** Arguments for `ashley worker start` on the grid; the grid CLI renders the sbatch file. */
@@ -63,6 +65,7 @@ export function workerStartArgs(s: WorkerJobSpec): string[] {
     '--mem', s.memory,
     '--concurrency', String(s.concurrency),
   ];
+  if (s.container) args.push('--container', s.container);
   if (s.gpus > 0) {
     args.push('--gpus', String(s.gpus), '--partition', 'gmsap,gvohp,galhp', '--qos', 'gpu');
   } else {

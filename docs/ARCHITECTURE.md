@@ -142,6 +142,38 @@ while jobs run). `--signal=B:TERM@120` gives the daemon two minutes to finish a 
 limit; `--dependency=singleton` keeps one job per worker name; on the `requeue` QoS the job is
 `--requeue --open-mode=append` because the daemon is re-entrant.
 
+## The shared container library
+
+Containers are read-only at run time (every account's sessions, settings and caches live in its
+own home), so one copy serves the whole lab. `/rs/rs_grp_oschome/shared/ashley/` (group
+`oschome`, mode 2775) holds `library.json` and one sandbox per entry:
+
+```json
+{"version": 1, "default": "claude-node22",
+ "containers": {"claude-node22": {"sandbox": ".../containers/claude-node22", "claude_bin": ".../npm-claude-node22/bin/claude",
+   "runtime": "/wsu/el7/gnu7/apptainer/1.2.2/bin/apptainer", "image": "docker://node:22-bookworm",
+   "claude_version": "2.1.283 (Claude Code)", "gpu": false, "built": "...", "built_by": "go2432", "purpose": "general ..."}}}
+```
+
+- `ashley install` adopts the library's default when it is readable (`ashley adopt <name>` writes
+  `config.env` and `READY` in a second; nothing is built, nothing is stored in the student's
+  space). `ashley install --build-own` keeps the old per-account build.
+- `ashley worker start --container <name>` runs any entry; the worker's job script carries the
+  sandbox and binds the library root. A student can run a CPU worker on the general container and
+  a GPU worker on a CUDA one at the same time.
+- Leads publish entries with `ashley library publish --name <name> --image docker://<image>
+  [--gpu] [--purpose "..."]`: a job builds the sandbox, installs the pinned Claude Code, merges the
+  entry into `library.json` and makes the tree group-readable. Entries are pinned by image and
+  Claude Code version, so every student runs the same bits; an update is a new entry.
+- Access: membership of the `oschome` group (the lab asks the HPC admins). Without it, the wizard
+  falls back to building in the student's own storage, so nothing blocks.
+
+Because every worker of an account shares `~/.ashley`, a worker Claude can hand work to another
+worker with `ashley send --worker <name>` from its shell; the daemon tells each worker who it is,
+which peers are alive and the exact command (`peerNote()` in `ashleyd.js`). A lead worker on the
+general container can therefore fan out to a GPU worker on a CUDA container and collect the result
+with `ashley result`.
+
 ## The laptop side
 
 - **Wizard** (`core/wizard.ts`): nine steps, each with `check()` and `run()`, over an abstract

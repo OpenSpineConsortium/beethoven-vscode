@@ -17,17 +17,28 @@
 set -uo pipefail
 ASHLEY_HOME="${ASHLEY_HOME:-$HOME/.ashley}"
 CFG="$ASHLEY_HOME/config.env"
-[ -s "$CFG" ] || { echo "REFUSING: $CFG missing; run 'ashley install' first"; exit 1; }
-# shellcheck disable=SC1090
-source "$CFG"
-: "${ROOT:?config.env must set ROOT}"
+# LIBRARY=1 publishes into the lab's shared library (ROOT_OVERRIDE, LIB_NAME, IMAGE, GPU) instead
+# of the user's own root: nothing in the user's config.env or READY is touched.
+LIBRARY="${LIBRARY:-0}"
+if [ "$LIBRARY" = "1" ]; then
+  ROOT="${ROOT_OVERRIDE:?LIBRARY=1 needs ROOT_OVERRIDE}"
+  LIB_NAME="${LIB_NAME:?LIBRARY=1 needs LIB_NAME}"
+else
+  [ -s "$CFG" ] || { echo "REFUSING: $CFG missing; run 'ashley install' first"; exit 1; }
+  # shellcheck disable=SC1090
+  source "$CFG"
+  : "${ROOT:?config.env must set ROOT}"
+  LIB_NAME="node22-bookworm"
+fi
 IMAGE="${IMAGE:-docker://node:22-bookworm}"
 CLAUDE_CODE_VERSION="${CLAUDE_CODE_VERSION:-2.1.283}"
-SANDBOX="$ROOT/containers/node22-bookworm"
+GPU="${GPU:-0}"
+SANDBOX="$ROOT/containers/$LIB_NAME"
 NPM_PREFIX="$ROOT/npm"
+[ "$LIBRARY" = "1" ] && NPM_PREFIX="$ROOT/npm-$LIB_NAME"
 say() { echo "$(date -u +%FT%TZ) $*"; }
-say "bootstrap job ${SLURM_JOB_ID:-local} on $(hostname); ROOT=$ROOT"
-mkdir -p "$ROOT"/{containers,cache,tmp,npm,npm-cache,workspaces} || { echo "REFUSING: cannot write $ROOT"; exit 1; }
+say "bootstrap job ${SLURM_JOB_ID:-local} on $(hostname); ROOT=$ROOT; LIBRARY=$LIBRARY; name=$LIB_NAME; image=$IMAGE"
+mkdir -p "$ROOT"/{containers,cache,tmp,npm-cache,workspaces} "$NPM_PREFIX" || { echo "REFUSING: cannot write $ROOT"; exit 1; }
 SCR=/dev/shm/${USER}_ashley_boot_${SLURM_JOB_ID:-x}; mkdir -p "$SCR"; trap 'rm -rf "$SCR"' EXIT
 export TMPDIR="$ROOT/tmp" APPTAINER_CACHEDIR="$ROOT/cache" SINGULARITY_CACHEDIR="$ROOT/cache" APPTAINER_TMPDIR="$ROOT/tmp" SINGULARITY_TMPDIR="$ROOT/tmp"
 
@@ -85,6 +96,29 @@ smoke=$(run_in bash -c 'echo git=$(git --version | cut -d" " -f3) glibc=$(ldd --
 say "smoke: $smoke"
 
 # ---- 2. record ------------------------------------------------------------------------
+if [ "$LIBRARY" = "1" ]; then
+  # merge the entry into library.json (the container's python3 does the JSON), then make the
+  # whole tree group-readable so every lab member can run it without building their own
+  run_in python3 - "$ROOT/library.json" "$LIB_NAME" "$SANDBOX" "$CLAUDE_BIN" "$RUNTIME" "$IMAGE" "$CLAUDE_VERSION" "$GPU" "$(date -u +%FT%TZ)" "$USER" "${SLURM_JOB_ID:-local}" "${PURPOSE:-general: Claude Code, Node 22, git, python3}" <<'PYEOF'
+import json, sys, os
+p, name, sandbox, claude, runtime, image, ver, gpu, built, by, job, purpose = sys.argv[1:13]
+lib = {"version": 1, "default": name, "containers": {}}
+if os.path.exists(p):
+    try:
+        lib = json.load(open(p))
+    except Exception:
+        pass
+lib.setdefault("containers", {})[name] = {"sandbox": sandbox, "claude_bin": claude, "runtime": runtime, "image": image,
+    "claude_version": ver, "gpu": gpu == "1", "built": built, "built_by": by, "job": job, "purpose": purpose}
+lib.setdefault("default", name)
+json.dump(lib, open(p + ".part", "w"), indent=1)
+os.replace(p + ".part", p)
+print("library entry written:", name)
+PYEOF
+  chmod -R g+rX "$ROOT" 2>/dev/null; find "$ROOT" -type d -exec chmod g+s {} + 2>/dev/null
+  say "published $LIB_NAME to $ROOT (group-readable)"
+  exit 0
+fi
 {
   grep -v -E '^(RUNTIME|SANDBOX|CLAUDE_BIN|BINDS|BOOTSTRAP_STATE)=' "$CFG"
   echo "RUNTIME=$RUNTIME"

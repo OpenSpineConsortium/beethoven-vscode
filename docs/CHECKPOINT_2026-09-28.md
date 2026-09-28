@@ -1,4 +1,34 @@
-# CHECKPOINT 2026-09-28 (updated 03:05 UTC, third pass: the relay) — Ashley, the WSU grid + Claude Code extension
+# CHECKPOINT 2026-09-28 (updated 03:20 UTC, fourth pass: the shared container library) — Ashley, the WSU grid + Claude Code extension
+
+## Fourth pass: the lab's shared container library (Greg's request at 23:00 local)
+
+- `/rs/rs_grp_oschome/shared/ashley/` (group `oschome`, 2775) with `library.json`; first entry
+  `claude-node22` published by job 40486583 (`bootstrap.sbatch` with `LIBRARY=1 ROOT_OVERRIDE=...
+  LIB_NAME=... IMAGE=... GPU=...`; merges the entry with the container's python3, `chmod -R g+rX`).
+- Grid CLI: `ashley library [--json]`, `ashley library publish --name N --image docker://... [--gpu]
+  [--purpose ...]`, `ashley adopt [name]` (config.env + READY in a second), `ashley install` adopts the
+  default when readable (`--build-own` to opt out), `ashley worker start --container <name>`
+  (`worker.sbatch.tpl` carries `@SANDBOX@ @CLAUDE_BIN@ @LIBRARY@`, binds the library root),
+  `status --json` reports `container`, `source`, `library`.
+- Daemon: every run gets `--append-system-prompt` from `peerNote()`: who the worker is, which peers
+  of the account are alive, and the exact `ashley send --worker <name>` / `ashley result` commands, so
+  a lead worker can fan out to others (each its own job, possibly a different container).
+- Extension: setting `ashley.container` (auto | own | <name>), a container picker in *Start a Claude
+  worker*, `GridApi.library()`, the tree shows the shared container. Docs: ARCHITECTURE library
+  section, INSTALL "for leads", getting started step 9, LIMITS.
+- Access: `getent group oschome` = ab5188, go2432 only. Students must be added to `oschome` by the
+  HPC admins (Greg requests with the AccessID); until then the wizard builds in their own space.
+- Test in flight when this was written: `docs/research/library_peer_test.sh` (adopt, restart
+  `default` on the shared container, start `peer`, send from inside default's allocation with
+  `srun --overlap` into peer's inbox, read peer's answer); log at `docs/research/library_peer_test.log`.
+- Future entries Greg named: a CUDA/torch container for GPU workers; an R/Bioconductor one; the
+  image must run Node 22 (Debian 12 / Ubuntu 22.04+). Worker-to-worker messaging with live Claude
+  needs the setup-token first.
+
+The third pass follows.
+
+---
+
 
 ## Third pass: prompt latency and the relay (Greg's question at 22:40 local)
 

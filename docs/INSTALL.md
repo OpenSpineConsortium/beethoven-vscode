@@ -79,6 +79,22 @@ node dist/ashley-cli.js ask --session thesis "read PREREG.md and list its hypoth
 `cli/ashley` (bash) and `cli/ashley.ps1` forward any command to the grid over ssh and need only
 an ssh client and the config block (`node dist/ashley-cli.js ssh-config` prints it).
 
+## For leads: the shared container library
+
+One group-readable tree on the CephFS volume (`/rs/rs_grp_oschome/shared/ashley`) holds pre-built
+containers; students adopt them instead of building (no storage used, identical bits for everyone).
+
+```bash
+ssh wsu-grid "ashley library"                                   # what exists, which is the default
+ssh wsu-grid "ashley library publish --name claude-node22 --image docker://node:22-bookworm --purpose 'general: Claude Code, Node 22, git, python3'"
+ssh wsu-grid "ashley library publish --name claude-cuda --image docker://nvidia/cuda:12.4.1-runtime-ubuntu22.04 --gpu --purpose 'GPU: torch and inference'"
+```
+
+Each publish is a job (5 to 15 minutes) that builds the sandbox, installs the pinned Claude Code
+(the image must be able to run Node 22: Debian 12 / Ubuntu 22.04 or newer), merges the entry into
+`library.json` and makes the tree group-readable. Students need the `oschome` group (request it from
+the HPC admins with the student's AccessID). Without it the wizard builds in the student's own space.
+
 ## Updating
 
 Install the new `.vsix` the same way; run **Ashley: Install or update Ashley on the grid** to push

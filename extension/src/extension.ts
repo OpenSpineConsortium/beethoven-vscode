@@ -264,6 +264,20 @@ async function commandWorkerStart(grid: GridApi): Promise<void> {
   if (!gpuPick) return;
   const hours = await vscode.window.showInputBox({ title: 'Hours', value: String(c.get('worker.hours', 24)), validateInput: (v) => (/^\d+$/.test(v) && +v >= 1 && +v <= 720 ? undefined : '1 to 720'), ignoreFocusOut: true });
   if (!hours) return;
+  // container: the lab's shared library when readable (no build, same for everyone), else the account's own
+  let container: string | undefined;
+  const pref = c.get<string>('container', 'auto');
+  const lib = await grid.library();
+  if (lib.available && Object.keys(lib.containers).length) {
+    if (pref !== 'auto' && pref !== 'own' && lib.containers[pref]) container = pref;
+    else if (pref === 'auto' || pref === 'own') {
+      const items = Object.entries(lib.containers).map(([name, e]) => ({ label: name + (name === lib.default ? '  (lab default)' : ''), description: `${e.purpose ?? ''}${e.gpu ? '  GPU' : ''}  ${e.claude_version ?? ''}`, name }));
+      items.push({ label: 'my own build', description: 'the container built in your storage (ashley install --build-own)', name: '' });
+      const pick = await vscode.window.showQuickPick(items, { title: 'Which container? (shared containers need no build and are identical for every student)' });
+      if (!pick) return;
+      container = pick.name || undefined;
+    }
+  }
   const spec: WorkerJobSpec = {
     name,
     partition: c.get('worker.partition', 'reqp'),
@@ -273,6 +287,7 @@ async function commandWorkerStart(grid: GridApi): Promise<void> {
     memory: c.get('worker.memory', '16G'),
     gpus: gpuPick.gpus,
     concurrency: c.get('worker.concurrency', 2),
+    container,
   };
   await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: 'Ashley: submitting the worker job' }, async () => {
     const r = await grid.workerStart(spec);

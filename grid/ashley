@@ -27,7 +27,7 @@ die() { echo "ashley: $*" >&2; exit 1; }
 json_str() { # escape a string for JSON
   local s=${1//\\/\\\\}; s=${s//\"/\\\"}; s=${s//$'\n'/\\n}; s=${s//$'\r'/}; s=${s//$'\t'/\\t}; printf '"%s"' "$s"
 }
-load_cfg() { [ -s "$CFG" ] && source "$CFG"; ROOT="${ROOT:-}"; RUNTIME="${RUNTIME:-}"; SANDBOX="${SANDBOX:-}"; CLAUDE_BIN="${CLAUDE_BIN:-}"; BOOTSTRAP_JOB="${BOOTSTRAP_JOB:-}"; BINDS="${BINDS:-}"; }
+load_cfg() { [ -s "$CFG" ] && source "$CFG"; ROOT="${ROOT:-}"; RUNTIME="${RUNTIME:-}"; SANDBOX="${SANDBOX:-}"; CLAUDE_BIN="${CLAUDE_BIN:-}"; BOOTSTRAP_JOB="${BOOTSTRAP_JOB:-}"; BINDS="${BINDS:-}"; CONTAINER="${CONTAINER:-}"; SOURCE="${SOURCE:-}"; }
 is_ready() { load_cfg; [ -s "$ASHLEY_HOME/READY" ] && [ -n "$CLAUDE_BIN" ] && [ -x "$CLAUDE_BIN" ] && [ -x "$SANDBOX/usr/local/bin/node" ]; }
 job_state() { # $1 job id -> state or "" if gone
   [ -n "${1:-}" ] || { echo ""; return; }
@@ -43,9 +43,64 @@ default_root() {
   if [ -d "/rs/rs_grp_oschome/$USER" ] && [ -w "/rs/rs_grp_oschome/$USER" ]; then echo "/rs/rs_grp_oschome/$USER/ashley"; else echo "$HOME/ashley"; fi
 }
 
+# ---- the lab's shared container library -------------------------------------------------
+# One group-readable tree on the CephFS volume holds pre-built containers with Claude Code
+# inside. A student who can read it adopts an entry in a second instead of building for seven
+# minutes and 1.8 GB. Containers are read-only at run time: every account's state lives in its
+# own home, so sharing costs nothing in isolation.
+LIBRARY_ROOT="${ASHLEY_LIBRARY:-/rs/rs_grp_oschome/shared/ashley}"
+lib_file() { echo "$LIBRARY_ROOT/library.json"; }
+lib_readable() { [ -r "$(lib_file)" ]; }
+lib_field() { # NAME FIELD -> value (string fields only; python-free)
+  local name="$1" field="$2"
+  tr -d '\n' < "$(lib_file)" | grep -o "\"$name\": *{[^}]*}" | grep -o "\"$field\": *\"[^\"]*\"" | head -1 | sed 's/.*: *"\([^"]*\)"$/\1/'
+}
+lib_default() { tr -d '\n' < "$(lib_file)" | grep -o '"default": *"[^"]*"' | head -1 | sed 's/.*"\([^"]*\)"$/\1/'; }
+lib_names() { tr -d '\n' < "$(lib_file)" | grep -o '"containers": *{.*' | grep -o '"[A-Za-z0-9_.-]*": *{' | sed 's/"\([^"]*\)".*/\1/'; }
+cmd_library() {
+  local sub="${1:-list}"; shift || true
+  case "$sub" in
+    list|--json)
+      [ "$sub" = "--json" ] && set -- --json "$@"
+      if ! lib_readable; then
+        if [ "${1:-}" = "--json" ]; then echo '{"available":false,"root":"'"$LIBRARY_ROOT"'","containers":{}}'; else echo "no shared library readable at $LIBRARY_ROOT (ask your lead for the oschome group)"; fi; return 0
+      fi
+      if [ "${1:-}" = "--json" ]; then printf '{"available":true,"root":%s,"library":' "$(json_str "$LIBRARY_ROOT")"; tr -d '\n' < "$(lib_file)"; echo '}'
+      else echo "shared library at $LIBRARY_ROOT (default: $(lib_default))"; for n in $(lib_names); do printf '  %-22s %s  [%s]%s\n' "$n" "$(lib_field "$n" purpose)" "$(lib_field "$n" claude_version)" "$([ "$(lib_field "$n" gpu)" = true ] && echo ' gpu' || true)"; done; fi;;
+    publish)
+      # leads only: builds an entry as a job, then group-readable. ashley library publish --name NAME --image docker://... [--gpu] [--purpose "..."] [--partition P --qos Q]
+      local name="" image="docker://node:22-bookworm" gpu=0 purpose="" part="secp" qos="secondary"
+      while [ $# -gt 0 ]; do case "$1" in --name) name="$2"; shift 2;; --image) image="$2"; shift 2;; --gpu) gpu=1; shift;; --purpose) purpose="$2"; shift 2;; --partition) part="$2"; shift 2;; --qos) qos="$2"; shift 2;; *) shift;; esac; done
+      [[ "$name" =~ ^[A-Za-z0-9_.-]+$ ]] || die "library publish needs --name"
+      mkdir -p "$LIBRARY_ROOT" "$ASHLEY_HOME/log" || die "cannot create $LIBRARY_ROOT"
+      chmod 2775 "$LIBRARY_ROOT" 2>/dev/null
+      local id; id=$(cd "$ASHLEY_HOME/log" && sbatch --parsable --partition="$part" --qos="$qos" --export="ALL,LIBRARY=1,ROOT_OVERRIDE=$LIBRARY_ROOT,LIB_NAME=$name,IMAGE=$image,GPU=$gpu,PURPOSE=$purpose" "$BIN/bootstrap.sbatch" 2>&1) || die "sbatch failed: $id"
+      echo "publish job ${id%%;*} submitted: $name from $image into $LIBRARY_ROOT (log $ASHLEY_HOME/log/bootstrap_${id%%;*}.out)";;
+    *) die "library: list|publish";;
+  esac
+}
+cmd_adopt() { # use a shared container instead of building: writes config.env + READY
+  local name="${1:-}"
+  lib_readable || die "no shared library readable at $LIBRARY_ROOT"
+  [ -n "$name" ] || name=$(lib_default)
+  local sandbox claude runtime ver
+  sandbox=$(lib_field "$name" sandbox); claude=$(lib_field "$name" claude_bin); runtime=$(lib_field "$name" runtime); ver=$(lib_field "$name" claude_version)
+  [ -n "$sandbox" ] || die "no library entry '$name' (ashley library)"
+  [ -x "$sandbox/usr/local/bin/node" ] || die "cannot read the shared container $sandbox (ask your lead for the oschome group)"
+  [ -r "$claude" ] || die "cannot read $claude"
+  load_cfg; [ -n "$ROOT" ] || set_cfg ROOT "$(default_root)"; load_cfg
+  mkdir -p "$ROOT/workspaces" 2>/dev/null
+  local binds="-B $HOME"; [ -d "/rs/rs_grp_oschome/$USER" ] && binds="$binds -B /rs/rs_grp_oschome/$USER"
+  case "$ROOT" in /rs/rs_grp_oschome/*|"$HOME"/*) ;; *) binds="$binds -B $ROOT";; esac
+  binds="$binds -B $LIBRARY_ROOT"
+  set_cfg RUNTIME "$runtime"; set_cfg SANDBOX "$sandbox"; set_cfg CLAUDE_BIN "$claude"; set_cfg BINDS "$binds"; set_cfg CONTAINER "$name"; set_cfg SOURCE "shared"; set_cfg BOOTSTRAP_STATE "adopted"
+  printf '{"claude_version":"%s","runtime":"%s","sandbox":"%s","container":"%s","source":"shared","adopted":"%s","host":"%s"}\n' "$ver" "$runtime" "$sandbox" "$name" "$(date -u +%FT%TZ)" "$(hostname)" > "$ASHLEY_HOME/READY.part" && mv "$ASHLEY_HOME/READY.part" "$ASHLEY_HOME/READY"
+  echo "adopted shared container '$name' ($ver); nothing to build"
+}
+
 cmd_install() {
-  local root="" pass=()
-  while [ $# -gt 0 ]; do case "$1" in --root) root="$2"; shift 2;; --partition|--qos) pass+=("$1" "$2"); shift 2;; *) shift;; esac; done
+  local root="" pass=() build_own=0
+  while [ $# -gt 0 ]; do case "$1" in --root) root="$2"; shift 2;; --partition|--qos) pass+=("$1" "$2"); shift 2;; --build-own) build_own=1; shift;; *) shift;; esac; done
   mkdir -p "$ASHLEY_HOME"/{bin,log,accounts,workers,sessions} && chmod 700 "$ASHLEY_HOME" "$ASHLEY_HOME/accounts"
   # scripts uploaded from a Windows checkout may carry CR line endings, which break bash and sbatch
   for f in "$BIN"/ashley "$BIN"/*.sbatch "$BIN"/*.tpl "$BIN"/*.js "$BIN"/*.block; do [ -f "$f" ] && sed -i 's/\r$//' "$f"; done
@@ -65,6 +120,8 @@ cmd_install() {
   fi
   echo "installed ashley $VERSION at $ASHLEY_HOME (ROOT=$ROOT); bashrc block written"
   if is_ready; then echo "grid already ready: $(cat "$ASHLEY_HOME/READY")"; return 0; fi
+  # the shared library first: instant, consistent across the lab, no storage used
+  if [ $build_own -eq 0 ] && lib_readable && cmd_adopt "$(lib_default)" 2>/dev/null; then return 0; fi
   cmd_bootstrap "${pass[@]}"
 }
 
@@ -140,8 +197,8 @@ cmd_status() {
   [ -n "$BOOTSTRAP_JOB" ] && bst=$(job_state "$BOOTSTRAP_JOB")
   read -r used soft < <(home_quota)
   if [ $as_json -eq 1 ]; then
-    printf '{"version":%s,"host":%s,"ready":%s,"root":%s,"runtime":%s,"claude_version":%s,"bootstrap_job":%s,"bootstrap_state":%s,"home_used_gb":%s,"home_soft_gb":%s,"workers":[' \
-      "$(json_str "$VERSION")" "$(json_str "$(hostname)")" "$ready" "$(json_str "$ROOT")" "$(json_str "$RUNTIME")" "$(json_str "$cv")" "$(json_str "$BOOTSTRAP_JOB")" "$(json_str "$bst")" "${used:-0}" "${soft:-0}"
+    printf '{"version":%s,"host":%s,"ready":%s,"root":%s,"runtime":%s,"claude_version":%s,"container":%s,"source":%s,"library":%s,"bootstrap_job":%s,"bootstrap_state":%s,"home_used_gb":%s,"home_soft_gb":%s,"workers":[' \
+      "$(json_str "$VERSION")" "$(json_str "$(hostname)")" "$ready" "$(json_str "$ROOT")" "$(json_str "$RUNTIME")" "$(json_str "$cv")" "$(json_str "${CONTAINER:-own}")" "$(json_str "${SOURCE:-own}")" "$(lib_readable && echo true || echo false)" "$(json_str "$BOOTSTRAP_JOB")" "$(json_str "$bst")" "${used:-0}" "${soft:-0}"
     local first=1; for w in $(worker_dirs); do [ $first -eq 1 ] || printf ','; first=0; worker_json "$w"; done
     printf '],"accounts":%s,"secrets":%s,"jobs":%s}\n' "$(accounts_json)" "$(secrets_json)" "$(jobs_json)"
   else
@@ -173,10 +230,11 @@ cmd_doctor() {
 
 cmd_worker() {
   local sub="${1:-list}"; shift || true
-  local name="default" hours=24 cpus=4 mem="16G" part="reqp" qos="requeue" gpus=0 conc=2 lines=80 as_json=0
+  local name="default" hours=24 cpus=4 mem="16G" part="reqp" qos="requeue" gpus=0 conc=2 lines=80 as_json=0 container=""
   while [ $# -gt 0 ]; do case "$1" in
     --name) name="$2"; shift 2;; --hours) hours="$2"; shift 2;; --cpus) cpus="$2"; shift 2;; --mem) mem="$2"; shift 2;;
     --partition) part="$2"; shift 2;; --qos) qos="$2"; shift 2;; --gpus) gpus="$2"; shift 2;; --concurrency) conc="$2"; shift 2;;
+    --container) container="$2"; shift 2;;
     --lines) lines="$2"; shift 2;; --json) as_json=1; shift;; *) shift;; esac; done
   [[ "$name" =~ ^[A-Za-z0-9_-]+$ ]] || die "worker name must be letters, digits, _ or -"
   local w="$ASHLEY_HOME/workers/$name"
@@ -189,15 +247,23 @@ cmd_worker() {
       case "$st" in PENDING|RUNNING|CONFIGURING) echo "worker $name already has job $jid ($st) on $(cat "$w/node" 2>/dev/null || echo '?')"; return 0;; esac
       [[ "$hours" =~ ^[0-9]+$ ]] || die "--hours must be an integer"
       local time; time=$(printf '%d-%02d:00:00' $((hours / 24)) $((hours % 24)))
-      local gres="" requeue="#SBATCH --no-requeue"
+      local gres="" requeue="#SBATCH --no-requeue" w_sandbox="" w_claude=""
       [ "$gpus" != "0" ] && gres="#SBATCH --gres=gpu:$gpus"
       [ "$qos" = "requeue" ] && requeue="#SBATCH --requeue"
+      if [ -n "$container" ]; then
+        lib_readable || die "--container needs the shared library ($LIBRARY_ROOT)"
+        w_sandbox=$(lib_field "$container" sandbox); w_claude=$(lib_field "$container" claude_bin)
+        [ -n "$w_sandbox" ] || die "no library entry '$container' (ashley library)"
+        [ -x "$w_sandbox/usr/local/bin/node" ] || die "cannot read the shared container $w_sandbox"
+        echo "$container" > "$w/container"
+      fi
       sed -e "s|@NAME@|$name|g" -e "s|@PARTITION@|$part|g" -e "s|@QOS@|$qos|g" -e "s|@CPUS@|$cpus|g" -e "s|@MEM@|$mem|g" \
           -e "s|@TIME@|$time|g" -e "s|@GRES@|$gres|g" -e "s|@REQUEUE@|$requeue|g" -e "s|@GPUS@|$gpus|g" -e "s|@CONC@|$conc|g" \
+          -e "s|@SANDBOX@|$w_sandbox|g" -e "s|@CLAUDE_BIN@|$w_claude|g" -e "s|@LIBRARY@|$LIBRARY_ROOT|g" \
           "$BIN/worker.sbatch.tpl" > "$w/job.sbatch"
       local out; out=$(cd "$w" && sbatch --parsable job.sbatch 2>&1) || die "sbatch failed: $out"
       jid=${out%%;*}; echo "$jid" > "$w/job.id"; rm -f "$w/node"
-      echo "submitted worker $name as job $jid ($part/$qos, $cpus cpu, $mem, $time, gpus=$gpus, concurrency=$conc)";;
+      echo "submitted worker $name as job $jid ($part/$qos, $cpus cpu, $mem, $time, gpus=$gpus, concurrency=$conc${container:+, container $container})";;
     stop)
       [ -d "$w" ] || die "no worker $name"
       touch "$w/stop"
@@ -374,6 +440,8 @@ case "${1:-help}" in
   install) shift; cmd_install "$@";;
   verify-tokens) shift; cmd_verify_tokens "$@";;
   relay) shift; cmd_relay "$@";;
+  library) shift; cmd_library "$@";;
+  adopt) shift; cmd_adopt "$@";;
   uninstall) shift; cmd_uninstall "$@";;
   bootstrap) shift; cmd_bootstrap "$@";;
   status) shift; cmd_status "$@";;

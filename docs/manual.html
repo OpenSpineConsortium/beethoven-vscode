@@ -315,8 +315,10 @@ key</td>
 </tr>
 <tr>
 <td>9 Install on the grid</td>
-<td>a progress line; then “bootstrap job N submitted”</td>
-<td>wait 5 to 15 minutes; the Ashley view turns to <em>Grid
+<td>a progress line; then either “adopted shared container” (a second,
+when your lead has given you the <code>oschome</code> group) or
+“bootstrap job N submitted”</td>
+<td>nothing, or wait 5 to 15 minutes; the Ashley view turns to <em>Grid
 ready</em></td>
 </tr>
 </tbody>
@@ -333,8 +335,9 @@ a container in your storage.</p>
 your first question</h3>
 <ol type="1">
 <li><strong>Ashley: Start a Claude worker on the grid</strong>: name
-<code>default</code>, CPU node, 24 hours. A Slurm job is submitted. When
-it starts, the Ashley view shows
+<code>default</code>, CPU node, 24 hours, and, when the lab library is
+readable, which container (the lab default is right for most work). A
+Slurm job is submitted. When it starts, the Ashley view shows
 <code>Worker default  &lt;node&gt; idle</code>.</li>
 <li><strong>Ashley: Ask the grid Claude</strong>: type <em>“Create a
 folder hello in my home with a README that says which node you are on
@@ -672,6 +675,45 @@ a turn at the wall limit; <code>--dependency=singleton</code> keeps one
 job per worker name; on the <code>requeue</code> QoS the job is
 <code>--requeue --open-mode=append</code> because the daemon is
 re-entrant.</p>
+<h3 id="the-shared-container-library">The shared container library</h3>
+<p>Containers are read-only at run time (every account’s sessions,
+settings and caches live in its own home), so one copy serves the whole
+lab. <code>/rs/rs_grp_oschome/shared/ashley/</code> (group
+<code>oschome</code>, mode 2775) holds <code>library.json</code> and one
+sandbox per entry:</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode json"><code class="sourceCode json"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="fu">{</span><span class="dt">&quot;version&quot;</span><span class="fu">:</span> <span class="dv">1</span><span class="fu">,</span> <span class="dt">&quot;default&quot;</span><span class="fu">:</span> <span class="st">&quot;claude-node22&quot;</span><span class="fu">,</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a> <span class="dt">&quot;containers&quot;</span><span class="fu">:</span> <span class="fu">{</span><span class="dt">&quot;claude-node22&quot;</span><span class="fu">:</span> <span class="fu">{</span><span class="dt">&quot;sandbox&quot;</span><span class="fu">:</span> <span class="st">&quot;.../containers/claude-node22&quot;</span><span class="fu">,</span> <span class="dt">&quot;claude_bin&quot;</span><span class="fu">:</span> <span class="st">&quot;.../npm-claude-node22/bin/claude&quot;</span><span class="fu">,</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>   <span class="dt">&quot;runtime&quot;</span><span class="fu">:</span> <span class="st">&quot;/wsu/el7/gnu7/apptainer/1.2.2/bin/apptainer&quot;</span><span class="fu">,</span> <span class="dt">&quot;image&quot;</span><span class="fu">:</span> <span class="st">&quot;docker://node:22-bookworm&quot;</span><span class="fu">,</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>   <span class="dt">&quot;claude_version&quot;</span><span class="fu">:</span> <span class="st">&quot;2.1.283 (Claude Code)&quot;</span><span class="fu">,</span> <span class="dt">&quot;gpu&quot;</span><span class="fu">:</span> <span class="kw">false</span><span class="fu">,</span> <span class="dt">&quot;built&quot;</span><span class="fu">:</span> <span class="st">&quot;...&quot;</span><span class="fu">,</span> <span class="dt">&quot;built_by&quot;</span><span class="fu">:</span> <span class="st">&quot;go2432&quot;</span><span class="fu">,</span> <span class="dt">&quot;purpose&quot;</span><span class="fu">:</span> <span class="st">&quot;general ...&quot;</span><span class="fu">}}}</span></span></code></pre></div>
+<ul>
+<li><code>ashley install</code> adopts the library’s default when it is
+readable (<code>ashley adopt &lt;name&gt;</code> writes
+<code>config.env</code> and <code>READY</code> in a second; nothing is
+built, nothing is stored in the student’s space).
+<code>ashley install --build-own</code> keeps the old per-account
+build.</li>
+<li><code>ashley worker start --container &lt;name&gt;</code> runs any
+entry; the worker’s job script carries the sandbox and binds the library
+root. A student can run a CPU worker on the general container and a GPU
+worker on a CUDA one at the same time.</li>
+<li>Leads publish entries with
+<code>ashley library publish --name &lt;name&gt; --image docker://&lt;image&gt; [--gpu] [--purpose &quot;...&quot;]</code>:
+a job builds the sandbox, installs the pinned Claude Code, merges the
+entry into <code>library.json</code> and makes the tree group-readable.
+Entries are pinned by image and Claude Code version, so every student
+runs the same bits; an update is a new entry.</li>
+<li>Access: membership of the <code>oschome</code> group (the lab asks
+the HPC admins). Without it, the wizard falls back to building in the
+student’s own storage, so nothing blocks.</li>
+</ul>
+<p>Because every worker of an account shares <code>~/.ashley</code>, a
+worker Claude can hand work to another worker with
+<code>ashley send --worker &lt;name&gt;</code> from its shell; the
+daemon tells each worker who it is, which peers are alive and the exact
+command (<code>peerNote()</code> in <code>ashleyd.js</code>). A lead
+worker on the general container can therefore fan out to a GPU worker on
+a CUDA container and collect the result with
+<code>ashley result</code>.</p>
 <h3 id="the-laptop-side">The laptop side</h3>
 <ul>
 <li><strong>Wizard</strong> (<code>core/wizard.ts</code>): nine steps,
@@ -755,6 +797,11 @@ runs until its wall time (24 h by default, 30 days maximum on the
 <p><strong>Images.</strong> Open your grid files with <strong>Ashley:
 Open my grid files on a compute node</strong>; click a PNG. No X
 server.</p>
+<p><strong>Containers.</strong> Workers run the lab’s shared container
+by default (no build, same for everyone); a lead can publish others (a
+CUDA one for training, an R/Bioconductor one) and you pick per worker.
+Two workers of yours can run different containers at once and hand work
+to each other.</p>
 <p><strong>GPUs.</strong> Start a worker with one GPU when the task
 trains or infers; the grid has H200, L40S, A30 and V100-class nodes. Ask
 for a GPU only for that worker; CPU workers start sooner.</p>
@@ -938,19 +985,19 @@ forgets tokens, key and config block, settings, the Claude Code
 registration, and optionally Ashley on the grid
 (<code>ashley uninstall</code>, with <code>--purge-root</code> for the
 container). For a brand-new VS Code as well:</p>
-<div class="sourceCode" id="cb2"><pre class="sourceCode powershell"><code class="sourceCode powershell"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>code <span class="op">--</span>user-data-dir <span class="va">$env</span><span class="op">:</span><span class="va">TEMP</span>\fresh-vscode <span class="op">--</span>extensions-dir <span class="va">$env</span><span class="op">:</span><span class="va">TEMP</span>\fresh-ext</span></code></pre></div>
+<div class="sourceCode" id="cb3"><pre class="sourceCode powershell"><code class="sourceCode powershell"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>code <span class="op">--</span>user-data-dir <span class="va">$env</span><span class="op">:</span><span class="va">TEMP</span>\fresh-vscode <span class="op">--</span>extensions-dir <span class="va">$env</span><span class="op">:</span><span class="va">TEMP</span>\fresh-ext</span></code></pre></div>
 <p>install Claude Code, Remote - SSH and the Ashley VSIX in that window,
 and run the wizard. Delete the two folders afterwards.</p>
 <h3 id="building-from-source">Building from source</h3>
 <p>Requirements: Node.js 22 (the packaging tool refuses older), Git.</p>
-<div class="sourceCode" id="cb3"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="fu">git</span> clone <span class="op">&lt;</span>this repository<span class="op">&gt;</span> ashley</span>
-<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="bu">cd</span> ashley/extension</span>
-<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="ex">npm</span> install</span>
-<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="ex">npm</span> run build          <span class="co"># bundles dist/extension.js, dist/mcp-server.js, dist/ashley-cli.js, copies ../grid into dist/grid</span></span>
-<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a><span class="ex">npm</span> run test:unit      <span class="co"># 22 tests: ssh config, protocol, slurm parsing, and the daemon with a fake claude</span></span>
-<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a><span class="ex">npm</span> run test:vscode    <span class="co"># downloads a VS Code build once, runs the integration suite</span></span>
-<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a><span class="ex">npm</span> run package        <span class="co"># writes ../dist/ashley-wsu-&lt;version&gt;.vsix</span></span>
-<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a><span class="ex">code</span> <span class="at">--install-extension</span> ../dist/ashley-wsu-1.0.0.vsix</span></code></pre></div>
+<div class="sourceCode" id="cb4"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="fu">git</span> clone <span class="op">&lt;</span>this repository<span class="op">&gt;</span> ashley</span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="bu">cd</span> ashley/extension</span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a><span class="ex">npm</span> install</span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a><span class="ex">npm</span> run build          <span class="co"># bundles dist/extension.js, dist/mcp-server.js, dist/ashley-cli.js, copies ../grid into dist/grid</span></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a><span class="ex">npm</span> run test:unit      <span class="co"># 22 tests: ssh config, protocol, slurm parsing, and the daemon with a fake claude</span></span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a><span class="ex">npm</span> run test:vscode    <span class="co"># downloads a VS Code build once, runs the integration suite</span></span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a><span class="ex">npm</span> run package        <span class="co"># writes ../dist/ashley-wsu-&lt;version&gt;.vsix</span></span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a><span class="ex">code</span> <span class="at">--install-extension</span> ../dist/ashley-wsu-1.0.0.vsix</span></code></pre></div>
 <p>On a Windows machine without Node on <code>PATH</code>, the portable
 build works: download <code>node-v22.x-win-x64.zip</code> from
 nodejs.org, unzip, and prefix <code>PATH</code> with that folder for the
@@ -963,14 +1010,30 @@ commands above.</p>
 (macOS, Linux, Xcode users)</h3>
 <p><code>extension/dist/ashley-cli.js</code> is the wizard and the grid
 calls without VS Code:</p>
-<div class="sourceCode" id="cb4"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="ex">node</span> dist/ashley-cli.js setup            <span class="co"># the same nine steps, in the terminal</span></span>
-<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="ex">node</span> dist/ashley-cli.js doctor</span>
-<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a><span class="ex">node</span> dist/ashley-cli.js worker start <span class="at">--name</span> default <span class="at">--hours</span> 24</span>
-<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a><span class="ex">node</span> dist/ashley-cli.js ask <span class="at">--session</span> thesis <span class="st">&quot;read PREREG.md and list its hypotheses&quot;</span></span></code></pre></div>
+<div class="sourceCode" id="cb5"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="ex">node</span> dist/ashley-cli.js setup            <span class="co"># the same nine steps, in the terminal</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="ex">node</span> dist/ashley-cli.js doctor</span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a><span class="ex">node</span> dist/ashley-cli.js worker start <span class="at">--name</span> default <span class="at">--hours</span> 24</span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a><span class="ex">node</span> dist/ashley-cli.js ask <span class="at">--session</span> thesis <span class="st">&quot;read PREREG.md and list its hypotheses&quot;</span></span></code></pre></div>
 <p><code>cli/ashley</code> (bash) and <code>cli/ashley.ps1</code>
 forward any command to the grid over ssh and need only an ssh client and
 the config block (<code>node dist/ashley-cli.js ssh-config</code> prints
 it).</p>
+<h3 id="for-leads-the-shared-container-library">For leads: the shared
+container library</h3>
+<p>One group-readable tree on the CephFS volume
+(<code>/rs/rs_grp_oschome/shared/ashley</code>) holds pre-built
+containers; students adopt them instead of building (no storage used,
+identical bits for everyone).</p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="fu">ssh</span> wsu-grid <span class="st">&quot;ashley library&quot;</span>                                   <span class="co"># what exists, which is the default</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="fu">ssh</span> wsu-grid <span class="st">&quot;ashley library publish --name claude-node22 --image docker://node:22-bookworm --purpose &#39;general: Claude Code, Node 22, git, python3&#39;&quot;</span></span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a><span class="fu">ssh</span> wsu-grid <span class="st">&quot;ashley library publish --name claude-cuda --image docker://nvidia/cuda:12.4.1-runtime-ubuntu22.04 --gpu --purpose &#39;GPU: torch and inference&#39;&quot;</span></span></code></pre></div>
+<p>Each publish is a job (5 to 15 minutes) that builds the sandbox,
+installs the pinned Claude Code (the image must be able to run Node 22:
+Debian 12 / Ubuntu 22.04 or newer), merges the entry into
+<code>library.json</code> and makes the tree group-readable. Students
+need the <code>oschome</code> group (request it from the HPC admins with
+the student’s AccessID). Without it the wizard builds in the student’s
+own space.</p>
 <h3 id="updating">Updating</h3>
 <p>Install the new <code>.vsix</code> the same way; run <strong>Ashley:
 Install or update Ashley on the grid</strong> to push new grid scripts

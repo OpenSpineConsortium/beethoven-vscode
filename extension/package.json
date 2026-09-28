@@ -329,6 +329,11 @@
           "type": "boolean",
           "default": true,
           "description": "Put GITHUB_TOKEN and HF_TOKEN into every integrated terminal. ANTHROPIC_API_KEY is never injected: it would switch the local Claude Code from your subscription to pay-per-use."
+        },
+        "ashley.container": {
+          "type": "string",
+          "default": "auto",
+          "description": "Which container a new worker runs: 'auto' = the lab's shared default when readable (no build, consistent across students), 'own' = the container built in your storage, or the name of a shared-library entry (Ashley: Start a Claude worker lets you pick)."
         }
       }
     }

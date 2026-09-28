@@ -172,7 +172,7 @@ function startRequest(req, claimedPath) {
   args.push('--max-turns', String(req.max_turns || 50));
   if (req.model) args.push('--model', req.model);
   if (Array.isArray(req.allowed_tools) && req.allowed_tools.length) args.push('--allowedTools', req.allowed_tools.join(','));
-  if (req.append_system_prompt) args.push('--append-system-prompt', req.append_system_prompt);
+  args.push('--append-system-prompt', req.append_system_prompt || peerNote());
   if (session.resume) args.push('--resume', session.session_id);
   else args.push('--session-id', session.session_id);
 
@@ -282,6 +282,29 @@ function writeResult(req, r) {
     r,
   );
   atomicWrite(path.join(OUTBOX, `${req.id}.json`), JSON.stringify(out, null, 1));
+}
+
+// ---- peers ----------------------------------------------------------------------------
+// The worker Claude is told who it is and which other workers of this account are alive, and how
+// to hand them work: the same inbox mechanism, from its own shell. This is how one lead worker
+// can fan a task out to several others (each its own Slurm job, possibly a different container).
+function peerNote() {
+  const peers = [];
+  try {
+    for (const name of fs.readdirSync(path.join(ASHLEY_HOME, 'workers'))) {
+      if (name === WORKER) continue;
+      const st = safe(() => JSON.parse(fs.readFileSync(path.join(ASHLEY_HOME, 'workers', name, 'state.json'), 'utf8')), null);
+      if (st && Date.now() - Date.parse(st.last_beat) < 90e3) peers.push(`${name} (node ${st.node}, ${st.status})`);
+    }
+  } catch {
+    /* no workers dir */
+  }
+  return [
+    `You are the Ashley worker "${WORKER}" of user ${os.userInfo().username} on Wayne State grid node ${node} (Slurm job ${job}); ~/.ashley/bin/ashley is on PATH.`,
+    peers.length ? `Other live workers of this account: ${peers.join('; ')}.` : 'No other worker of this account is alive right now.',
+    'To hand work to another worker, write a request from your shell: printf \'%s\' \'{"v":1,"id":"<unique>","prompt":"...","session":"<name>","mode":"acceptEdits","max_turns":50,"created":"<iso>","from":"' + WORKER + '"}\' | ashley send --worker <name> --json ; collect it later with: ashley result --worker <name> <id> (or ashley wait). Start one with: ashley worker start --name <name> [--container <library entry>] [--gpus 1].',
+    'Never run heavy work on the login node; submit jobs. Read files before changing them; keep results in files.',
+  ].join(' ');
 }
 
 // ---- accounts -------------------------------------------------------------------------

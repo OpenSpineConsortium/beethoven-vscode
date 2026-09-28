@@ -24,6 +24,11 @@ cd "$W" || exit 1
 say() { echo "$(date -u +%FT%TZ) $*"; }
 # shellcheck disable=SC1090
 source "$ASHLEY_HOME/config.env" || { echo "REFUSING: no config.env"; exit 1; }
+# a worker may run a container from the lab's shared library instead of the account's own
+W_SANDBOX="@SANDBOX@"; W_CLAUDE="@CLAUDE_BIN@"; LIBRARY_ROOT="@LIBRARY@"
+[ -n "$W_SANDBOX" ] && SANDBOX="$W_SANDBOX"
+[ -n "$W_CLAUDE" ] && CLAUDE_BIN="$W_CLAUDE"
+case "$SANDBOX" in "$LIBRARY_ROOT"/*) case " ${BINDS:-} " in *" -B $LIBRARY_ROOT "*|*" $LIBRARY_ROOT "*) ;; *) BINDS="${BINDS:-} -B $LIBRARY_ROOT";; esac;; esac
 for v in RUNTIME SANDBOX CLAUDE_BIN ROOT; do [ -n "${!v:-}" ] || { echo "REFUSING: $v unset in config.env (bootstrap not finished?)"; exit 1; }; done
 [ -x "$SANDBOX/usr/local/bin/node" ] || { echo "REFUSING: sandbox $SANDBOX incomplete"; exit 1; }
 [ -x "$CLAUDE_BIN" ] || { echo "REFUSING: $CLAUDE_BIN missing"; exit 1; }
