@@ -8,6 +8,8 @@ import * as path from 'node:path';
 import { runWizard, checkAll, WizardEnv, WizardSettings, StepReport } from '../core/wizard';
 import { SecretId } from '../core/services';
 import { GridApi } from '../core/gridApi';
+import { GridRelay } from '../core/relay';
+import { makeRequest } from '../core/protocol';
 import { TerminalUI } from './terminalUi';
 import { renderBlock } from '../core/sshConfig';
 import { installPublicKey, probeWithKey } from '../core/sshInstall';
@@ -83,7 +85,8 @@ async function main(argv: string[]): Promise<number> {
   const cmd = argv[0] ?? 'help';
   const ui = new TerminalUI();
   const s = settings();
-  const grid = new GridApi(s.sshAlias);
+  const relay = new GridRelay(s.sshAlias);
+  const grid = new GridApi(s.sshAlias, () => {}, ['ask', 'latency', 'send', 'result'].includes(cmd) ? relay : undefined);
   switch (cmd) {
     case 'setup': {
       const only = flag(argv, '--only')?.split(',').filter(Boolean);
@@ -95,6 +98,35 @@ async function main(argv: string[]): Promise<number> {
       print(await checkAll(env(ui)));
       const r = await grid.ashley(['doctor'], { timeoutMs: 120_000 });
       console.log((r.stdout + r.stderr).trim());
+      return 0;
+    }
+    case 'latency': {
+      // receipt latency: laptop send -> worker claim (result.started), skew-corrected via PING
+      const n = parseInt(argv[1] && !argv[1].startsWith('--') ? argv[1] : '5', 10);
+      const worker = flag(argv, '--worker') ?? 'default';
+      await relay.ensure();
+      console.log('path,sample,ms');
+      for (let i = 1; i <= n; i++) {
+        const p = await relay.ping();
+        const skew = p.gridMs - p.localMidMs;
+        console.log(`ping_relay,${i},${p.rttMs}`);
+        const req = makeRequest({ prompt: 'latency probe', session: 'latency', mode: 'plan', max_turns: 1, from: 'probe' });
+        const t0 = Date.now();
+        const q = await relay.send(req, worker);
+        console.log(`ack_relay,${i},${Date.now() - t0}`);
+        const r = await new Promise<import('../core/protocol').AshleyResult | null>(async (resolve) => {
+          for (let k = 0; k < 120; k++) {
+            const x = await relay.result(req.id, worker);
+            if (x) return resolve(x);
+            await new Promise((z) => setTimeout(z, 250));
+          }
+          resolve(null);
+        });
+        if (r) console.log(`receipt_relay,${i},${Date.parse(r.started) - skew - t0}`);
+        else console.log(`receipt_relay,${i},NA`);
+        void q;
+      }
+      relay.close();
       return 0;
     }
     case 'ssh2-probe': {
@@ -129,6 +161,7 @@ async function main(argv: string[]): Promise<number> {
   doctor               every check, laptop and grid
   ssh-config           print the ~/.ssh/config block
   ssh2-probe           prove the in-panel SSH client reaches the grid with your key
+  latency [N]          measure prompt receipt latency over the relay (CSV)
   ask [--session S] [--worker W] [--cwd DIR] <prompt...>   ask the grid Claude and stream the answer
   <anything else>      passed to the grid: status, worker start|stop|list|log, sessions, accounts, result, tail, bootstrap
 Settings: ${SETTINGS}; secrets: ${SECRETS} (mode 600)`);

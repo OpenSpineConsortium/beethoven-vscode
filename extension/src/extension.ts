@@ -10,6 +10,7 @@ import { AshleyTree } from './vscode/tree';
 import { registerMcp, isMcpRegistered } from './vscode/mcpRegister';
 import { runWizard, checkAll, StepReport, testConnection, STEPS } from './core/wizard';
 import { GridApi } from './core/gridApi';
+import { GridRelay } from './core/relay';
 import { SERVICES, SecretId, gridHome } from './core/services';
 import { remoteUri, stripBlock, hasBlock } from './core/sshConfig';
 import { WorkerJobSpec, describeWall } from './core/slurm';
@@ -21,11 +22,22 @@ let output: vscode.OutputChannel;
 let store: AshleyStore;
 let tree: AshleyTree;
 let panel: SetupPanel | undefined;
+let relay: GridRelay | undefined;
+function getRelay(alias: string): GridRelay {
+  if (!relay || relay.alias !== alias) {
+    relay?.close();
+    relay = new GridRelay(alias, { onStatus: (s, d) => output.appendLine(`relay ${s} ${d ?? ''}`) });
+  }
+  return relay;
+}
 
 export async function activate(context: vscode.ExtensionContext): Promise<{ _internal: typeof _internal }> {
   output = vscode.window.createOutputChannel('Ashley');
   store = new AshleyStore(context);
-  const grid = () => new GridApi(store.settings().sshAlias, (l) => output.appendLine(l));
+  const grid = () => {
+    const alias = store.settings().sshAlias;
+    return new GridApi(alias, (l) => output.appendLine(l), getRelay(alias));
+  };
   tree = new AshleyTree(store, grid);
   context.subscriptions.push(output, vscode.window.registerTreeDataProvider('ashley.status', tree));
 
@@ -80,6 +92,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<{ _int
 
 export function deactivate(): void {
   panel?.dispose();
+  relay?.close();
 }
 
 // ---------------------------------------------------------------------------------------

@@ -40,7 +40,7 @@ and V100-class nodes. Ask for a GPU only for that worker; CPU workers start soon
 | Put patient data, PHI, survey CSVs or contact lists on the grid | The lab's IRB umbrella (HPR 2026-269) covers public, de-identified datasets only; anything else needs its own filing first (RECIPE.md, data rules) |
 | Push the grid Claude to `--dangerously-skip-permissions` for everything | It is available (`mode: bypassPermissions`) but the default `acceptEdits` lets it edit files and run tools while refusing destructive commands; use bypass only inside a project folder you can `git checkout` back |
 | Ask for interactive programs (ITK-SNAP, a GUI) through the worker | The worker is headless. Run GUI tools locally on rsynced results, or with `srun --x11` in your own shell |
-| Expect a reply in under a few seconds | One ssh connection (2 s), the poll (1 s) and Claude Code's start (5 s) come before the first token; a real task takes minutes |
+| Expect a reply in under a few seconds | A prompt reaches the worker in about 0.2 s over the open relay, but Claude Code's own start (about 5 s) comes before the first token; a real task takes minutes |
 | Keep a worker forever | Jobs have wall limits; the `requeue` QoS may requeue the job (it resumes). Start another; queued requests wait |
 | Store 200 GB in your home | Home is a 4 TB soft quota shared with everything else; Ashley's container and workspaces live on the lab's CephFS volume when you have access, and the doctor shows the quota |
 

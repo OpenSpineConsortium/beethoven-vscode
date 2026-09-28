@@ -29,7 +29,9 @@ const argv = parseArgs(process.argv.slice(2));
 const WORKER_DIR = must(argv['worker-dir'], '--worker-dir');
 const CLAUDE = must(argv.claude, '--claude');
 const CONCURRENCY = parseInt(argv.concurrency || '2', 10);
-const POLL_MS = parseInt(argv['poll-ms'] || '1000', 10);
+// 250 ms: a readdir of a tiny directory four times a second is nothing for the filesystem,
+// and it takes the poll out of the latency budget (measured 2026-09-28).
+const POLL_MS = parseInt(argv['poll-ms'] || '250', 10);
 const ASHLEY_HOME = process.env.ASHLEY_HOME || path.join(os.homedir(), '.ashley');
 const ROOT = process.env.ASHLEY_ROOT || path.join(os.homedir(), 'ashley');
 const WORKER = path.basename(WORKER_DIR);

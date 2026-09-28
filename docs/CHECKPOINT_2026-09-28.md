@@ -1,4 +1,38 @@
-# CHECKPOINT 2026-09-28 (updated 02:35 UTC, second pass) — Ashley, the WSU grid + Claude Code extension
+# CHECKPOINT 2026-09-28 (updated 03:05 UTC, third pass: the relay) — Ashley, the WSU grid + Claude Code extension
+
+## Third pass: prompt latency and the relay (Greg's question at 22:40 local)
+
+Measured (Windows laptop, grid clock skew corrected, `docs/research/latency_*.csv`, plot
+`docs/figures/latency.png`, script `docs/research/plot_latency.py`):
+
+| Path | Median | Range |
+|---|---|---|
+| `ssh wsu-grid true` (one connection) | 2.6 s | 2.4 to 2.7 s |
+| prompt received by the worker, one ssh per prompt (the first design) | 2.0 s | 1.6 to 2.2 s |
+| relay round trip (PING/PONG over the open session) | 20 ms | 18 to 23 ms |
+| relay: QUEUED ack back on the laptop | 37 ms | 35 to 43 ms |
+| **prompt received by the worker via the relay** | **193 ms** | 53 to 275 ms |
+| ssh straight to the compute node through the jump host | about 25 s | node sshd delay, measured earlier (26.8 s, 38 s) |
+
+Decision: switched to the relay everywhere. Design: `ashley relay` (grid CLI, bash `read -t 0.25`
+loop) speaks a line protocol (SEND/QUEUED, RESULT/PENDING, PING/PONG, pushed EVENT/RESULT lines);
+`extension/src/core/relay.ts` (`GridRelay`) keeps one ssh session per process (extension, MCP
+server, CLI), reconnects on drop; `GridApi.send/ask/result` use it when present and fall back to a
+fresh ssh. The daemon polls every 250 ms (was 1 s). `ashley-cli latency N` reproduces the
+measurement. Direct UDP to the node is impossible (laptop cannot reach compute nodes) and
+unnecessary; the remaining time to first token is Claude Code's ~5 s start-up (next lever: a warm
+`--input-format stream-json` process per session). Interactive ssh/Remote-SSH remain as before.
+
+Worker now: job 40486562 on asx1 (secp/secondary, 6 h from 02:53 UTC), 250 ms poll.
+GitHub: private repository https://github.com/GregorySchwing/ashley created with the `repo`-scoped
+token that lives in Greg's grid environment (the token never left the grid; the push goes through a
+git bundle uploaded to the grid). Move it to OpenSpineConsortium when Greg wants (his grid token is
+not an org member).
+
+The second pass follows.
+
+---
+
 
 ## Second pass (Greg's feedback after trying the wizard, 2026-09-27 22:06 local)
 

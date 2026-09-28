@@ -12,11 +12,15 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod';
 import * as os from 'node:os';
 import { GridApi } from '../core/gridApi';
+import { GridRelay } from '../core/relay';
 import { PermissionMode } from '../core/protocol';
 
 const alias = process.env.ASHLEY_GRID || 'wsu-grid';
 const defaultWorker = process.env.ASHLEY_WORKER || 'default';
-const grid = new GridApi(alias, (l) => process.stderr.write(l + '\n'));
+// One relay session for the life of this server: prompts cost a network round trip, not an ssh handshake.
+const relay = new GridRelay(alias, { onStatus: (s, d) => process.stderr.write(`relay ${s} ${d ?? ''}\n`) });
+const grid = new GridApi(alias, (l) => process.stderr.write(l + '\n'), relay);
+process.on('exit', () => relay.close());
 
 const server = new McpServer({ name: 'ashley', version: '1.0.0' });
 

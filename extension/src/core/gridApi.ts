@@ -3,6 +3,7 @@
 import { ssh, RunResult, RunOptions } from './shell';
 import { AshleyRequest, AshleyResult, WorkerState, makeRequest, PermissionMode } from './protocol';
 import { parseSqueue, SqueueRow, SQUEUE_FORMAT, workerStartArgs, WorkerJobSpec } from './slurm';
+import { GridRelay } from './relay';
 
 export interface GridStatus {
   version?: string;
@@ -27,7 +28,11 @@ export interface AskEvents {
 }
 
 export class GridApi {
-  constructor(public alias: string, private log: (line: string) => void = () => {}) {}
+  /**
+   * @param relay an open message channel (see relay.ts). With it, send/ask/result cost one
+   * network round trip instead of one ssh connection each; without it every call is its own ssh.
+   */
+  constructor(public alias: string, private log: (line: string) => void = () => {}, public relay?: GridRelay) {}
 
   ashley(args: string[], opts: RunOptions = {}): Promise<RunResult> {
     this.log(`$ ssh ${this.alias} ashley ${args.join(' ')}`);
@@ -76,6 +81,14 @@ export class GridApi {
   /** Queue a prompt; returns the request id immediately. */
   async send(req: Partial<AshleyRequest> & { prompt: string }, worker = 'default'): Promise<{ id: string; message: string }> {
     const full = makeRequest({ ...req, from: req.from ?? 'laptop' });
+    if (this.relay) {
+      try {
+        const q = await this.relay.send(full, worker);
+        return { id: full.id, message: `queued ${full.id} on worker ${worker} (relay, grid time ${new Date(q.queuedGridMs).toISOString()})` };
+      } catch (e) {
+        this.log(`relay send failed (${(e as Error).message}); using a fresh ssh`);
+      }
+    }
     const r = await this.ashley(['send', '--worker', worker, '--json'], { input: JSON.stringify(full), timeoutMs: 60_000 });
     if (r.code !== 0) throw new Error(`send failed: ${(r.stderr || r.stdout).trim()}`);
     return { id: full.id, message: r.stdout.trim() };
@@ -83,6 +96,13 @@ export class GridApi {
 
   /** Fetch a result if it exists (null otherwise). */
   async result(id: string, worker = 'default'): Promise<AshleyResult | null> {
+    if (this.relay) {
+      try {
+        return await this.relay.result(id, worker);
+      } catch (e) {
+        this.log(`relay result failed (${(e as Error).message}); using a fresh ssh`);
+      }
+    }
     const r = await this.ashley(['result', '--worker', worker, id], { timeoutMs: 60_000 });
     if (r.code !== 0) return null;
     return parseLastJson<AshleyResult>(r.stdout);
@@ -100,6 +120,13 @@ export class GridApi {
     signal?: AbortSignal,
   ): Promise<AshleyResult> {
     const full = makeRequest({ ...req, from: req.from ?? 'laptop' });
+    if (this.relay) {
+      try {
+        return await this.relay.ask(full, worker, timeoutSec, (ev) => events.onEvent?.(ev));
+      } catch (e) {
+        this.log(`relay ask failed (${(e as Error).message}); using a fresh ssh`);
+      }
+    }
     let buffer = '';
     let result: AshleyResult | null = null;
     const r = await this.ashley(['ask', '--worker', worker, '--json', '--stream', '--timeout', String(timeoutSec)], {

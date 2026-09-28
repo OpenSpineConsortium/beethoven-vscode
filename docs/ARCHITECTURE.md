@@ -47,9 +47,37 @@ A request is a JSON file. Its life:
 5. On exit, the daemon writes `outbox/<id>.json` (`.part` then rename): status, result text,
    session id, account, cost, turns, duration, node, job. `ashley wait` prints it as `RESULT {…}`.
 
-Latency is one ssh connection plus at most one poll interval plus Claude Code's own start-up
-(about 5 s cold on the grid). A queued request survives a daemon restart, a requeued job or a
-closed laptop: the daemon moves any `.claimed` file back to the inbox when it starts.
+### How a prompt travels, and how fast
+
+The laptop keeps **one ssh session** to the login node open, running `ashley relay`. A prompt
+is one line on that session's stdin; the relay writes the inbox file and answers `QUEUED`; the
+daemon polls the inbox every 250 ms; results and events come back on the same session as
+`RESULT`/`EVENT` lines. Measured on 2026-09-28 (Windows laptop, skew-corrected; `docs/research/`):
+
+| Path | Median | Range |
+|---|---|---|
+| one ssh connection to the login node | 2.6 s | 2.4 to 2.7 s |
+| prompt received by the worker, one ssh per prompt (the first design) | 2.0 s | 1.6 to 2.2 s |
+| relay round trip | 20 ms | 18 to 23 ms |
+| relay: queued on the grid, ack on the laptop | 37 ms | 35 to 43 ms |
+| **prompt received by the worker via the relay** | **0.19 s** | 0.05 to 0.28 s |
+| ssh straight to the compute node (for comparison) | about 25 s | the node's sshd delay |
+
+![Latency of the prompt paths](figures/latency.png)
+
+So the relay is roughly ten times faster to receipt and the remaining 0.1 to 0.3 s is the
+daemon's poll interval. It is "UDP-like" in the sense that matters (no per-message handshake,
+fire-and-forget `send` with an ack in 40 ms) while staying reliable: the file is the message,
+and a dropped session loses nothing that was already queued. If the session drops, the next
+call reconnects; every call also falls back to a fresh ssh. True UDP to the node is impossible
+(the laptop cannot reach compute nodes) and unnecessary. Claude Code's own start-up (about 5 s
+cold) now dominates the time to a first token; a warm `--input-format stream-json` process
+per session is the next lever if that ever matters.
+
+A queued request survives a daemon restart, a requeued job or a closed laptop: the daemon
+moves any `.claimed` file back to the inbox when it starts. An interactive ssh to the login
+node or the node (Remote-SSH, `Ashley: Open a terminal on the grid login node`) remains
+available; it is simply not the path prompts take.
 
 Why not a socket or a TCP port: the laptop can only reach the login node; the daemon runs on
 whichever node Slurm chose; the shared home is the one thing both see. Files are also what a

@@ -27,7 +27,13 @@ Everything else: [docs/manual.html](docs/manual.html) (also `docs/manual.pdf`, 2
 [docs/INSTALL.md](docs/INSTALL.md), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md),
 [docs/LIMITS.md](docs/LIMITS.md), [docs/PITCH.md](docs/PITCH.md), [docs/RESEARCH.md](docs/RESEARCH.md).
 
-## Status (2026-09-28, second pass after the first student feedback)
+## Status (2026-09-28, third pass: the relay)
+
+Prompts now travel over one persistent ssh session (`ashley relay`): receipt at the worker in about 0.2 s
+instead of 2 s (measured, `docs/figures/latency.png`); the daemon polls every 250 ms; every call still falls back to a
+fresh ssh. Repository: https://github.com/GregorySchwing/ashley (private).
+
+### Second pass after the first student feedback
 
 Windows-native only (no WSL mirror). GitHub arrives through VS Code's sign-in; Hugging Face and Claude tokens
 are picked up from the clipboard after one copy; the grid password and code are typed in the panel (ssh2),

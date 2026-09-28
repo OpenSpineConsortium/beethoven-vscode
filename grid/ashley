@@ -297,6 +297,53 @@ cmd_accounts() {
   esac
 }
 
+cmd_relay() {
+  # One long-lived ssh session instead of one per message. Protocol, one line each way:
+  #   -> SEND <worker> <json>        queue a request        <- QUEUED <id> <epoch_ms>
+  #   -> RESULT <worker> <id>        ask for a result       <- RESULT <id> <json> | PENDING <id>
+  #   -> PING                                               <- PONG <epoch_ms>
+  #   -> QUIT
+  # Results and events of everything queued through this session are pushed as they appear:
+  #   <- EVENT <id> <json line>   <- RESULT <id> <json>
+  # The loop wakes every 250 ms (read -t) to look at pending files; a sleep-and-stat loop is
+  # the kind of load the login node is for.
+  local -A pw poff   # id -> worker, id -> events offset
+  local line cmd rest worker json id
+  echo "READY $(date +%s%3N) $VERSION"
+  while :; do
+    if IFS= read -r -t 0.25 line; then
+      cmd=${line%% *}; rest=${line#* }
+      case "$cmd" in
+        SEND)
+          worker=${rest%% *}; json=${rest#* }
+          id=$(printf '%s' "$json" | grep -o '"id": *"[^"]*"' | head -1 | sed 's/.*"\([^"]*\)"$/\1/')
+          if [[ ! "$id" =~ ^[A-Za-z0-9_.-]+$ ]] || [ ! -d "$ASHLEY_HOME/workers/$worker" ]; then echo "ERROR bad request or unknown worker '$worker'"; continue; fi
+          mkdir -p "$ASHLEY_HOME/workers/$worker/inbox" "$ASHLEY_HOME/workers/$worker/outbox"
+          printf '%s' "$json" > "$ASHLEY_HOME/workers/$worker/inbox/$id.json.part" && mv "$ASHLEY_HOME/workers/$worker/inbox/$id.json.part" "$ASHLEY_HOME/workers/$worker/inbox/$id.json"
+          pw[$id]=$worker; poff[$id]=0
+          echo "QUEUED $id $(date +%s%3N)";;
+        RESULT)
+          worker=${rest%% *}; id=${rest#* }
+          if [ -s "$ASHLEY_HOME/workers/$worker/outbox/$id.json" ]; then printf 'RESULT %s ' "$id"; tr -d '\n' < "$ASHLEY_HOME/workers/$worker/outbox/$id.json"; echo; else echo "PENDING $id"; fi;;
+        PING) echo "PONG $(date +%s%3N)";;
+        QUIT) exit 0;;
+        *) echo "ERROR unknown command";;
+      esac
+    else
+      [ $? -gt 128 ] || exit 0   # stdin closed: the laptop went away
+      for id in "${!pw[@]}"; do
+        worker=${pw[$id]}
+        local ev="$ASHLEY_HOME/workers/$worker/outbox/$id.events.jsonl" out="$ASHLEY_HOME/workers/$worker/outbox/$id.json"
+        if [ -f "$ev" ]; then
+          local size; size=$(stat -c %s "$ev" 2>/dev/null || echo 0)
+          if [ "$size" -gt "${poff[$id]}" ]; then tail -c +$(( poff[$id] + 1 )) "$ev" | head -c $(( size - poff[$id] )) | sed "s/^/EVENT $id /"; poff[$id]=$size; fi
+        fi
+        if [ -s "$out" ]; then printf 'RESULT %s ' "$id"; tr -d '\n' < "$out"; echo; unset "pw[$id]" "poff[$id]"; fi
+      done
+    fi
+  done
+}
+
 cmd_verify_tokens() { # prove the stored tokens work, from the login node (tiny requests); prints names, never values
   [ -s "$ASHLEY_HOME/secrets.env" ] || { echo "no secrets.env"; return 1; }
   unset HF_TOKEN GITHUB_TOKEN GH_TOKEN
@@ -326,6 +373,7 @@ cmd_uninstall() { # what a brand-new grid account looks like to Ashley
 case "${1:-help}" in
   install) shift; cmd_install "$@";;
   verify-tokens) shift; cmd_verify_tokens "$@";;
+  relay) shift; cmd_relay "$@";;
   uninstall) shift; cmd_uninstall "$@";;
   bootstrap) shift; cmd_bootstrap "$@";;
   status) shift; cmd_status "$@";;
