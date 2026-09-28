@@ -12,7 +12,7 @@ const SECRET_PREFIX = 'ashley.';
 export const GITHUB_SCOPES = ['repo', 'workflow', 'read:org', 'gist'];
 
 export class AshleyStore {
-  constructor(private context: vscode.ExtensionContext) {}
+  constructor(public readonly context: vscode.ExtensionContext) {}
 
   get config(): vscode.WorkspaceConfiguration {
     return vscode.workspace.getConfiguration('ashley');
@@ -46,6 +46,15 @@ export class AshleyStore {
   async setSecret(id: SecretId, value: string | undefined): Promise<void> {
     if (value === undefined || value === '') await this.context.secrets.delete(SECRET_PREFIX + id);
     else await this.context.secrets.store(SECRET_PREFIX + id, value);
+  }
+
+  /** keychain probe for the troubleshooter */
+  async setSecretRaw(key: string, value: string | undefined): Promise<void> {
+    if (value === undefined) await this.context.secrets.delete(key);
+    else await this.context.secrets.store(key, value);
+  }
+  getSecretRaw(key: string): Promise<string | undefined> {
+    return Promise.resolve(this.context.secrets.get(key));
   }
 
   async secretSummary(): Promise<Array<{ id: SecretId; name: string; present: boolean }>> {

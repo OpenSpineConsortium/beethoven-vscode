@@ -35,6 +35,9 @@ export async function registerMcp(extensionPath: string, alias: string, log: (s:
   const node = await nodeForMcp();
   const config = mcpServerConfig(extensionPath, alias, node);
   const claude = findClaudeExecutable();
+  // add-json refuses a name that exists ("MCP server ashley already exists in user config", exit 1;
+  // measured on 2.1.283), and the path changes with every extension version: replace, never append
+  await run(claude, ['mcp', 'remove', '--scope', 'user', 'ashley'], { timeoutMs: 60_000 });
   const r = await run(claude, ['mcp', 'add-json', '--scope', 'user', 'ashley', JSON.stringify(config)], { timeoutMs: 60_000 });
   log(`${r.command}\n${r.stdout}${r.stderr}`);
   if (r.code === 0) {

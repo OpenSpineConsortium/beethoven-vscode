@@ -46,6 +46,13 @@ tell me whether the sex difference matches the published value"* in one sentence
 when it resets, and waits. It never uses anyone else's account, never types a token on a command
 line, and never runs anything heavy on the login node.
 
+**Your science stays yours.** The lab curates the datasets, the Claude containers and the software
+in one folder you can read. Everything you build runs in your own grid account, with your own
+subscription and your own tokens.
+
+**Claude in your pocket.** Turn on phone access and the Claude app on your phone drives your worker
+on the grid: check a job from the bus, ask for the next figure between patients.
+
 ## What becomes possible
 
 - A first-year student with an idea on Monday has ten measured cases by Tuesday and a

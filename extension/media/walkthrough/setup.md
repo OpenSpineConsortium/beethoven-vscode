@@ -1,16 +1,15 @@
 # The setup wizard
 
-Eleven steps, each one skipped if it is already done, so you can rerun it any time.
+Ten steps in a strict order, each skipped if it is already done, so you can rerun it any time.
 
-1. **AccessID** (your grid username, e.g. `ab1234`).
-2. **Grid account and Authenticator**: the panel checks whether you are on the WSU VPN, opens the account request page, OnDemand's 2FA Setup and the C&IT guide, and links the Authenticator app; you scan one QR code.
-3. **SSH key** made on this laptop, no passphrase, so Claude and Remote-SSH can use it unattended.
-4. **SSH config**: the login node `warrior` becomes a jump host; any compute node is one hop away.
-5. **Log in to the grid once**: the panel asks for your grid password and your Google Authenticator code, once. After that the grid never prompts again.
-6. **GitHub**: sign in in the browser; the token arrives by itself. 7. **Hugging Face token**: the token page opens pre-filled; copy the token and the panel picks it up.
-8. **Claude token for the grid**: `claude setup-token` opens the browser; you approve; copy the printed token and the panel picks it up.
-9. **Anthropic API key** (optional overflow).
-10. **Grid install**: uploads the scripts, writes the tokens to your grid home (mode 600), patches `~/.bashrc` for VS Code.
-11. **Join the lab**: once everything above works and your tokens verify, one request to your lead; approval gives you the lab folder and its shared containers (nothing to build).
+1. **Sign in with Wayne State**: AccessID@wayne.edu in the browser; only AccessIDs your lab pre-approved continue.
+2. **GitHub**: sign in in the browser; the token arrives by itself.
+3. **Hugging Face**: the token page opens pre-filled; press Create token and Copy; the panel takes it.
+4. **Claude**: claude.ai opens; sign in with the account you made with your WSU e-mail and press Authorize.
+5. **Grid account and Authenticator**: campus Wi-Fi or the VPN, OnDemand's 2FA Setup, one QR code.
+6. **SSH key** and 7. **SSH configuration**: automatic.
+8. **Log in to the grid once**: your grid password and the Authenticator code, in the panel, once.
+9. **Install on the grid**: scripts and all your tokens, in one pass.
+10. **Join the lab**: one request to your lead once everything above works; approval lets you read the lab folder.
 
-Nothing is typed on a command line where it would land in a history file.
+Tokens that stop working show **Renew**: one click, and the grid copy is updated too.

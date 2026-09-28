@@ -39,9 +39,37 @@ say "worker @NAME@ job ${SLURM_JOB_ID:-x} on $(hostname -f); cpus=${SLURM_CPUS_P
 SCR=/dev/shm/${USER}_ashley_@NAME@_${SLURM_JOB_ID:-x}; mkdir -p "$SCR" || { echo "REFUSING: no /dev/shm scratch"; exit 1; }
 trap 'rm -rf "$SCR"' EXIT
 export TMPDIR="$SCR"
+# Slurm from inside the container, so the worker's Claude can submit and watch jobs. Bound read-only:
+# the host's Slurm client (/usr/bin under /opt/host/bin), its library, the munge library (into
+# /usr/lib, a default search folder), the config, the munge socket, and a user list that names the
+# slurm and munge users the config refers to (the container's own lacks them). The wrappers give a
+# submitted job the host PATH and no container variables. Measured on asx1, 2026-09-28: squeue and
+# sbatch work, and the job runs on the host. Skipped, and the worker tells Claude so, if a piece is absent.
+SLURM_ARGS=(); SLURM_BIN=""
+MUNGE_LIB=$(readlink -f /usr/lib64/libmunge.so.2 2>/dev/null || true)
+if [ -x /usr/bin/sbatch ] && [ -d /usr/lib64/slurm ] && [ -d /etc/slurm ] && [ -d /var/run/munge ] && [ -n "$MUNGE_LIB" ]; then
+  SB="$W/slurm"; mkdir -p "$SB/bin" "$SB/etc"
+  { cat "$SANDBOX/etc/passwd"; getent passwd slurm munge "$USER"; } > "$SB/etc/passwd"
+  { cat "$SANDBOX/etc/group"; getent group slurm munge "$(id -gn)"; } > "$SB/etc/group"
+  for c in sbatch squeue scancel sacct sinfo scontrol; do
+    cat > "$SB/bin/$c" <<EOW
+#!/bin/sh
+# host Slurm client, written by worker job ${SLURM_JOB_ID:-x}; a submitted job gets the host PATH, not the container's
+for v in \$(env | sed -n 's/^\\(APPTAINER_[A-Za-z_]*\\|SINGULARITY_[A-Za-z_]*\\)=.*/\\1/p'); do unset "\$v"; done
+PATH='$PATH' exec /opt/host/bin/$c "\$@"
+EOW
+    chmod 755 "$SB/bin/$c"
+  done
+  SLURM_ARGS=(-B /usr/bin:/opt/host/bin:ro -B /usr/lib64/slurm:/usr/lib64/slurm:ro -B "$MUNGE_LIB:/usr/lib/libmunge.so.2:ro" -B /etc/slurm:/etc/slurm:ro -B /var/run/munge:/var/run/munge -B "$SB/etc/passwd:/etc/passwd:ro" -B "$SB/etc/group:/etc/group:ro")
+  SLURM_BIN="$SB/bin"
+  say "Slurm available inside the container ($SB/bin)"
+else
+  say "Slurm NOT available inside the container: a piece is missing on $(hostname)"
+fi
 NV=""; [ "@GPUS@" != "0" ] && NV="--nv"
 # shellcheck disable=SC2086,SC2206
 BIND_ARR=($BINDS)
-exec "$RUNTIME" exec $NV "${BIND_ARR[@]}" -B "$SCR:/tmp" "$SANDBOX" \
-  env HOME="$HOME" ASHLEY_HOME="$ASHLEY_HOME" ASHLEY_ROOT="$ROOT" SLURM_JOB_ID="${SLURM_JOB_ID:-x}" TMPDIR=/tmp \
+# ${ARR[@]+...}: bash 4.2 (CentOS 7) calls an empty array unbound under set -u
+exec "$RUNTIME" exec $NV "${BIND_ARR[@]}" ${SLURM_ARGS[@]+"${SLURM_ARGS[@]}"} -B "$SCR:/tmp" "$SANDBOX" \
+  env HOME="$HOME" ASHLEY_HOME="$ASHLEY_HOME" ASHLEY_ROOT="$ROOT" SLURM_JOB_ID="${SLURM_JOB_ID:-x}" TMPDIR=/tmp ASHLEY_SLURM_BIN="$SLURM_BIN" \
   node "$ASHLEY_HOME/bin/ashleyd.js" --worker-dir "$W" --claude "$CLAUDE_BIN" --concurrency @CONC@

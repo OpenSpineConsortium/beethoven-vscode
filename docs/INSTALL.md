@@ -87,32 +87,47 @@ containers; students adopt them instead of building (no storage used, identical 
 ```bash
 ssh wsu-grid "ashley library"                                   # what exists, which is the default
 ssh wsu-grid "ashley library publish --name claude-node22 --image docker://node:22-bookworm --purpose 'general: Claude Code, Node 22, git, python3'"
-ssh wsu-grid "ashley library publish --name claude-cuda --image docker://nvidia/cuda:12.4.1-runtime-ubuntu22.04 --gpu --purpose 'GPU: torch and inference'"
+ssh wsu-grid "ashley library publish --name claude-gpu --image docker://node:22-bookworm --gpu --purpose 'GPU: torch and inference'"
 ```
 
-Each publish is a job (5 to 15 minutes) that builds the sandbox, installs the pinned Claude Code
-(the image must be able to run Node 22: Debian 12 / Ubuntu 22.04 or newer), merges the entry into
-`library.json` and makes the tree group-readable.
+Each publish is a job (5 to 15 minutes) that builds the sandbox, installs the pinned Claude Code,
+merges the entry into `library.json` and makes the tree group-readable. The image must already
+provide Node 22 at `/usr/local/bin/node`, npm and python3: the build checks for Node, and the
+library entry is written by the container's python3. A bare `nvidia/cuda` image has neither and
+stops at the check. For GPU work publish a Node 22 image with `--gpu`; a worker started with `--gpus 1` runs it with
+`--nv`, which brings the host's NVIDIA driver in, and PyTorch's pip wheels carry their own CUDA
+runtime. The purpose may contain commas.
 
-Who may read it is yours to decide, inside Ashley, with no HPC ticket. Run once:
+Who may read it is yours to decide, inside Ashley, with no HPC ticket and no e-mail. Run once:
 
 ```bash
 ssh wsu-grid "ashley access init"
 ```
 
-It makes `shared/` closed except the drop-box `shared/access/`. A student reaches **Join the lab**,
-the wizard's last step, only when everything else works and their Claude (Pro at the minimum),
-GitHub and Hugging Face tokens verify; the step files one request with a note. **Ashley: Lab access
-to the shared library** shows you the queue (pending first) with Approve, Deny, Deny with message,
-Remove, Reset and a direct Grant; the Ashley view shows the pending count. Approve is a POSIX ACL
-over the whole lab folder, instantly effective and revocable; the student's next worker uses the lab
-container without building anything. The command line equivalents:
+It closes the volume to other grid users and makes the lab folder read-only for everyone but you.
+A student reaches **Join the lab**, the wizard's last step, only when everything else works and their
+Claude (Pro at the minimum), GitHub and Hugging Face tokens verify; the step files one request as a
+held Slurm job (it never runs; Slurm vouches for who sent it). **Ashley: Lab access** shows you the
+queue (pending first) with Approve, Deny, Deny with message, Remove, Reset and a direct Grant; the
+Ashley view shows the pending count. Approve is a read-only POSIX ACL over the lab folder, effective
+at once and revocable; the student's next worker uses the lab container without building anything.
+Command-line equivalents:
 
 ```bash
 ssh wsu-grid "ashley access admin list"
 ssh wsu-grid "ashley access admin approve ab1234"
 ssh wsu-grid "ashley access admin deny ab1234 --message 'finish the onboarding first'"
 ssh wsu-grid "ashley access admin reset ab1234"      # lets them ask again
+ssh wsu-grid "ashley access admin resync"            # after copying data in with cp -a or mv
+```
+
+## For leads: who may use Ashley at all
+
+The wizard's first step accepts only AccessIDs on the pre-approved list:
+
+```bash
+python tools/allow.py add ab1234 cd5678
+cd extension && npm run package      # send students the new .vsix
 ```
 
 ## Updating

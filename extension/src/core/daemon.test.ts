@@ -149,3 +149,23 @@ test('a forced account is honoured and the heartbeat has the expected shape', as
   assert.equal(st.worker, 'w1');
   assert.ok(st.processed >= 6);
 });
+
+test('a session that moves to the API key on a limit keeps its conversation (shared history)', async () => {
+  // Claude Code looks for a session only under the running account's CLAUDE_CONFIG_DIR/projects;
+  // without the shared history the resume on the API key fails with "No conversation found".
+  fs.rmSync(path.join(home, 'accounts', 'default', 'state.json'), { force: true });
+  fs.rmSync(path.join(home, 'accounts', 'apikey', 'state.json'), { force: true });
+  fs.writeFileSync(path.join(home, 'accounts', 'default', 'fake_rate_limit'), '');
+  send({ v: 1, id: 'r20', prompt: 'continue on the key', session: 's1', mode: 'acceptEdits', max_turns: 5, created: new Date().toISOString(), from: 'test' });
+  assert.ok(await waitFor(() => !!result('r20')));
+  const r = result('r20');
+  fs.rmSync(path.join(home, 'accounts', 'default', 'fake_rate_limit'));
+  assert.equal(r.status, 'ok', `status ${r.status}: ${r.error ?? ''}`);
+  assert.equal(r.account, 'apikey');
+  assert.match(r.result, /\(resumed\)/);
+  assert.equal(r.session_id, result('r1').session_id, 'the same conversation');
+  for (const a of ['default', 'apikey']) {
+    const l = fs.lstatSync(path.join(home, 'accounts', a, 'projects'));
+    assert.ok(l.isSymbolicLink(), `${a}/projects links to the shared history`);
+  }
+});

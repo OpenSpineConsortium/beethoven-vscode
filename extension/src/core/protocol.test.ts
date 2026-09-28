@@ -2,8 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { makeRequest, newRequestId, looksRateLimited, parseResetTime } from './protocol';
 import { parseSqueue, parseSbatchId, workerStartArgs, describeWall } from './slurm';
-import { normaliseAccessId, gridHome, SERVICES } from './services';
-import { shq, shjoin } from './shell';
+import { normaliseAccessId, gridHome, SERVICES, extractWrappedToken } from './services';
+import { shq, shjoin, renderRemote, remotePath } from './shell';
 
 test('request ids sort by time and are filesystem safe', () => {
   const a = newRequestId(new Date('2026-09-27T23:59:00Z'));
@@ -79,4 +79,29 @@ test('token patterns accept real shapes and reject junk', () => {
 test('remote quoting is single-layer POSIX', () => {
   assert.equal(shq("it's"), `'it'\\''s'`);
   assert.equal(shjoin(['a b', 'c']), `'a b' 'c'`);
+});
+
+test('every ~/ argument expands on the grid; nothing else does', () => {
+  // the first install ran mkdir with quoted '~/...' paths and made a folder literally named '~'
+  assert.equal(renderRemote(['mkdir', '-p', '~/.ashley/bin', '~/.ashley/log']), `'mkdir' '-p' ~/'.ashley/bin' ~/'.ashley/log'`);
+  assert.equal(renderRemote(['~/.ashley/bin/ashley', 'status']), `~/'.ashley/bin/ashley' 'status'`);
+  assert.equal(renderRemote(['echo', '$USER', 'a~/b', '~']), `'echo' '$USER' 'a~/b' ~`);
+  assert.equal(remotePath("~/it's here"), `~/'it'\\''s here'`);
+});
+
+test('a token is captured whole: across chunks and across hard line wraps', () => {
+  const pat = /sk-ant-oat[A-Za-z0-9_\-]{20,}/;
+  const tok = 'sk-ant-oat01-' + 'A1b2C3d4E5'.repeat(9) + '-xY_z';
+  // unwrapped, still arriving: not complete until a following line exists
+  assert.deepEqual(extractWrappedToken('Your token:\n' + tok.slice(0, 40), pat), { token: tok.slice(0, 40), complete: false });
+  assert.deepEqual(extractWrappedToken('Your token:\n' + tok + '\n\nStore it safely.\n', pat), { token: tok, complete: true });
+  // hard-wrapped at 60 columns by the terminal UI, with trailing padding
+  const w = 60;
+  const wrapped = tok.match(new RegExp(`.{1,${w}}`, 'g'))!.map((l, i, a) => (i < a.length - 1 ? l : l.padEnd(10, ' '))).join('\n');
+  assert.deepEqual(extractWrappedToken('Your token:\n' + wrapped + '\n\nStore it safely.\n', pat), { token: tok, complete: true });
+  // Claude Code prints a blank line after the token, which ends it. (A one-word line directly after an
+  // unwrapped token would look like a wrap and be glued on; the token check then fails and Renew asks again.)
+  assert.deepEqual(extractWrappedToken('x\n' + tok + '\n\nDone\n', pat), { token: tok, complete: true });
+  // the token followed by text on the same line
+  assert.deepEqual(extractWrappedToken(`token=${tok} (keep it)\n`, pat), { token: tok, complete: true });
 });

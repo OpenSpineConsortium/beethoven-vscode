@@ -52,6 +52,9 @@ parts.append("# Troubleshooting\n\n" + demote(read("manual/90_troubleshooting.md
 parts.append("""# Appendix
 
 - `docs/RESEARCH.md`: the research behind the design (Claude Code headless mode, subscription limits and terms, containers on this grid, multi-account tools, orchestration patterns, VS Code Remote-SSH on old glibc, Xcode, literature APIs), with sources and which findings were independently verified.
+- `docs/DIAGNOSTICS.md`: the troubleshooter's dependency graph, the rule that every feature adds its checks before it is integrated, and what the dependency study found and fixed.
+- `docs/DEPENDENCY_MAP.md`: every assumption Ashley makes (370 entries), with the check, what a failure looks like and how to fix it; search it for an error message the troubleshooter does not name.
+- `docs/research/claude_swap_notes.md`: what Ashley took from claude-swap and cswap-desktop, and the plan for the next release.
 - `docs/CHECKPOINT_2026-09-28.md`: the state of the project on the day this manual was built, including what was tested and what was not.
 - `Student_Projects/RECIPE.md`: the lab's method; Ashley is the on-ramp to it.
 - C&IT: "How to SSH to the Grid in Visual Studio Code" and "How do I set up and use Google Authenticator for the Grid" (services.wayne.edu knowledge base).

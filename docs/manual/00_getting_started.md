@@ -1,13 +1,22 @@
 # Getting started (a student's first hour)
 
+## How the lab works, in one paragraph
+
+The lab curates one folder on the grid's lab volume: the datasets you may use, the Claude
+containers, and the software. You **read** that folder; you never write to it. All of your
+science happens in **your own grid account**: your home directory, your jobs, your Claude worker,
+with your own tokens and your own Claude subscription. Ashley sets that up and keeps it working;
+it never asks you to build or install anything under the hood.
+
 ## Before you open VS Code
 
-1. **A grid account** (two business days) and **Google Authenticator** for it. The wizard's second
-   step walks you through both: it opens the request page, tells you whether the WSU VPN is on,
-   opens OnDemand's 2FA Setup and the C&IT guide. If you already have them, you say so and move on.
-2. **A Claude Pro or Max subscription**, and the Claude Code extension signed in.
-3. **GitHub and Hugging Face accounts.** Create them with your WSU email if you do not have
-   them; the lab adds you to its GitHub organisation by that address.
+1. **Your Wayne State account** (AccessID@wayne.edu). Your lead adds your AccessID to the list of
+   students allowed to use Ashley.
+2. **Accounts, made with your WSU e-mail:** Claude (Pro at the minimum; Max if your lead says so),
+   GitHub, Hugging Face. The lab assumes your Claude account is the one made with
+   AccessID@wayne.edu.
+3. **A grid account** (two business days) and **Google Authenticator** for it. The wizard walks you
+   through both.
 
 ## Install
 
@@ -17,70 +26,67 @@ Ctrl/Cmd+Shift+P and type **Ashley: Set up my research environment**.
 
 ## The setup panel
 
-Everything happens in one panel: the eleven steps on the left with their state, the current
-question on the right, a progress bar on top, the log one click away. Finished steps are skipped,
-so the wizard can be rerun at any time. Nothing is typed into a terminal.
+One panel: the steps on the left with their state, the current question on the right, a
+progress bar on top, the log one click away. The order is strict: a step does not start until
+every step above it is green. Your accounts come first and their tokens are kept on this laptop;
+the grid comes next and receives everything in one pass; joining the lab is last.
 
-![The nine wizard steps](figures/wizard.svg)
+![The wizard's steps](figures/wizard.svg)
 
-| Step | What you see in the panel | What you do |
+| Step | What you see | What you do |
 |---|---|---|
-| 1 AccessID | a text field | type it (`ab1234`) |
-| 2 Grid account and Authenticator | a menu: the account request page, OnDemand (the panel says whether the WSU VPN is on), the C&IT guide, the Authenticator app for iPhone or Android, and *continue* | apply for the account if you have none; connect the VPN; on OnDemand open Interactive Apps, 2FA Setup, Launch, Launch 2FA Setup, and scan the QR code with Google Authenticator; then *continue* |
-| 3 SSH key | a spinner for a second | nothing |
-| 4 SSH configuration | a spinner for a second | nothing |
-| 5 Log in to the grid once | a password field, then a code field | type your grid password, then the six-digit Authenticator code. Once. Ashley installs its key and the grid never asks again. |
-| 6 GitHub | your browser opens on GitHub's sign-in | sign in and approve; the token arrives in the panel by itself |
-| 7 Hugging Face | a button *Open the page in my browser*; the token page opens pre-filled (name `wsu-grid`, type Write) | press *Create token*, then *Copy*; the panel notices the copied token and offers *Use it* |
-| 8 Claude token | a terminal titled *claude setup-token* opens below; the browser asks you to approve | approve, copy the printed `sk-ant-oat...` token; the panel notices it and offers *Use it* |
-| 9 API key | a field | leave it empty and press *Skip* unless your lead gave you a key |
-| 10 Install on the grid | a progress line; "installed; the lab's container comes with lab access" (or "adopted the lab's shared container" once you have access) | nothing |
-| 11 Join the lab | a note field, only once every step above is green and your tokens verify | write your project and lead; one request goes to your lead, who approves it in Ashley. From then on your workers use the lab's shared container, nothing to build |
+| 1 Sign in with Wayne State | your browser opens the WSU sign-in | sign in with AccessID@wayne.edu. If your AccessID is not on the lab's list, ask your lead |
+| 2 GitHub | your browser opens GitHub | sign in and approve; the token arrives by itself |
+| 3 Hugging Face | a button opens the token page, pre-filled | press *Create token*, then *Copy*; the panel takes it |
+| 4 Claude | your browser opens claude.ai | sign in with the account you made with your WSU e-mail and press *Authorize*; the token arrives by itself |
+| 5 Grid account and Authenticator | a menu (the panel says whether you are on the campus Wi-Fi or the VPN) | if you have no grid account, apply; on OnDemand open 2FA Setup and scan the QR code; then *continue* |
+| 6 SSH key | a spinner | nothing |
+| 7 SSH configuration | a spinner | nothing |
+| 8 Log in to the grid once | a password field, then a code field | your grid password, then the six-digit Authenticator code. Once; the grid never asks again |
+| 9 Install on the grid | a progress line | nothing: scripts and all your tokens go to the grid in one pass |
+| 10 Join the lab | a note field, only when everything above is green and your tokens work | a sentence for your lead (project, lead). One request; your lead approves it in Ashley, and from then on you read the lab folder and your workers use the lab's Claude container |
 
-The last step is refused until everything above works, on purpose: the lab admits working
-environments. **Ashley: Lab access to the shared library** shows the state of your request
-afterwards (pending, approved, or denied with your lead's message).
-
-If a token cannot be checked from your laptop's network (some campus Wi-Fi blocks it), the
-panel keeps it and the grid verifies it a moment later; a token the service actually rejects
-is refused with a reason.
-
-The wizard writes only: a key pair and one block in `~/.ssh/config` on the laptop; tokens in the
-OS keychain; on the grid `~/.ashley/`, a block in `~/.bashrc`, and a container in your storage.
+Every step has a button next to it. **Renew** next to a token signs you in again and updates the
+grid copy in the same click; Ashley checks your tokens once a day and offers Renew when one stops
+working. **Run again** reruns any other step.
 
 ## Your first worker and your first question
 
-1. **Ashley: Start a Claude worker on the grid** (after your lead approved step 11): name `default`,
-   CPU node, 24 hours, and which lab container (the default is right for most work). A Slurm
-   job is submitted. When it starts, the Ashley view shows `Worker default  <node> idle`.
-2. **Ashley: Ask the grid Claude**: type *"Create a folder hello in my home with a README that
-   says which node you are on and what Python version you have."* The answer streams into an
-   output channel; tool calls appear as italics.
-3. **Ashley: Open my grid files on a compute node**: a new VS Code window opens on the node; you
-   see `hello/README.md` in the Explorer. The window shows a banner that the OS is unsupported:
-   expected on the grid's CentOS 7 (Wayne State supplies the compatibility libraries); dismiss it.
+1. **Ashley: Start a Claude worker on the grid** (after your lead approved step 10): name
+   `default`, CPU node, 24 hours.
+2. **Ashley: Ask the grid Claude**: *"Create a folder hello in my home with a README that says
+   which node you are on and what Python version you have."* The answer streams in; tool calls
+   appear as italics.
+3. **Ashley: Open my grid files on a compute node**: a new VS Code window opens on the node. It
+   shows a banner that the OS is unsupported: expected on the grid's CentOS 7 (Wayne State supplies
+   the compatibility libraries); dismiss it.
+
+## From your phone
+
+**Ashley: Phone access** turns on Claude Code's Remote Control on your worker. The first time, your
+browser opens claude.ai: sign in with the same account, press *Authorize*, press *Copy* next to the
+code the page shows; Ashley hands it to the worker. The session then appears in the Claude app on
+your phone (and at claude.ai/code) whenever the worker runs, exactly like `/remote-control` in a
+Claude Code session on your laptop. The sign-in lasts about 30 days; the same command renews it.
 
 ## Talking to it from Claude Code
 
-**Ashley: Connect the Claude Code extension to the grid** registers the bridge (once). Then, in the
-Claude Code panel: *"Check the grid status and tell me whether my worker is idle."* The local
-Claude calls `ashley_status`. For work: *"Ask the grid Claude, in session `demo`, to run
-`examples/pelvic_width_dimorphism/measure_pelvic_width.py` on ten records and report the mean."*
+**Ashley: Connect the Claude Code extension to the grid** registers the bridge (the wizard does it
+for you). Then, in the Claude Code panel: *"Check the grid status and tell me whether my worker is
+idle,"* or *"Ask the grid Claude, in session `demo`, to run the pelvic width demo on ten records
+and report the mean."*
 
 ## Starting over, or showing a friend
 
-**Ashley: Reset this laptop (emulate a fresh install)** forgets, as you choose, the tokens, the
-key and config block, the settings, the Claude Code registration, and Ashley on the grid. After a
-reload, VS Code looks the way it does to a brand-new student, and the wizard runs from the start.
-To emulate a brand-new VS Code as well, start it with its own profile folders:
-`code --user-data-dir %TEMP%\fresh-vscode --extensions-dir %TEMP%\fresh-ext` (macOS/Linux:
-`/tmp/...`), install the three extensions there, and run the wizard.
+**Ashley: Reset this laptop (emulate a fresh install)** forgets, as you choose, the tokens, the key
+and config block, the settings, the Claude Code registration, and Ashley on the grid. After a
+reload, VS Code looks the way it does to a brand-new student. For a brand-new VS Code as well:
+`code --user-data-dir %TEMP%\fresh-vscode --extensions-dir %TEMP%\fresh-ext`.
 
 ## Every day after that
 
-- Start a worker when you sit down (or keep one running for a day); it costs nothing.
+- Start a worker when you sit down, or keep one running for a day.
 - Name your sessions after the project; a session remembers its folder.
 - Let the worker write scripts and Slurm job files; you read them; you say "submit".
-- Pull small results back with git or `rsync`; open PNGs on the node with Remote-SSH.
-- If something is off: **Ashley: Check everything (doctor)**. Its notification names the step;
-  the details are in the Ashley output.
+- If something is off: the Ashley item in the status bar turns red; **Troubleshoot** finds the
+  broken piece and repairs what it can; **Show log** has the details.

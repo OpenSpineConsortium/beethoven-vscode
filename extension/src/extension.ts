@@ -4,8 +4,12 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { AshleyStore } from './vscode/store';
-import { VsCodeUI, resolveExecutable } from './vscode/ui';
+import { resolveExecutable } from './vscode/ui';
 import { SetupPanel } from './vscode/panel';
+import { Troubleshooter } from './vscode/diagnosticsUi';
+import { buildGraph, makeCtx } from './vscode/diagNodes';
+import { VsCodeUI as SetupPanelFreeUI } from './vscode/ui';
+import { order, runDiagnostics, formatReport } from './core/diagnostics';
 import { AshleyTree } from './vscode/tree';
 import { registerMcp, isMcpRegistered } from './vscode/mcpRegister';
 import { runWizard, checkAll, StepReport, testConnection, STEPS, validateToken } from './core/wizard';
@@ -23,6 +27,7 @@ let store: AshleyStore;
 let tree: AshleyTree;
 let panel: SetupPanel | undefined;
 let relay: GridRelay | undefined;
+let troubleshooter: Troubleshooter | undefined;
 function getRelay(alias: string): GridRelay {
   if (!relay || relay.alias !== alias) {
     relay?.close();
@@ -61,8 +66,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<{ _int
       }),
     );
 
+  troubleshooter = new Troubleshooter(context, store, output);
+  context.subscriptions.push(troubleshooter);
+  reg('ashley.troubleshoot', () => troubleshooter!.run({ repair: true, quick: false, quiet: false }));
+  reg('ashley.healthMenu', () => troubleshooter!.menu());
+  reg('ashley.showLog', () => output.show(true));
+  reg('ashley.investigate', () => troubleshooter!.investigate());
   reg('ashley.setup', () => commandSetup(context));
-  reg('ashley.doctor', () => commandDoctor(context));
+  reg('ashley.doctor', () => troubleshooter!.run({ repair: false, quick: false, quiet: false }));
   reg('ashley.connect', (item?: any) => commandConnect(context, grid(), item?.data?.name));
   reg('ashley.workerStart', () => commandWorkerStart(grid()));
   reg('ashley.workerStop', (item?: any) => commandWorkerStop(grid(), item?.data?.name));
@@ -88,6 +99,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<{ _int
       else if (pick === 'Read the manual') void vscode.commands.executeCommand('ashley.openManual');
     });
   }
+  troubleshooter.startSweeps();
   setTimeout(() => void checkTokensQuietly(context).catch((e) => output.appendLine(`token check: ${e}`)), 20_000);
   output.appendLine(`Ashley ${context.extension.packageJSON.version} active (build ${process.env.ASHLEY_BUILD ?? 'dev'})`);
   return { _internal };
@@ -189,35 +201,6 @@ async function checkTokensQuietly(context: vscode.ExtensionContext): Promise<voi
       if (pick) await commandTokenStep(context, svc.id);
     }
   }
-}
-
-async function commandDoctor(context: vscode.ExtensionContext): Promise<void> {
-  const ui = new VsCodeUI(output);
-  const env = store.wizardEnv(ui);
-  output.show(true);
-  output.appendLine(`--- Ashley doctor ${new Date().toISOString()} ---`);
-  output.appendLine(`platform ${process.platform} ${process.arch}; VS Code ${vscode.version}; extension ${context.extension.packageJSON.version}`);
-  const remoteSsh = vscode.extensions.getExtension('ms-vscode-remote.remote-ssh');
-  output.appendLine(`${remoteSsh ? 'PASS' : 'FAIL'}  Remote-SSH extension ${remoteSsh ? remoteSsh.packageJSON.version : 'not installed (Ashley: Open my grid files needs it)'}`);
-  const claudeExt = vscode.extensions.getExtension('anthropic.claude-code');
-  output.appendLine(`${claudeExt ? 'PASS' : 'WARN'}  Claude Code extension ${claudeExt ? claudeExt.packageJSON.version : 'not installed'}`);
-  output.appendLine(`INFO  claude executable for setup-token: ${env.settings.claudeExecutable}`);
-  const reports = await checkAll(env);
-  output.appendLine(format(reports));
-  const mcp = await isMcpRegistered();
-  output.appendLine(`${mcp ? 'PASS' : 'TODO'}  MCP bridge registered with Claude Code${mcp ? '' : ' (Ashley: Connect the Claude Code extension to the grid)'}`);
-  const summary = reports.map((r) => `${r.status === 'done' ? '✓' : r.status === 'skipped' ? '–' : '✗'} ${r.title}`).join('   ');
-  if (reports.every((r) => r.status === 'done' || r.status === 'skipped')) {
-    const g = new GridApi(store.settings().sshAlias, (l) => output.appendLine(l));
-    const r = await g.ashley(['doctor'], { timeoutMs: 120_000 });
-    output.appendLine('--- grid doctor ---\n' + (r.stdout + r.stderr).trim());
-  }
-  void vscode.window.showInformationMessage(`Ashley doctor: ${summary}`, 'Show details').then((c) => c && output.show());
-  if (!remoteSsh) {
-    const inst = await vscode.window.showWarningMessage('The Remote-SSH extension is missing; it is what shows your grid files and images. Install it?', 'Install');
-    if (inst) await vscode.commands.executeCommand('workbench.extensions.installExtension', 'ms-vscode-remote.remote-ssh');
-  }
-  tree.refresh();
 }
 
 async function pickWorker(grid: GridApi, prompt: string, onlyRunning = true): Promise<{ name: string; node: string; state: string } | undefined> {
@@ -593,5 +576,14 @@ async function commandOpenTerminal(): Promise<void> {
   t.show();
 }
 
-const _internal = { STEPS, testConnection };
+const _internal = {
+  STEPS,
+  testConnection,
+  buildGraph,
+  order,
+  runDiagnostics,
+  formatReport,
+  storeFor: () => store,
+  makeCtx: (s: AshleyStore, withNodeProbe: boolean, log: (l: string) => void) => makeCtx(s, s.wizardEnv(new SetupPanelFreeUI(output)), s.context.extensionPath, withNodeProbe, log),
+};
 export { _internal };

@@ -92,16 +92,26 @@ later turns pass `--resume <uuid>`. Claude Code keeps the transcript under
 `<CLAUDE_CONFIG_DIR>/projects/<encoded cwd>/<uuid>.jsonl`, which is why a session stays bound to
 its directory.
 
+`--resume` looks only in the running account's `projects/`. Measured on Claude Code 2.1.283: from
+a second config folder the resume answers "No conversation found"; with the transcript present it
+finds it. A turn moved to the student's API key after a limit would therefore start from nothing.
+So every account's `projects/` is a link to one `~/.ashley/projects` (the daemon links it before
+each run; `ashley accounts add-token|add-key` link it when an account is made; the diagnostics
+node `grid.accounts` finds and repairs an unlinked one). All accounts belong to one person, so
+this shares nothing between people.
+
 ## Credentials
 
 Each `~/.ashley/accounts/<name>/` is both a credential and a `CLAUDE_CONFIG_DIR`, so accounts
-never share sessions, settings or caches:
+keep separate settings and caches, and share only the session history (above):
 
 - `token`: a long-lived subscription token from `claude setup-token` (the normal case). Exported
   to Claude Code as `CLAUDE_CODE_OAUTH_TOKEN`.
 - `apikey`: an Anthropic API key (pay-per-use overflow). Exported as `ANTHROPIC_API_KEY`.
-- `.credentials.json`: a copied interactive login. Works until its refresh token dies; not
-  recommended (the probe on 2026-09-28 showed a copy rejected after eight idle days).
+- A copied `.credentials.json` is no longer used. A copy shares a refresh-token chain with the
+  machine it came from, and the first refresh on either side revokes the other (claude-swap
+  issues #164 and #381; our own probe saw a copy rejected after eight idle days). The phone's
+  login is the one exception, and it is made on the grid, not copied (below).
 
 Order of use: subscriptions before API keys, `default` first. When a run ends with an error that
 matches the limit patterns in `protocol.ts` ("hit your limit", "rate_limit", "429", ...), the
@@ -112,7 +122,12 @@ with `status: rate_limited` and `retry_after`. The worker's heartbeat reports `b
 
 One person, one token. Pooling several people's subscriptions into one worker would breach the
 Consumer Terms (each account is for the person who holds it); the rotation exists for a student's
-own second credential, typically an API key with a spending cap.
+own second credential, typically an API key with a spending cap. `ashley accounts add-token`
+refuses a second subscription token under another name (replacing the one you have is allowed),
+and records when the token was made (`minted_at`), since a setup-token carries no expiry of its
+own. Before every run the daemon removes every variable that could override or redirect the
+chosen credential: `CLAUDE_CODE_OAUTH_TOKEN`, `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`,
+`ANTHROPIC_BASE_URL` and the two file-descriptor variants, then sets only the chosen one.
 
 ## Secrets: where they are and where they are not
 
@@ -142,6 +157,23 @@ while jobs run). `--signal=B:TERM@120` gives the daemon two minutes to finish a 
 limit; `--dependency=singleton` keeps one job per worker name; on the `requeue` QoS the job is
 `--requeue --open-mode=append` because the daemon is re-entrant.
 
+**Slurm inside the worker.** The container has no Slurm of its own, so until version 3 the
+worker's Claude could not submit or even see jobs, although its instructions said it could (found
+by the dependency study; confirmed on asx1: no `ashley`, `sbatch` or `squeue` on its PATH, and
+`ashley worker list` called running workers dead). The worker job now binds the host's Slurm client
+in read-only: `/usr/bin` under `/opt/host/bin`, `/usr/lib64/slurm`, the munge library into `/usr/lib`
+(a default search folder, so no `LD_LIBRARY_PATH` leaks into submitted jobs), `/etc/slurm`, the
+munge socket, and a user list that adds the `slurm` and `munge` users that `slurm.conf` names
+(without them: "Invalid user for SlurmUser slurm"). Small wrappers in `<worker>/slurm/bin` run the
+host binaries with the host's PATH and without the container's variables, so a submitted job runs
+on the host with the student's normal environment. The daemon asks Slurm for its own job at start
+and puts the answer in its heartbeat; Claude is told either that Slurm works or that it does not,
+and why. The diagnostics node `grid.slurm-in-worker` reads that answer.
+
+`ashley worker start` saves its settings in `<worker>/params`; `ashley worker restart` stops the
+job and starts it again from the current template with those settings, so an upgrade of the
+template reaches running workers.
+
 ## The shared container library
 
 Containers are read-only at run time (every account's sessions, settings and caches live in its
@@ -157,7 +189,7 @@ own home), so one copy serves the whole lab. `/rs/rs_grp_oschome/shared/ashley/`
 
 - `ashley install` adopts the library's default when it is readable (`ashley adopt <name>` writes
   `config.env` and `READY` in a second; nothing is built, nothing is stored in the student's
-  space). `ashley install --build-own` keeps the old per-account build.
+  space). `ashley install --build-own` (admin only) builds a private copy for testing an image.
 - `ashley worker start --container <name>` runs any entry; the worker's job script carries the
   sandbox and binds the library root. A student can run a CPU worker on the general container and
   a GPU worker on a CUDA one at the same time.
@@ -165,32 +197,34 @@ own home), so one copy serves the whole lab. `/rs/rs_grp_oschome/shared/ashley/`
   [--gpu] [--purpose "..."]`: a job builds the sandbox, installs the pinned Claude Code, merges the
   entry into `library.json` and makes the tree group-readable. Entries are pinned by image and
   Claude Code version, so every student runs the same bits; an update is a new entry.
-- **Lab access is one folder, self-service for the lab admin, no HPC ticket.** The lab folder is
-  `/rs/rs_grp_oschome/shared` (the containers now, anything the lab adds later). Only its
-  `access/` sub-folder is open to everyone: `inbox/` (1733, a sticky drop-box: a student creates
-  their own request file and cannot list or touch others'), `status/` (711: each student reads
-  `status/<own id>.json`, nobody can list), `requests/` (700, the admin's archive). Approving runs
-  `setfacl` (CephFS honours POSIX ACLs and the admin owns the volume): `r-x` plus a default ACL on
-  `shared/`, and `r-X` recursively with default ACLs on everything under it except `access/`, so
-  folders the admin adds later are covered too. Deny, remove and reset take it away; the student
-  does not need the `oschome` unix group (that lives in the university directory and C&IT changes it on
-  the admin's email; the admin page drafts that email). The admin's own tree (`/rs/rs_grp_oschome/<admin>`, 2750)
-  stays private.
-- **The request is the wizard's last step (`labAccess`) and is refused until the environment works
-  the way the lab works:** every earlier step done; the Claude Code and Remote-SSH extensions and
-  the bridge present; and, checked on the grid by `ashley access requirements`, a Claude
-  subscription token that the API accepts (one `GET /v1/models` with the OAuth token: 200 = valid,
-  401 = invalid or revoked; `claude setup-token` only issues tokens to Pro/Max and above), and
-  GitHub and Hugging Face tokens that verify. The shared container is **not** a requirement: it is
-  what access gives. Until approval `ashley install` does not build a private copy (it marks
-  `awaiting_access`). Students are never offered a private build; `ashley install --build-own` exists
-  only for the lab admin (the first bootstrap, testing a new image). After approval, the next
-  `worker start` or wizard run adopts the lab container in a second.
-- Integrity of the drop-box: the admin's ingest (run as the admin) accepts a request only if it is
-  a regular file, not a symlink, under 4 KB, and owned by the user it names; anything else is moved
-  to the archive as rejected. One request per student until the admin resets it. Token checks pass
-  tokens to `curl` on stdin (`-K -`), never as arguments, so they never appear in the login node's
-  process list.
+- **The lab's philosophy.** The admin curates one folder, `/rs/rs_grp_oschome/shared`: datasets,
+  Claude containers, software. Students only ever **read** it; all their science runs in their own
+  grid accounts (home, jobs, workers, their own tokens and subscription). Nothing under the lab
+  volume is writable by students, not even a request drop-box.
+- **Requests travel as held Slurm jobs.** *Join the lab* (the wizard's last step) submits one held,
+  zero-work job named `ashley_access` whose comment carries the student's note. Slurm authenticates
+  the submitter (`PrivateData=none` here, so the admin sees every user's jobs), so a request cannot
+  be forged or squatted and uses no storage. The admin's ingest writes `status/<id>.json` (mode 600
+  plus an ACL for that student only) and gives the applicant a traverse-only ACL on the path to it.
+  Decisions: approve, deny or remove with a message, reset (the student may ask again); each goes to
+  `access/requests/decisions.log`. The student's own held job is cancelled once a decision exists.
+- **Approval is a read-only ACL** (CephFS honours POSIX ACLs; the admin owns the volume): `--x` on
+  the volume root, `r-x` plus a default ACL on `shared/`, and `r-X` recursively with default ACLs on
+  everything under it except `access/`, walking physically (links are never followed out of the
+  folder). No unix-group change, no ticket. `ashley access admin resync` re-applies grants after
+  data is copied in with `cp -a` or `mv`; publishing a container resyncs automatically.
+- **Layout after `ashley access init`:** volume root 2770 with a default ACL `o::---` (new entries
+  start closed); `shared/` and its contents 2750 (the group reads, only the admin writes); `access/`
+  and `access/status/` 2710; `access/requests/` 2700. Nothing is open to other grid users.
+- **The request is refused until the environment works the way the lab works:** every earlier step
+  done; the Claude Code and Remote-SSH extensions and the bridge present; and, checked on the grid by
+  `ashley access requirements`, a Claude subscription token the API accepts (`GET /v1/models` with the
+  OAuth token must answer 200; 401 means invalid or revoked; `claude setup-token` only issues tokens
+  to paid plans), and GitHub and Hugging Face tokens that verify. The shared container is what access
+  gives, never a precondition; students are never offered a private build (`ashley install
+  --build-own` is for the admin only).
+- **Token checks never put a token on a command line:** `curl -K -` reads the header from stdin, so
+  nothing appears in the login node's process list (sampled during three runs: nothing).
 
 Because every worker of an account shares `~/.ashley`, a worker Claude can hand work to another
 worker with `ashley send --worker <name>` from its shell; the daemon tells each worker who it is,
@@ -198,9 +232,58 @@ which peers are alive and the exact command (`peerNote()` in `ashleyd.js`). A le
 general container can therefore fan out to a GPU worker on a CUDA container and collect the result
 with `ashley result`.
 
+## Wayne State sign-in and the pre-approved list
+
+The wizard's first step signs the student in with the university's Microsoft account through VS
+Code's built-in Microsoft sign-in (work or school accounts only; only the account's e-mail is used).
+The AccessID is the part before `@wayne.edu`, and the student continues only if it is on the lab's
+pre-approved list: `extension/media/allowlist.json`, shipped in the VSIX (`python tools/allow.py
+add ab1234`, then rebuild), or a newer copy published at the URL in `ashley.allowlistUrl`. This is
+a gate for honest users; the enforceable boundary is still the grid (the student's own account and
+the admin's approval). The lab assumes the student's Claude, GitHub and Hugging Face accounts were
+made with AccessID@wayne.edu.
+
+## Phone access
+
+Claude Code's Remote Control lets the Claude app (or claude.ai/code) drive a session running
+elsewhere, over outbound HTTPS only. On the grid the worker hosts it (`grid/phone.js`, inside the
+worker job; no extra process to manage). Remote Control needs a claude.ai login on that machine:
+the one-year token the worker uses for prompts is refused for it ("You must be logged in to use
+Remote Control"). So the first time, the worker runs `claude auth login` in a pseudo-terminal
+(`script`), the extension opens the printed link on the laptop, the student presses Authorize and
+copies the code the page shows, and the worker types it in. That login lives in its own folder
+(`~/.ashley/remote/config`, never mixed with the prompt accounts) and lasts about 30 days. Then the
+worker runs `claude remote-control` in a pretrusted folder (`workspaces/phone`), restarts it if it
+exits, and the session appears in the app for the same account. Measured on asx1: the sign-in link
+appears within seconds; a wrong code is answered at once ("Invalid code") and the panel asks again.
+
+Only one worker hosts phone access. All workers share the one phone login, and two hosts, or two
+sign-ins, on one refresh-token chain would revoke each other. The host holds a lease: a directory
+`~/.ashley/remote/host.lock` made with `mkdir` (atomic on the shared home, where `flock` is not
+reliable across nodes), with a beat every 5 s, treated as abandoned after 60 s. These are the
+timings Claude Code uses for its own credential locks. `ashley phone on --worker B` turns phone access
+off on the other workers; B shows *elsewhere* for about a second and then takes over (measured
+between the two workers on asx1). Turning phone access off only stops processes: `claude auth
+logout` would revoke the login, so Ashley never runs it. The phone's config is seeded with
+`hasCompletedOnboarding` and a theme so the pseudo-terminal shows no first-run prompts, and the
+same six credential variables are removed before Remote Control starts (`ANTHROPIC_BASE_URL`
+would also switch Remote Control off). The handlers act only for the current sign-in or session,
+so output from a stopped process can neither change the status nor raise inside the daemon.
+
+## Diagnostics
+
+Every assumption Ashley makes, from the laptop's OpenSSH to the node's pseudo-terminal, is a node
+in one dependency graph (`extension/src/vscode/diagNodes.ts`, grid side `ashley diag`). The
+troubleshooter checks the nodes in dependency order, names the lowest broken one as the cause of
+everything above it, and runs a repair where one is safe. A feature is not integrated until its
+nodes are in the graph, and a test fails when a feature's nodes go missing. The map, the rule,
+and how to add a node: `docs/DIAGNOSTICS.md`.
+
 ## The laptop side
 
-- **Wizard** (`core/wizard.ts`): nine steps, each with `check()` and `run()`, over an abstract
+- **Wizard** (`core/wizard.ts`): ten steps in a strict order (Wayne State sign-in, GitHub, Hugging
+  Face, Claude, grid account, SSH key, SSH config, login, grid install, join the lab), each with
+  `check()` and `run()`; a single step never runs before every earlier one is done; over an abstract
   `WizardEnv` (settings, secrets, UI). The VS Code extension and the terminal CLI plug in their
   own UI. Rerunning does only what is missing.
 - **SSH config** (`core/sshConfig.ts`): one managed block between markers, inserted first so it

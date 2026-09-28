@@ -25,40 +25,50 @@ dist/        the built .vsix
 
 Everything else: [docs/manual.html](docs/manual.html) (also `docs/manual.pdf`, 21 pages, built by `docs/manual/build_manual.py`),
 [docs/INSTALL.md](docs/INSTALL.md), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md),
-[docs/LIMITS.md](docs/LIMITS.md), [docs/PITCH.md](docs/PITCH.md), [docs/RESEARCH.md](docs/RESEARCH.md).
+[docs/LIMITS.md](docs/LIMITS.md), [docs/PITCH.md](docs/PITCH.md), [docs/RESEARCH.md](docs/RESEARCH.md),
+[docs/DIAGNOSTICS.md](docs/DIAGNOSTICS.md).
 
-## Status (2026-09-28, seventh pass: joining the lab)
+## Status (2026-09-28): version 1, ready for testing
 
-Eleven wizard steps. The last, *Join the lab*, files one request to the lab admin and is refused until
-every other step works and the Claude (Pro at the minimum), GitHub and Hugging Face tokens verify. Approval
-opens the lab folder `/rs/rs_grp_oschome/shared` (the shared Claude containers and whatever the lab adds) by
-ACL; students never build containers. The admin manages requests in *Ashley: Lab access* and gets a drafted
-email asking C&IT to add approved students to the `oschome` unix group.
+Ten wizard steps in a fixed order: *Sign in with Wayne State* (a Microsoft sign-in, checked against
+the lab's pre-approved AccessIDs), GitHub, Hugging Face and Claude by browser click, the grid
+account and Authenticator, SSH key and configuration, one password-and-code login, the grid
+install (scripts and every token in one pass), and *Join the lab*. Each token has **Renew**, which
+also updates the grid copy.
 
-### Third pass: the relay
+- **Lab access.** A request is a held Slurm job, so Slurm vouches for who sent it; the lab admin
+  approves, denies (with a message), removes or resets in *Ashley: Lab access*. Approval is a
+  read-only ACL on the lab folder. Students never build containers.
+- **Workers.** A persistent Claude Code worker per student in the lab's container on a compute
+  node; prompts arrive over one persistent ssh session in about 0.2 s. Workers message each other.
+- **Phone access.** Claude Code Remote Control hosted by the worker, so the Claude app drives a
+  grid session with no workstation. One worker hosts it at a time.
+- **Troubleshooter.** A status-bar item over a 42-node dependency graph; it names the root cause,
+  repairs what is safe, keeps a log, and can ask Claude to research a failure. Every feature must
+  add its nodes before it is integrated (`docs/DIAGNOSTICS.md`).
+- **Grid scripts version 3.** Five fixes from a study of claude-swap and cswap-desktop
+  (`docs/research/claude_swap_notes.md`): shared session history across one person's accounts, a
+  single phone host, full removal of overriding credential variables, the phone's first-run seed,
+  and one subscription per person. Workers can now use Slurm from inside their container, and
+  `ashley worker restart` re-renders the job from the current template.
+- **Dependency study.** 370 assumptions mapped (`docs/DEPENDENCY_MAP.md`); twelve defect claims were
+  checked on the grid or laptop and fixed where real, among them a first-install failure on fresh
+  grid accounts (a quoted `~`) and an MCP registration that broke on every upgrade
+  (`docs/DIAGNOSTICS.md`).
 
-Prompts now travel over one persistent ssh session (`ashley relay`): receipt at the worker in about 0.2 s
-instead of 2 s (measured, `docs/figures/latency.png`); the daemon polls every 250 ms; every call still falls back to a
-fresh ssh. Repository: https://github.com/GregorySchwing/ashley (private).
+Tests: 31 laptop unit tests (5 more skip on Windows), 7 VS Code integration tests, a live
+troubleshooter run against the grid, and 12 tests inside the lab container on a compute node
+(`tools/grid_tests.sh`).
 
-### Second pass after the first student feedback
+Still needs a person: the Claude *Authorize* click and a real subscription token on the grid; the
+Wayne State sign-in in the university tenant; a phone sign-in with a real code; a second student
+account to confirm the lab-access ACLs from the student side.
 
-Windows-native only (no WSL mirror). GitHub arrives through VS Code's sign-in; Hugging Face and Claude tokens
-are picked up from the clipboard after one copy; the grid password and code are typed in the panel (ssh2),
-not a terminal; a setup panel with step states replaces the input boxes; `Ashley: Reset` emulates a fresh
-install; tokens the laptop's network cannot check are verified on the grid.
+Next release: usage and reset times from Claude Code's own rate-limit events, a status-bar usage
+meter, and read-only cooperation with claude-swap on the laptop (plan in
+`docs/research/claude_swap_notes.md`, section 5).
 
-### Earlier
-
-Tested end to end on Windows 11 + WSL against the grid: key install, SSH config (login node as
-jump host, `MACs +hmac-sha1`, `AddressFamily inet`), container build on a compute node
-(Apptainer 1.2.2 module, `node:22-bookworm`, Claude Code 2.1.283), worker daemon heartbeat,
-request round trip laptop -> login node -> worker -> laptop, MCP bridge called by the real Claude
-Code, 22 unit tests including the daemon with a fake Claude, VS Code integration suite.
-
-Remote-SSH from VS Code to the node needs `remote.SSH.connectTimeout` of 300 s (the node's sshd takes about 25 s per session); the extension sets it when it opens a node. Not yet exercised with a live subscription token on the grid: that needs the student's one-time
-`claude setup-token` approval in a browser (wizard step 7). A copied interactive login was
-rejected after eight idle days, which is why the token flow is the supported one.
+Repository: https://github.com/GregorySchwing/ashley (private).
 
 ## Licence
 

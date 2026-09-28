@@ -5,6 +5,7 @@
 import * as vscode from 'vscode';
 import { WizardUI, StepReport, TokenAskOptions, STEPS } from '../core/wizard';
 import { resolveExecutable } from './ui';
+import { extractWrappedToken } from '../core/services';
 
 type Pending = { resolve: (v: any) => void; kind: string };
 
@@ -107,7 +108,9 @@ export class SetupPanel implements WizardUI, vscode.Disposable {
    */
   async runCapturing(title: string, command: string, args: string[], pattern: RegExp): Promise<{ code: number | null; match?: string }> {
     // hidden: the student sees only the browser; the terminal appears only if something needs typing
-    const term = vscode.window.createTerminal({ name: title, isTransient: true, hideFromUser: true });
+    // a shell VS Code integrates with, whatever the student's default profile is (cmd.exe has none)
+    const shellPath = process.platform === 'win32' ? 'powershell.exe' : /(bash|zsh|fish)$/.test(process.env.SHELL ?? '') ? process.env.SHELL : '/bin/bash';
+    const term = vscode.window.createTerminal({ name: title, isTransient: true, hideFromUser: true, shellPath });
     const si = await new Promise<vscode.TerminalShellIntegration | undefined>((resolve) => {
       if (term.shellIntegration) return resolve(term.shellIntegration);
       const d = vscode.window.onDidChangeTerminalShellIntegration((e) => {
@@ -153,10 +156,10 @@ export class SetupPanel implements WizardUI, vscode.Disposable {
     (async () => {
       try {
         for await (const chunk of exec.read()) {
-          text += chunk.replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, '');
-          const m = pattern.exec(text);
-          if (m && !match) {
-            match = m[0];
+          text += chunk.replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b\[[0-9;?]*[ -/]*[@-~]/g, '');
+          const got = extractWrappedToken(text, pattern);
+          if (got?.complete && !match) {
+            match = got.token;
             this.post({ type: 'toast', message: 'Token captured from the terminal.', level: 'info' });
           }
         }
@@ -166,10 +169,7 @@ export class SetupPanel implements WizardUI, vscode.Disposable {
     })();
     const code = await done;
     clearTimeout(reveal);
-    if (!match) {
-      const m = pattern.exec(text);
-      if (m) match = m[0];
-    }
+    if (!match) match = extractWrappedToken(text, pattern)?.token; // the command ended: take what arrived
     if (match) setTimeout(() => term.dispose(), 2000);
     return { code, match };
   }

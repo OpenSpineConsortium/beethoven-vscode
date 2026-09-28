@@ -1,8 +1,8 @@
 // VS Code implementation of the wizard's UI contract.
 import * as vscode from 'vscode';
-import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { WizardUI } from '../core/wizard';
+import { resolveExecutable } from '../core/shell';
 
 export class VsCodeUI implements WizardUI {
   constructor(private output: vscode.OutputChannel) {}
@@ -82,17 +82,4 @@ export class VsCodeUI implements WizardUI {
 }
 
 /** ssh on Windows lives in System32\OpenSSH and is not always on the terminal's PATH. */
-export function resolveExecutable(command: string): string {
-  if (command.includes('/') || command.includes('\\')) return command;
-  if (process.platform === 'win32') {
-    const sys = process.env.SystemRoot ?? 'C:\\Windows';
-    const candidates: Record<string, string[]> = {
-      ssh: [`${sys}\\System32\\OpenSSH\\ssh.exe`],
-      scp: [`${sys}\\System32\\OpenSSH\\scp.exe`],
-      'ssh-keygen': [`${sys}\\System32\\OpenSSH\\ssh-keygen.exe`],
-    };
-    for (const c of candidates[command] ?? []) if (fs.existsSync(c)) return c;
-    return command.endsWith('.exe') ? command : `${command}.exe`;
-  }
-  return command;
-}
+export { resolveExecutable };

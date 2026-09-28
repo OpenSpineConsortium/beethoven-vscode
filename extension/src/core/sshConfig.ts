@@ -56,6 +56,11 @@ export function renderBlock(t: SshTargets): string {
     '    ServerAliveInterval 60',
     '    ServerAliveCountMax 5',
     '    StrictHostKeyChecking accept-new',
+    '',
+    // ssh_config scopes every line to the last Host or Match: without this, global lines the student
+    // already had below the block (Include, ForwardAgent, AddKeysToAgent) would apply only to the
+    // grid's nodes. Checked with `ssh -G` on OpenSSH for Windows 9.5.
+    'Match all',
     BLOCK_END,
     '',
   ].join('\n');

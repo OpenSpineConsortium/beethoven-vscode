@@ -13,7 +13,15 @@
 //   <worker>/rc/code         the code from the claude.ai page (read once, then deleted)
 //   <worker>/rc/status.json  {phase, url, session_url, message, attempts, updated}
 //   <worker>/rc/login.log, rc/session.log   the two pseudo-terminal transcripts
-// phases: off, login, need_code, verifying, starting, running, error
+//   ~/.ashley/remote/host.lock/holder.json   which worker hosts the phone (one at a time)
+// phases: off, login, need_code, verifying, starting, running, elsewhere, error
+//
+// Only ONE worker may host: every worker shares the one login in remote/config, and two hosts
+// (or two sign-ins) on one refresh-token chain revoke each other. The host holds a lease, a
+// directory made with mkdir (atomic on the shared home; flock is not reliable across nodes),
+// touched every 5 s and treated as abandoned after 60 s, the timings Claude Code uses for its own
+// credential locks. Turning phone access off only stops processes: `claude auth logout` would
+// revoke the login, so it is never run.
 const fs = require('fs');
 const path = require('path');
 const { spawn, spawnSync } = require('child_process');
@@ -32,6 +40,11 @@ function startPhone(o) {
   const ENABLE = path.join(RC, 'enable');
   const CODE = path.join(RC, 'code');
   const STATUS = path.join(RC, 'status.json');
+  const LEASE = path.join(o.ashleyHome, 'remote', 'host.lock');
+  const HOLDER = path.join(LEASE, 'holder.json');
+  const me = { worker: path.basename(o.workerDir), node: o.node, job: o.job, pid: process.pid };
+  let holding = false;
+  let leaseBeat = 0;
   const log = o.log || (() => {});
   let login = null; // {child, out}
   let session = null; // {child, out, lastAnswer}
@@ -52,8 +65,8 @@ function startPhone(o) {
   }
   function env() {
     const e = { ...process.env, CLAUDE_CONFIG_DIR: CFG, BROWSER: '/bin/false', DISABLE_AUTOUPDATER: '1', TERM: 'xterm-256color' };
-    delete e.CLAUDE_CODE_OAUTH_TOKEN;
-    delete e.ANTHROPIC_API_KEY;
+    // no other credential may override the phone login; ANTHROPIC_BASE_URL also disables Remote Control
+    for (const k of ['CLAUDE_CODE_OAUTH_TOKEN', 'ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_BASE_URL', 'CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR', 'CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR']) delete e[k];
     delete e.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC; // it switches Remote Control off
     return e;
   }
@@ -75,9 +88,14 @@ function startPhone(o) {
     return v;
   }
   function pty(cmdline, transcript, cwd) {
-    // `script` gives the child a real terminal; its stdin is forwarded to that terminal
+    // `script` gives the child a real terminal; its stdin is forwarded to that terminal.
+    // Errors on the process or its pipes are logged, never thrown: this runs inside the worker
+    // daemon, and an unhandled 'error' event would take every queued prompt down with it.
     fs.mkdirSync(cwd, { recursive: true });
-    return spawn('script', ['-qfc', cmdline, transcript], { cwd, env: env(), stdio: ['pipe', 'pipe', 'pipe'] });
+    const child = spawn('script', ['-qfc', cmdline, transcript], { cwd, env: env(), stdio: ['pipe', 'pipe', 'pipe'] });
+    child.on('error', (e) => log(`phone: ${e.message}`));
+    for (const s of [child.stdin, child.stdout, child.stderr]) if (s) s.on('error', () => {});
+    return child;
   }
   function pretrust() {
     // Remote Control refuses an untrusted folder; mark the phone folder trusted in this login's config
@@ -88,6 +106,9 @@ function startPhone(o) {
     } catch {
       /* new */
     }
+    // a fresh config shows onboarding and a theme picker in the terminal unless both are set
+    j.hasCompletedOnboarding = true;
+    j.theme = j.theme || 'dark';
     j.projects = j.projects || {};
     j.projects[PROJ] = { ...(j.projects[PROJ] || {}), hasTrustDialogAccepted: true };
     fs.mkdirSync(CFG, { recursive: true, mode: 0o700 });
@@ -101,17 +122,20 @@ function startPhone(o) {
     }
     fs.mkdirSync(CFG, { recursive: true, mode: 0o700 });
     const child = pty(claudeCmd('auth login'), path.join(RC, 'login.log'), PROJ);
-    login = { child, out: '' };
+    // handlers act only while this is still the current sign-in: a stopped one can still emit
+    const me = { child, out: '' };
+    login = me;
     write({ phase: 'login', url: null, message: 'starting the sign-in', attempts: st.attempts + 1 });
     child.stdout.on('data', (d) => {
+      if (login !== me) return;
       const chunk = clean(d.toString('utf8'));
-      login.out += chunk;
+      me.out += chunk;
       // Claude answers a wrong code at once and keeps waiting for another
       if (/Invalid code|code (is )?(invalid|expired)/i.test(chunk) && st.phase === 'verifying') {
         write({ phase: 'need_code', message: 'Claude did not accept that code: copy the whole code from the page (it is long) and send it again' });
         log('phone: code rejected');
       }
-      const urls = login.out.match(URL_RE);
+      const urls = me.out.match(URL_RE);
       if (urls && st.phase === 'login') {
         const url = urls.find((u) => /oauth\/authorize/.test(u)) || urls[0];
         write({ phase: 'need_code', url, message: 'open the link, press Authorize, bring back the code the page shows' });
@@ -119,7 +143,8 @@ function startPhone(o) {
       }
     });
     child.on('close', (code) => {
-      const out = login ? login.out : '';
+      if (login !== me) return;
+      const out = me.out;
       login = null;
       if (loggedIn(true)) {
         write({ phase: 'starting', url: null, message: 'signed in', attempts: 0 });
@@ -132,23 +157,26 @@ function startPhone(o) {
   function startSession() {
     pretrust();
     const child = pty(claudeCmd('remote-control'), path.join(RC, 'session.log'), PROJ);
-    session = { child, out: '', lastAnswer: 0 };
+    const me = { child, out: '', lastAnswer: 0 };
+    session = me;
     write({ phase: 'starting', message: 'starting Remote Control' });
     child.stdout.on('data', (d) => {
-      session.out = (session.out + clean(d.toString('utf8'))).slice(-20000);
-      const tail = session.out.slice(-400);
+      if (session !== me) return;
+      me.out = (me.out + clean(d.toString('utf8'))).slice(-20000);
+      const tail = me.out.slice(-400);
       // answer a yes/no question once in a while (enable / trust prompts); the folder is pretrusted
-      if (/\(y\/n\)|\[y\/n\]|\[Y\/n\]|\[y\/N\]|yes\/no/i.test(tail) && Date.now() - session.lastAnswer > 5000) {
-        session.lastAnswer = Date.now();
+      if (/\(y\/n\)|\[y\/n\]|\[Y\/n\]|\[y\/N\]|yes\/no/i.test(tail) && Date.now() - me.lastAnswer > 5000) {
+        me.lastAnswer = Date.now();
         child.stdin.write('y\r');
       }
-      const urls = session.out.match(URL_RE);
+      const urls = me.out.match(URL_RE);
       const sessionUrl = urls ? urls.filter((u) => /\/code/.test(u)).pop() : null;
-      const lines = session.out.split('\n').map((l) => l.trim()).filter(Boolean);
+      const lines = me.out.split('\n').map((l) => l.trim()).filter(Boolean);
       write({ phase: 'running', session_url: sessionUrl || st.session_url, message: (lines[lines.length - 1] || '').slice(0, 200) });
     });
     child.on('close', (code) => {
-      const out = session ? session.out : '';
+      if (session !== me) return;
+      const out = me.out;
       session = null;
       if (/must be logged in|not logged in|log in again|expired/i.test(out)) {
         loggedInCache = { at: 0, value: false };
@@ -159,6 +187,63 @@ function startPhone(o) {
         write({ phase: 'starting', message: `Remote Control stopped (exit ${code}); restarting in ${Math.round((restartAt - Date.now()) / 1000)} s` });
       }
     });
+  }
+  function readHolder() {
+    try {
+      const h = JSON.parse(fs.readFileSync(HOLDER, 'utf8'));
+      h.age_s = Math.round((Date.now() - fs.statSync(HOLDER).mtimeMs) / 1000);
+      return h;
+    } catch {
+      return null;
+    }
+  }
+  function beat() {
+    fs.writeFileSync(HOLDER + '.part', JSON.stringify({ ...me, beat: new Date().toISOString() }));
+    fs.renameSync(HOLDER + '.part', HOLDER);
+    leaseBeat = Date.now();
+  }
+  function acquire() {
+    // true when this worker holds the lease; otherwise the holder's record
+    if (holding) {
+      if (Date.now() - leaseBeat > 5000) {
+        const h = readHolder();
+        if (h && (h.worker !== me.worker || h.job !== me.job || h.pid !== me.pid)) {
+          holding = false; // taken over after we stalled past 60 s
+          return h;
+        }
+        beat();
+      }
+      return true;
+    }
+    fs.mkdirSync(path.dirname(LEASE), { recursive: true, mode: 0o700 });
+    for (let i = 0; i < 2; i++) {
+      try {
+        fs.mkdirSync(LEASE, { mode: 0o700 });
+        holding = true;
+        beat();
+        log('phone: this worker now hosts phone access');
+        return true;
+      } catch (e) {
+        if (e.code !== 'EEXIST') throw e;
+        const h = readHolder();
+        if (h && h.worker === me.worker && h.job === me.job && h.pid === me.pid) {
+          holding = true;
+          beat();
+          return true;
+        }
+        // abandoned (no beat for 60 s, or never written) or left by an earlier run of this worker
+        const stale = !h || h.age_s > 60 || (h.worker === me.worker && h.pid !== me.pid && h.age_s > 10);
+        if (!stale) return h;
+        fs.rmSync(LEASE, { recursive: true, force: true });
+      }
+    }
+    return readHolder() || {};
+  }
+  function release() {
+    if (!holding) return;
+    holding = false;
+    const h = readHolder();
+    if (!h || (h.worker === me.worker && h.pid === me.pid)) fs.rmSync(LEASE, { recursive: true, force: true });
   }
   function stopAll() {
     for (const c of [login, session]) if (c) try { c.child.kill('SIGTERM'); } catch { /* gone */ }
@@ -171,7 +256,16 @@ function startPhone(o) {
       const enabled = fs.existsSync(ENABLE);
       if (!enabled) {
         if (login || session) stopAll();
+        release();
         if (st.phase !== 'off') write({ phase: 'off', url: null, session_url: null, message: '', attempts: 0 });
+        return;
+      }
+      const lease = acquire();
+      if (lease !== true) {
+        if (login || session) stopAll();
+        const where = `worker ${lease.worker || '?'}${lease.node ? ` on ${lease.node}` : ''}`;
+        if (st.phase !== 'elsewhere') log(`phone: ${where} already hosts phone access`);
+        write({ phase: 'elsewhere', url: null, session_url: null, message: `phone access is hosted by ${where}; turn it on here with Ashley: Phone access to move it` });
         return;
       }
       if (login) {
@@ -202,7 +296,10 @@ function startPhone(o) {
 
   return {
     tick,
-    stop: stopAll,
+    stop() {
+      stopAll();
+      release();
+    },
     phase: () => st.phase,
   };
 }

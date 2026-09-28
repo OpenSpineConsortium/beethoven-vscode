@@ -479,11 +479,11 @@ export async function pushTokens(env: WizardEnv): Promise<{ ok: boolean; detail:
   let r = await ssh(alias, ['bash', '-c', 'umask 077; mkdir -p ~/.ashley; cat > ~/.ashley/secrets.env'], { input: secrets });
   if (r.code !== 0) return { ok: false, detail: `writing secrets.env: ${r.stderr.trim()}` };
   if (claude) {
-    r = await ssh(alias, ['bash', '-c', 'umask 077; mkdir -p ~/.ashley/accounts/default; cat > ~/.ashley/accounts/default/token; rm -f ~/.ashley/accounts/default/state.json'], { input: claude + '\n' });
+    r = await ssh(alias, ['bash', '-c', 'if [ -x ~/.ashley/bin/ashley ]; then ~/.ashley/bin/ashley accounts add-token default; else umask 077; mkdir -p ~/.ashley/accounts/default; cat > ~/.ashley/accounts/default/token; rm -f ~/.ashley/accounts/default/state.json; fi'], { input: claude + '\n' });
     if (r.code !== 0) return { ok: false, detail: `writing the Claude token: ${r.stderr.trim()}` };
   }
   if (apiKey) {
-    r = await ssh(alias, ['bash', '-c', 'umask 077; mkdir -p ~/.ashley/accounts/apikey; cat > ~/.ashley/accounts/apikey/apikey'], { input: apiKey + '\n' });
+    r = await ssh(alias, ['bash', '-c', 'if [ -x ~/.ashley/bin/ashley ]; then ~/.ashley/bin/ashley accounts add-key apikey; else umask 077; mkdir -p ~/.ashley/accounts/apikey; cat > ~/.ashley/accounts/apikey/apikey; fi'], { input: apiKey + '\n' });
     if (r.code !== 0) return { ok: false, detail: `writing the API key: ${r.stderr.trim()}` };
   }
   return { ok: true, detail: 'tokens updated on the grid' };

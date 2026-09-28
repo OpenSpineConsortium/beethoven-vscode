@@ -88,6 +88,14 @@ let processed = 0;
 function claudeCommand(args) {
   return CLAUDE.endsWith('.js') ? { cmd: process.execPath, args: [CLAUDE, ...args] } : { cmd: CLAUDE, args };
 }
+// Slurm inside the container (see worker.sbatch.tpl): tested once at start by asking for this job
+const SLURM_BIN = process.env.ASHLEY_SLURM_BIN || '';
+const SLURM = (() => {
+  if (!SLURM_BIN) return { ok: false, detail: 'the worker job found no Slurm client to bind' };
+  const r = spawnSync(path.join(SLURM_BIN, 'squeue'), ['-h', '-j', String(process.env.SLURM_JOB_ID || ''), '-o', '%T'], { encoding: 'utf8', timeout: 30_000 });
+  const out = `${r.stdout || ''}${r.stderr || ''}`.trim();
+  return /RUNNING/.test(out) ? { ok: true, detail: 'squeue answers from inside the container' } : { ok: false, detail: (out || String(r.error || `exit ${r.status}`)).slice(0, 200) };
+})();
 const claudeVersion = (() => {
   const c = claudeCommand(['--version']);
   const r = spawnSync(c.cmd, c.args, { encoding: 'utf8', timeout: 60000 });
@@ -192,10 +200,13 @@ function startRequest(req, claimedPath) {
     ASHLEY_REQUEST_ID: req.id,
     ASHLEY_WORKER: WORKER,
     ASHLEY_ROOT: ROOT,
-    PATH: `${path.dirname(CLAUDE)}:${process.env.PATH || ''}`,
+    // the ashley CLI and (when the worker job set it up) the host's Slurm client, for Claude's shell
+    PATH: [path.dirname(CLAUDE), path.join(ASHLEY_HOME, 'bin'), SLURM.ok ? SLURM_BIN : '', process.env.PATH || ''].filter(Boolean).join(':'),
   });
-  delete env.CLAUDE_CODE_OAUTH_TOKEN;
-  delete env.ANTHROPIC_API_KEY;
+  // only the chosen account's credential: nothing from the job environment or secrets.env may
+  // override it (ANTHROPIC_AUTH_TOKEN) or send it elsewhere (ANTHROPIC_BASE_URL)
+  for (const k of ['CLAUDE_CODE_OAUTH_TOKEN', 'ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_BASE_URL', 'CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR', 'CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR']) delete env[k];
+  shareTranscripts(account.dir);
   if (account.kind === 'oauth-token') env.CLAUDE_CODE_OAUTH_TOKEN = account.secret;
   if (account.kind === 'api-key') env.ANTHROPIC_API_KEY = account.secret;
 
@@ -308,7 +319,10 @@ function peerNote() {
     /* no workers dir */
   }
   return [
-    `You are the Ashley worker "${WORKER}" of user ${os.userInfo().username} on Wayne State grid node ${node} (Slurm job ${job}); ~/.ashley/bin/ashley is on PATH.`,
+    `You are the Ashley worker "${WORKER}" of user ${os.userInfo().username} on Wayne State grid node ${node}, inside Slurm job ${job} (${process.env.SLURM_CPUS_PER_TASK || '?'} CPUs), in a container; the ashley command is on PATH.`,
+    SLURM.ok
+      ? 'Slurm works from your shell (sbatch, squeue, scancel, sacct): submit heavy or long work as its own job instead of running it in this allocation; a submitted job runs on the host with the student\'s normal environment, not in this container.'
+      : `Slurm is NOT available from your shell (${SLURM.detail}): run work inside this job's allocation, and ask the student to start more workers from the laptop.`,
     peers.length ? `Other live workers of this account: ${peers.join('; ')}.` : 'No other worker of this account is alive right now.',
     'To hand work to another worker, write a request from your shell: printf \'%s\' \'{"v":1,"id":"<unique>","prompt":"...","session":"<name>","mode":"acceptEdits","max_turns":50,"created":"<iso>","from":"' + WORKER + '"}\' | ashley send --worker <name> --json ; collect it later with: ashley result --worker <name> <id> (or ashley wait). Start one with: ashley worker start --name <name> [--container <library entry>] [--gpus 1].',
     'Never run heavy work on the login node; submit jobs. Read files before changing them; keep results in files.',
@@ -316,6 +330,32 @@ function peerNote() {
 }
 
 // ---- accounts -------------------------------------------------------------------------
+// --resume finds a session only under <CLAUDE_CONFIG_DIR>/projects (measured on Claude Code
+// 2.1.283: "No conversation found" from another config folder), so a request moved to another of
+// the student's accounts would lose its conversation. Every account's projects/ is therefore a link
+// to one ~/.ashley/projects. All accounts belong to one person, so this shares nothing between people.
+const SHARED_PROJECTS = path.join(ASHLEY_HOME, 'projects');
+function shareTranscripts(dir) {
+  const p = path.join(dir, 'projects');
+  try {
+    fs.mkdirSync(SHARED_PROJECTS, { recursive: true, mode: 0o700 });
+    const st = fs.lstatSync(p, { throwIfNoEntry: false });
+    if (st && st.isSymbolicLink()) return;
+    if (st && st.isDirectory()) {
+      for (const proj of fs.readdirSync(p)) {
+        const src = path.join(p, proj);
+        const dst = path.join(SHARED_PROJECTS, proj);
+        if (!fs.statSync(src).isDirectory()) continue;
+        fs.mkdirSync(dst, { recursive: true });
+        for (const f of fs.readdirSync(src)) if (!fs.existsSync(path.join(dst, f))) fs.renameSync(path.join(src, f), path.join(dst, f));
+      }
+      fs.renameSync(p, `${p}.before-sharing.${Date.now()}`); // anything left (a name clash) is kept, not deleted
+    }
+    fs.symlinkSync(SHARED_PROJECTS, p, process.platform === 'win32' ? 'junction' : 'dir');
+  } catch (e) {
+    if (e.code !== 'EEXIST') log(`could not share transcripts for account ${path.basename(dir)}: ${e.message}`);
+  }
+}
 function listAccounts() {
   if (!fs.existsSync(ACCOUNTS)) return [];
   const out = [];
@@ -330,9 +370,9 @@ function listAccounts() {
     } else if (fs.existsSync(path.join(dir, 'apikey'))) {
       kind = 'api-key';
       secret = readFirstLine(path.join(dir, 'apikey'));
-    } else if (fs.existsSync(path.join(dir, '.credentials.json'))) {
-      kind = 'login';
     }
+    // a copied .credentials.json (the old 'login' kind) is retired: it shares a refresh-token chain
+    // with the machine it came from, and the first refresh on either side revokes the other
     if (!kind) continue;
     const enabled = !fs.existsSync(path.join(dir, 'disabled'));
     let st = {};
@@ -415,6 +455,7 @@ function writeState(status) {
     accounts,
     blocked_until: allCooling ? soonestCooldown() : null,
     phone: phone ? phone.phase() : 'unavailable',
+    slurm: SLURM,
   };
   atomicWrite(STATE, JSON.stringify(st, null, 1));
 }

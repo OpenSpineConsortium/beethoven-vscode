@@ -1,6 +1,6 @@
 // Everything the laptop asks the grid to do, as typed calls over `ssh <alias> ~/.ashley/bin/ashley ...`.
 // Shared by the extension, the MCP server and the CLI.
-import { ssh, RunResult, RunOptions } from './shell';
+import { ssh, RunResult, RunOptions, shq, remotePath } from './shell';
 import { AshleyRequest, AshleyResult, WorkerState, makeRequest, PermissionMode } from './protocol';
 import { parseSqueue, SqueueRow, SQUEUE_FORMAT, workerStartArgs, WorkerJobSpec } from './slurm';
 import { GridRelay } from './relay';
@@ -53,7 +53,8 @@ export class GridApi {
   }
 
   async squeue(): Promise<SqueueRow[]> {
-    const r = await ssh(this.alias, ['squeue', '-u', '$USER', '-h', '-o', SQUEUE_FORMAT], { timeoutMs: 60_000 });
+    // $USER must be expanded on the grid: a quoted '$USER' reached squeue literally and every list came back empty
+    const r = await ssh(this.alias, ['bash', '-c', `squeue -u "$USER" -h -o ${shq(SQUEUE_FORMAT)}`], { timeoutMs: 60_000 });
     return r.code === 0 ? parseSqueue(r.stdout) : [];
   }
 
@@ -226,7 +227,7 @@ export class GridApi {
   }
 
   async sbatch(scriptPath: string, cwd: string, extraArgs: string[] = []): Promise<{ ok: boolean; jobId?: string; message: string }> {
-    const r = await ssh(this.alias, ['bash', '-c', `cd ${cwd} && sbatch --parsable ${extraArgs.join(' ')} ${scriptPath}`], { timeoutMs: 60_000 });
+    const r = await ssh(this.alias, ['bash', '-c', `cd ${remotePath(cwd)} && sbatch --parsable ${extraArgs.map(shq).join(' ')} ${remotePath(scriptPath)}`], { timeoutMs: 60_000 });
     const m = /^(\d+)/.exec(r.stdout.trim());
     return { ok: r.code === 0 && !!m, jobId: m?.[1], message: (r.stdout + r.stderr).trim() };
   }

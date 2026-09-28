@@ -3,6 +3,11 @@
 Written for students. "The grid Claude" is the Claude Code worker running in your Slurm job with
 your subscription; "the laptop Claude" is the Claude Code extension in your VS Code.
 
+## How the lab works
+
+The lab curates one folder of datasets, Claude containers and software. You read it; you never
+write to it. Everything you do, you do in your own grid account.
+
 ## Things that work well
 
 **Ask the grid Claude to do work where the data is.** It runs in your grid home with your
@@ -23,6 +28,9 @@ tools; the heavy part happens on the grid; the answer returns to your panel.
 
 **Long tasks.** `ashley_send` queues; `ashley_result` collects later. Close the laptop. The job
 runs until its wall time (24 h by default, 30 days maximum on the `primary` QoS).
+
+**From your phone.** *Ashley: Phone access* puts your worker's Claude in the Claude app on your phone
+(Remote Control), for the same account. One sign-in on the worker, good for about 30 days.
 
 **Images.** Open your grid files with **Ashley: Open my grid files on a compute node**; click a PNG.
 No X server.

@@ -105,3 +105,32 @@ export function localEnvironment(accessId: string, sshAlias: string): Record<str
     ASHLEY_GRID_HOME: gridHome(accessId),
   };
 }
+
+/**
+ * The token a CLI printed, from a terminal stream with ANSI codes already removed.
+ * Terminal UIs hard-wrap long lines at the terminal width, and a stream arrives in chunks, so the
+ * first 20 matching characters are not yet the token. A wrapped token continues on the next line
+ * when the line it ends on is exactly as long as the first token line (the wrap width) and the next
+ * line is nothing but token characters. `complete` is true once a line after the token has arrived.
+ */
+export function extractWrappedToken(text: string, pattern: RegExp): { token: string; complete: boolean } | undefined {
+  const clean = text.replace(/\r/g, '');
+  const m = new RegExp(pattern.source, pattern.flags.replace('g', '')).exec(clean);
+  if (!m) return undefined;
+  const lineStart = clean.lastIndexOf('\n', m.index) + 1;
+  const lines = clean.slice(lineStart).split('\n');
+  const first = lines[0].trimEnd();
+  const afterToken = clean.slice(m.index + m[0].length, lineStart + lines[0].length);
+  if (afterToken.trim() !== '') return { token: m[0], complete: true };
+  let token = m[0];
+  const width = first.length;
+  let cur = first;
+  let i = 1;
+  // lines[lines.length - 1] may still be arriving: never consume it
+  while (i < lines.length - 1 && cur.length === width && /^[A-Za-z0-9_-]+$/.test(lines[i].trim())) {
+    token += lines[i].trim();
+    cur = lines[i].trimEnd();
+    i++;
+  }
+  return { token, complete: i < lines.length - 1 };
+}

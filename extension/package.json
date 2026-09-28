@@ -42,9 +42,32 @@
       },
       {
         "command": "ashley.doctor",
-        "title": "Check everything (doctor)",
+        "title": "Check everything (no repairs)",
         "category": "Ashley",
         "icon": "$(pulse)"
+      },
+      {
+        "command": "ashley.healthMenu",
+        "title": "Health",
+        "category": "Ashley"
+      },
+      {
+        "command": "ashley.investigate",
+        "title": "Investigate the failure with Claude",
+        "category": "Ashley",
+        "icon": "$(sparkle)"
+      },
+      {
+        "command": "ashley.showLog",
+        "title": "Show log",
+        "category": "Ashley",
+        "icon": "$(output)"
+      },
+      {
+        "command": "ashley.troubleshoot",
+        "title": "Troubleshoot and repair",
+        "category": "Ashley",
+        "icon": "$(tools)"
       },
       {
         "command": "ashley.connect",
@@ -184,6 +207,11 @@
           "command": "ashley.doctor",
           "when": "view == ashley.status",
           "group": "navigation@3"
+        },
+        {
+          "command": "ashley.troubleshoot",
+          "when": "view == ashley.status",
+          "group": "navigation@4"
         }
       ],
       "view/item/context": [
@@ -396,5 +424,10 @@
     "esbuild": "0.28.2",
     "mocha": "11.7.1",
     "typescript": "5.9.3"
+  },
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": true
+    }
   }
 }

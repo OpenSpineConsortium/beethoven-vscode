@@ -1,4 +1,76 @@
-# CHECKPOINT 2026-09-28 (updated 04:20 UTC, seventh pass: lab access as the last step) — Ashley, the WSU grid + Claude Code extension
+# CHECKPOINT 2026-09-28 (updated 07:05 UTC, twelfth pass: version 1 ready for testing) — Ashley, the WSU grid + Claude Code extension
+
+## CURRENT STATE: read this first
+
+Version 1.0.0 of the extension, grid scripts version 3, installed in Greg's VS Code
+(`dist/ashley-wsu-1.0.0.vsix`, 27 files, 1.64 MB) and deployed to his grid account. Workers
+`default` (job 40486902, 6 h) and `peer` (job 40486904, 2 h) run on asx1 from the version 3 template.
+
+### Passes 8 to 12 (after the seventh pass below)
+
+- **8 (committed a2e1f69):** access requests as held Slurm jobs; wizard v2 (Sign in with Wayne State
+  first, accounts before the grid, strict order, Renew updates the grid); phone access.
+- **9: troubleshooter.** `core/diagnostics.ts` engine, `vscode/diagNodes.ts` graph (42 nodes),
+  `vscode/diagnosticsUi.ts` (status bar, panel, Show log, Investigate with Claude, hourly sweep),
+  grid `ashley diag`/`diag-node`. The pre-integration rule is a test: `REQUIRED_BY_FEATURE` in
+  `vscode-test/extension.test.ts`, which also exports `docs/diagnostics_graph.json`;
+  `tools/diag_doc.py` writes the tables in `docs/DIAGNOSTICS.md`.
+- **10: claude-swap study** (`docs/research/claude_swap_notes.md`). Five v1 defects fixed: shared
+  session history across one person's accounts (measured on 2.1.283: `--resume` from another config
+  folder says "No conversation found"); one phone host (mkdir lease); all six credential variables
+  removed; phone onboarding seed; one subscription per person (`add-token` refuses a second).
+  The container run of the new phone tests found a crash in the phone handlers: fixed.
+  Next-release plan (usage meter from `rate_limit_event`, read-only cswap cooperation): section 5.
+- **11: dependency study** (`docs/DEPENDENCY_MAP.md`, 370 entries). Confirmed and fixed: quoted `~`
+  made a literal `~` folder (first install on a fresh account would fail; the empty folder in
+  Greg's home was removed); `squeue -u '$USER'` returned nothing; workers had no Slurm or `ashley`
+  inside the container (now bound in, self-tested, node `grid.slurm-in-worker`); MCP re-registration
+  refused on upgrade (now remove then add); SSH block captured the student's global lines (now ends
+  with `Match all`; Greg's block rewritten, login checked); library purpose cut at commas; token
+  capture could truncate (chunking, hard wraps); ssh/scp resolved from PATH; untrusted workspaces.
+- **12:** `ashley worker restart` re-renders the job from the current template (settings saved in
+  `<worker>/params`); manual rebuilt (32 pages); changelog; fixtures out of the VSIX.
+
+### Tests (all run today)
+
+| Suite | Result |
+|---|---|
+| Laptop unit tests (`node --test` over `dist-test/unit`) | 31 pass, 5 skip on Windows (phone) |
+| VS Code integration (`npx vscode-test --label unit`) | 7 pass |
+| Live troubleshooter (`npx vscode-test --label live`) | pass; 5 root causes, all from the isolated test profile |
+| Inside the lab container on asx1 (`bash tools/grid_tests.sh`) | 12 of 12 pass |
+
+### Open
+
+1. Greg only: the Claude *Authorize* click (then the grid token check and a real prompt through a
+   worker), the Wayne State sign-in in the university tenant, a phone sign-in with a real code, a
+   GitHub token, a second student account to confirm the ACLs from the student side, and a
+   human run-through of the wizard.
+2. Status calls open one ssh connection each; route them over the relay (study entry
+   `network.ssh-connection-budget`).
+3. Next release (extension 2.0.0, grid scripts 4): the plan in `docs/research/claude_swap_notes.md`
+   section 5. Greg's laptop already has claude-swap 0.26.0 in `~/.local/bin`, useful for its step 6.
+4. The Remote-SSH caveat in the history below (a second window timing out while an old server ran).
+
+### How to continue
+
+```powershell
+$env:Path = "C:\Users\grego\tools\node22;" + $env:Path
+cd C:\Users\grego\OneDrive\Desktop\ashley\extension
+node esbuild.mjs --tests; node --test "dist-test/unit/**/*.test.js"    # 31 pass, 5 skip
+npx vscode-test --label unit; npx vscode-test --label live           # 7 pass; live walks the grid
+bash ../tools/grid_tests.sh                                           # from Git Bash: 12 tests in the container
+python ../tools/diag_doc.py; python ../tools/depmap_doc.py           # regenerate the diagnostics docs
+npm run package; code --install-extension ..\dist\ashley-wsu-1.0.0.vsix --force
+ssh wsu-grid "~/.ashley/bin/ashley diag --json"                       # grid truth, node by node
+```
+
+Deploy grid scripts by hand: copy `grid/*` with CR stripped to `~/.ashley/bin/`, then
+`ashley worker restart --name <w>` (it re-renders from the new template). Push: `bash tools/push_via_grid.sh`.
+
+---
+
+History follows (passes 7 and earlier; counts and commands there are from that time).
 
 ## Seventh pass (Greg, 00:00 to 00:15 local): access is last, one folder, no private builds
 
@@ -204,7 +276,7 @@ architectural decisions with that future (the lab recipe, board, Nextflow later)
 seven prompt files in `CTSpinoPelvic1K-1/openresearch/` give the bigger vision ("Ashley"
 organizer, Nextflow, PRISMA lit review); `zeroethprompt.txt` says: step-wise, the wizard first.
 
-Standing preferences: never the word "provenance"; integer version bumps only; captions ≤ 60
+Standing preferences: one banned word (see CLAUDE.md); integer version bumps only; captions ≤ 60
 words; commit directly (no feature branches); network through WSL when Windows sockets flake;
 never run work on the grid login node; scripts are files, never heredocs over ssh.
 

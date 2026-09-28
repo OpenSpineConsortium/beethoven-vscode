@@ -63,3 +63,13 @@ test('node names become Remote-SSH hosts', () => {
   assert.equal(remoteUri('voh3', 'nas.grid.wayne.edu', '/wsu/home/ab/ab12/ab1234'), 'vscode-remote://ssh-remote+voh3.nas.grid.wayne.edu/wsu/home/ab/ab12/ab1234');
   assert.throws(() => nodeHost('  ', 'x'));
 });
+
+test('the block hands scope back: the student\'s global lines below it stay global', () => {
+  const targets = { alias: 'wsu-grid', includeGridAlias: false, loginHost: 'warrior.grid.wayne.edu', accessId: 'ab1234', identityFile: '~/.ssh/id_ed25519_wsu', nodeDomain: 'nas.grid.wayne.edu' };
+  const block = renderBlock(targets);
+  const lines = block.trim().split('\n');
+  assert.equal(lines[lines.length - 1], BLOCK_END);
+  assert.equal(lines[lines.length - 2], 'Match all', 'the last directive inside the block resets the scope');
+  const merged = upsertBlock('Include config.d/*\nForwardAgent yes\n', targets);
+  assert.ok(merged.indexOf('Match all') < merged.indexOf('Include config.d/*'), 'the old global lines follow the reset');
+});

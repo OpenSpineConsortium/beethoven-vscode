@@ -1,9 +1,12 @@
 node_modules/
-dist/
+# the built extension is committed (students install it from here); bundles and test builds are not
+/dist/*
+!/dist/ashley-wsu-*.vsix
+extension/dist/
 dist-test/
 out/
 *.vsix
-!dist/ashley-wsu-*.vsix
+!/dist/ashley-wsu-*.vsix
 .vscode-test/
 *.log
 .DS_Store

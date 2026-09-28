@@ -1,0 +1,658 @@
+{
+ "features": {
+  "wizard": [
+   "account.wsu",
+   "account.github",
+   "account.huggingface",
+   "account.claude",
+   "laptop.ssh-key",
+   "laptop.ssh-config",
+   "network.grid-login"
+  ],
+  "grid_install": [
+   "grid.scripts",
+   "grid.bashrc-block",
+   "grid.vscode-sysroot",
+   "grid.token-github",
+   "grid.token-hf",
+   "grid.token-claude"
+  ],
+  "workers": [
+   "grid.slurm",
+   "grid.qos",
+   "grid.runtime",
+   "grid.container",
+   "grid.worker",
+   "grid.slurm-in-worker",
+   "node.probe"
+  ],
+  "relay": [
+   "grid.relay",
+   "laptop.relay"
+  ],
+  "lab_access": [
+   "grid.lab-access",
+   "grid.lab-folder",
+   "grid.slurm-visibility",
+   "grid.acl-tools"
+  ],
+  "remote_ssh": [
+   "vscode.remote-ssh",
+   "vscode.remote-ssh-settings"
+  ],
+  "claude_bridge": [
+   "vscode.claude-code",
+   "vscode.claude-binary",
+   "vscode.mcp-bridge"
+  ],
+  "phone": [
+   "grid.phone"
+  ],
+  "accounts": [
+   "grid.accounts"
+  ],
+  "token_capture": [
+   "vscode.shell-integration",
+   "vscode.secret-storage"
+  ]
+ },
+ "nodes": [
+  {
+   "id": "laptop.os",
+   "title": "Operating system",
+   "layer": "laptop",
+   "dependsOn": [],
+   "assumption": "Windows 10/11, macOS or Linux on x64 or arm64",
+   "manualFix": "Ashley supports Windows, macOS and Linux laptops",
+   "futureRisk": "a new OS release changing OpenSSH or the keychain",
+   "source": "extension/src/extension.ts",
+   "autoRepair": false,
+   "slow": false
+  },
+  {
+   "id": "laptop.openssh",
+   "title": "OpenSSH client",
+   "layer": "laptop",
+   "dependsOn": [
+    "laptop.os"
+   ],
+   "assumption": "ssh 7.3+ on PATH (ProxyJump); on Windows the built-in OpenSSH client",
+   "manualFix": "Windows: Settings > System > Optional features > OpenSSH Client; macOS/Linux: install openssh-client",
+   "futureRisk": "an OpenSSH release dropping hmac-sha1, which the grid still needs",
+   "source": "extension/src/core/shell.ts",
+   "autoRepair": false,
+   "slow": false
+  },
+  {
+   "id": "laptop.ssh-keygen",
+   "title": "ssh-keygen",
+   "layer": "laptop",
+   "dependsOn": [
+    "laptop.openssh"
+   ],
+   "assumption": "ssh-keygen can make ed25519 keys",
+   "manualFix": "install the OpenSSH client (it includes ssh-keygen)",
+   "futureRisk": "",
+   "source": "extension/src/core/wizard.ts (stepSshKey)",
+   "autoRepair": false,
+   "slow": false
+  },
+  {
+   "id": "vscode.version",
+   "title": "VS Code version",
+   "layer": "vscode",
+   "dependsOn": [
+    "laptop.os"
+   ],
+   "assumption": "VS Code 1.100 or newer",
+   "manualFix": "Help > Check for Updates",
+   "futureRisk": "API removals in a future VS Code",
+   "source": "extension/package.json (engines)",
+   "autoRepair": false,
+   "slow": false
+  },
+  {
+   "id": "vscode.remote-ssh",
+   "title": "Remote-SSH extension",
+   "layer": "vscode",
+   "dependsOn": [
+    "vscode.version"
+   ],
+   "assumption": "ms-vscode-remote.remote-ssh installed (opening grid files and images)",
+   "manualFix": "install ms-vscode-remote.remote-ssh from the Extensions view",
+   "futureRisk": "the extension renamed or its commands changed",
+   "source": "extension/src/extension.ts",
+   "autoRepair": true,
+   "slow": false
+  },
+  {
+   "id": "vscode.claude-code",
+   "title": "Claude Code extension",
+   "layer": "vscode",
+   "dependsOn": [
+    "vscode.version"
+   ],
+   "assumption": "anthropic.claude-code installed (the local Claude, setup-token, the bridge)",
+   "manualFix": "install anthropic.claude-code from the Extensions view",
+   "futureRisk": "the extension renamed or its commands changed",
+   "source": "extension/src/extension.ts",
+   "autoRepair": true,
+   "slow": false
+  },
+  {
+   "id": "vscode.claude-binary",
+   "title": "Claude Code program",
+   "layer": "vscode",
+   "dependsOn": [
+    "vscode.claude-code"
+   ],
+   "assumption": "the claude executable bundled with the Claude Code extension runs",
+   "manualFix": "reinstall the Claude Code extension",
+   "futureRisk": "the extension moving its bundled binary",
+   "source": "extension/src/vscode/store.ts (findClaudeExecutable)",
+   "autoRepair": false,
+   "slow": false
+  },
+  {
+   "id": "vscode.shell-integration",
+   "title": "Terminal shell integration",
+   "layer": "vscode",
+   "dependsOn": [
+    "vscode.version"
+   ],
+   "assumption": "terminal.integrated.shellIntegration.enabled is on (Ashley reads the Claude token from the terminal)",
+   "manualFix": "Settings: Terminal > Integrated > Shell Integration: Enabled",
+   "futureRisk": "",
+   "source": "extension/src/vscode/panel.ts (runCapturing)",
+   "autoRepair": true,
+   "slow": false
+  },
+  {
+   "id": "vscode.secret-storage",
+   "title": "Keychain (VS Code secret storage)",
+   "layer": "vscode",
+   "dependsOn": [
+    "vscode.version"
+   ],
+   "assumption": "tokens can be stored and read back from the OS keychain",
+   "manualFix": "Linux: install a keyring (gnome-keyring or kwallet); restart VS Code",
+   "futureRisk": "a keychain backend change",
+   "source": "extension/src/vscode/store.ts",
+   "autoRepair": false,
+   "slow": false
+  },
+  {
+   "id": "vscode.remote-ssh-settings",
+   "title": "Remote-SSH settings for the grid",
+   "layer": "vscode",
+   "dependsOn": [
+    "vscode.remote-ssh"
+   ],
+   "assumption": "remote.SSH.connectTimeout >= 300 (compute nodes take ~25 s per session; the first connection downloads the server)",
+   "manualFix": "Settings: remote.SSH.connectTimeout = 300",
+   "futureRisk": "Remote-SSH changing its timeout semantics",
+   "source": "extension/src/extension.ts (commandConnect)",
+   "autoRepair": true,
+   "slow": false
+  },
+  {
+   "id": "network.internet",
+   "title": "Internet from this laptop",
+   "layer": "network",
+   "dependsOn": [
+    "laptop.os"
+   ],
+   "assumption": "HTTPS to github.com, huggingface.co and anthropic.com",
+   "manualFix": "check the Wi-Fi; some campus networks block token checks (the grid checks them instead)",
+   "futureRisk": "",
+   "source": "extension/src/core/wizard.ts (validateToken)",
+   "autoRepair": false,
+   "slow": false
+  },
+  {
+   "id": "account.wsu",
+   "title": "Wayne State sign-in and the lab list",
+   "layer": "account",
+   "dependsOn": [
+    "vscode.version"
+   ],
+   "assumption": "signed in with AccessID@wayne.edu; AccessID on the pre-approved list",
+   "manualFix": "run the wizard step \"Sign in with Wayne State\"; if not on the list, ask your lead",
+   "futureRisk": "the WSU tenant blocking VS Code sign-in",
+   "source": "extension/src/core/wizard.ts (stepWsuSignIn)",
+   "autoRepair": false,
+   "slow": false
+  },
+  {
+   "id": "account.github",
+   "title": "GitHub token",
+   "layer": "account",
+   "dependsOn": [
+    "account.wsu"
+   ],
+   "assumption": "GitHub token stored in the keychain and accepted by the service",
+   "manualFix": "press Renew next to \"GitHub personal access token\" in the setup panel",
+   "futureRisk": "token formats or scopes changing",
+   "source": "extension/src/core/wizard.ts (tokenStep)",
+   "autoRepair": false,
+   "slow": false
+  },
+  {
+   "id": "account.huggingface",
+   "title": "Hugging Face token",
+   "layer": "account",
+   "dependsOn": [
+    "account.wsu"
+   ],
+   "assumption": "Hugging Face token stored in the keychain and accepted by the service",
+   "manualFix": "press Renew next to \"Hugging Face access token\" in the setup panel",
+   "futureRisk": "token formats or scopes changing",
+   "source": "extension/src/core/wizard.ts (tokenStep)",
+   "autoRepair": false,
+   "slow": false
+  },
+  {
+   "id": "account.claude",
+   "title": "Claude subscription token",
+   "layer": "account",
+   "dependsOn": [
+    "account.wsu"
+   ],
+   "assumption": "Claude subscription token stored in the keychain and accepted by the service",
+   "manualFix": "press Renew next to \"Claude subscription token for the grid\" in the setup panel",
+   "futureRisk": "token formats or scopes changing",
+   "source": "extension/src/core/wizard.ts (tokenStep)",
+   "autoRepair": false,
+   "slow": false
+  },
+  {
+   "id": "laptop.ssh-key",
+   "title": "SSH key for the grid",
+   "layer": "laptop",
+   "dependsOn": [
+    "laptop.ssh-keygen",
+    "account.wsu"
+   ],
+   "assumption": "~/.ssh/id_ed25519_wsu and .pub exist",
+   "manualFix": "run the wizard steps \"SSH key\" and \"Log in to the grid once\"",
+   "futureRisk": "",
+   "source": "extension/src/core/wizard.ts (stepSshKey)",
+   "autoRepair": false,
+   "slow": false
+  },
+  {
+   "id": "laptop.ssh-config",
+   "title": "SSH configuration block",
+   "layer": "laptop",
+   "dependsOn": [
+    "laptop.ssh-key"
+   ],
+   "assumption": "the Ashley block in ~/.ssh/config is current (jump host, MACs +hmac-sha1, AddressFamily inet, *.nas.grid.wayne.edu)",
+   "manualFix": "run the wizard step \"SSH configuration\"",
+   "futureRisk": "the grid dropping hmac-sha1 or renaming nodes",
+   "source": "extension/src/core/sshConfig.ts",
+   "autoRepair": true,
+   "slow": false
+  },
+  {
+   "id": "network.grid-login",
+   "title": "Login node without a prompt",
+   "layer": "network",
+   "dependsOn": [
+    "laptop.openssh",
+    "laptop.ssh-config"
+   ],
+   "assumption": "ssh -o BatchMode=yes wsu-grid answers (key installed, no password or code)",
+   "manualFix": "Permission denied: run \"Log in to the grid once\" again; timed out: check the network (the grid accepts SSH from anywhere)",
+   "futureRisk": "the login host renamed, 2FA enforced for keys",
+   "source": "extension/src/core/wizard.ts (testConnection)",
+   "autoRepair": false,
+   "slow": false
+  },
+  {
+   "id": "laptop.relay",
+   "title": "Prompt relay (open session)",
+   "layer": "network",
+   "dependsOn": [
+    "grid.relay"
+   ],
+   "assumption": "one persistent ssh session carries prompts in tens of milliseconds",
+   "manualFix": "Ashley falls back to one ssh per prompt; check the grid relay node",
+   "futureRisk": "",
+   "source": "extension/src/core/relay.ts",
+   "autoRepair": false,
+   "slow": false
+  },
+  {
+   "id": "grid.scripts",
+   "title": "Ashley scripts on the grid",
+   "layer": "grid-login",
+   "dependsOn": [
+    "network.grid-login"
+   ],
+   "assumption": "the grid has this extension's scripts (same version, LF line endings)",
+   "manualFix": "run the wizard step \"Install on the grid\"",
+   "futureRisk": "a home directory restore or clean-up removing ~/.ashley",
+   "source": "grid/ashley (cmd_diag)",
+   "autoRepair": true,
+   "slow": false
+  },
+  {
+   "id": "grid.bashrc-block",
+   "title": "Ashley block in ~/.bashrc",
+   "layer": "grid-login",
+   "dependsOn": [
+    "grid.scripts"
+   ],
+   "assumption": "the block exporting the VS Code sysroot variables and PATH",
+   "manualFix": "ssh wsu-grid \"~/.ashley/bin/ashley install\"",
+   "futureRisk": "a new default .bashrc from C&IT",
+   "source": "grid/ashley (cmd_diag)",
+   "autoRepair": true,
+   "slow": false
+  },
+  {
+   "id": "grid.vscode-sysroot",
+   "title": "VS Code compatibility libraries (C&IT sysroot)",
+   "layer": "grid-login",
+   "dependsOn": [
+    "grid.bashrc-block"
+   ],
+   "assumption": "/wsu/apps/vscode sysroot and patchelf exist at the paths in the block",
+   "manualFix": "ask hpc@wayne.edu where the VS Code sysroot moved",
+   "futureRisk": "Wayne State moving or upgrading the sysroot (repair rediscovers it)",
+   "source": "grid/ashley (cmd_diag)",
+   "autoRepair": true,
+   "slow": false
+  },
+  {
+   "id": "grid.slurm",
+   "title": "Slurm commands",
+   "layer": "grid-login",
+   "dependsOn": [
+    "grid.scripts"
+   ],
+   "assumption": "sbatch, squeue, sacct, scancel work on the login node",
+   "manualFix": "contact hpc@wayne.edu",
+   "futureRisk": "a Slurm upgrade changing output formats",
+   "source": "grid/ashley (cmd_diag)",
+   "autoRepair": true,
+   "slow": false
+  },
+  {
+   "id": "grid.slurm-visibility",
+   "title": "Access requests visible to the admin",
+   "layer": "grid-login",
+   "dependsOn": [
+    "grid.slurm"
+   ],
+   "assumption": "Slurm PrivateData=none (the admin sees held ashley_access jobs)",
+   "manualFix": "the admin can grant directly without a request",
+   "futureRisk": "C&IT enabling PrivateData=jobs",
+   "source": "grid/ashley (cmd_diag)",
+   "autoRepair": true,
+   "slow": false
+  },
+  {
+   "id": "grid.qos",
+   "title": "Slurm partitions and QoS",
+   "layer": "grid-login",
+   "dependsOn": [
+    "grid.slurm"
+   ],
+   "assumption": "the account has the requeue or secondary QoS",
+   "manualFix": "ask your lead / hpc@wayne.edu for the QoS",
+   "futureRisk": "QoS renamed by C&IT",
+   "source": "grid/ashley (cmd_diag)",
+   "autoRepair": true,
+   "slow": false
+  },
+  {
+   "id": "grid.internet",
+   "title": "Internet from the grid",
+   "layer": "grid-login",
+   "dependsOn": [
+    "grid.scripts"
+   ],
+   "assumption": "HTTPS from the login node; curl reads secrets from stdin (-K -)",
+   "manualFix": "contact hpc@wayne.edu",
+   "futureRisk": "a proxy introduced on the grid",
+   "source": "grid/ashley (cmd_diag)",
+   "autoRepair": true,
+   "slow": false
+  },
+  {
+   "id": "grid.acl-tools",
+   "title": "ACL tools (setfacl/getfacl)",
+   "layer": "grid-login",
+   "dependsOn": [
+    "grid.scripts"
+   ],
+   "assumption": "POSIX ACL tools present (lab access)",
+   "manualFix": "contact hpc@wayne.edu",
+   "futureRisk": "the lab volume moved to a filesystem without ACLs",
+   "source": "grid/ashley (cmd_diag)",
+   "autoRepair": true,
+   "slow": false
+  },
+  {
+   "id": "grid.home-quota",
+   "title": "Home directory quota",
+   "layer": "grid-login",
+   "dependsOn": [
+    "grid.scripts"
+   ],
+   "assumption": "home below 98 % of its soft quota",
+   "manualFix": "delete or move large files; ask your lead for lab storage",
+   "futureRisk": "quota policy changes",
+   "source": "grid/ashley (cmd_diag)",
+   "autoRepair": true,
+   "slow": false
+  },
+  {
+   "id": "grid.token-github",
+   "title": "GitHub token on the grid",
+   "layer": "grid-login",
+   "dependsOn": [
+    "grid.internet",
+    "account.github"
+   ],
+   "assumption": "the grid copy of the GitHub token verifies",
+   "manualFix": "press Renew next to GitHub",
+   "futureRisk": "GitHub token expiry policies",
+   "source": "grid/ashley (cmd_diag)",
+   "autoRepair": true,
+   "slow": false
+  },
+  {
+   "id": "grid.token-hf",
+   "title": "Hugging Face token on the grid",
+   "layer": "grid-login",
+   "dependsOn": [
+    "grid.internet",
+    "account.huggingface"
+   ],
+   "assumption": "the grid copy of the Hugging Face token verifies",
+   "manualFix": "press Renew next to Hugging Face",
+   "futureRisk": "Hugging Face token changes",
+   "source": "grid/ashley (cmd_diag)",
+   "autoRepair": true,
+   "slow": false
+  },
+  {
+   "id": "grid.token-claude",
+   "title": "Claude token on the grid",
+   "layer": "grid-login",
+   "dependsOn": [
+    "grid.internet",
+    "account.claude"
+   ],
+   "assumption": "the grid copy of the Claude subscription token is accepted (HTTP 200)",
+   "manualFix": "press Renew next to Claude",
+   "futureRisk": "the one-year token expiring; Anthropic changing OAuth",
+   "source": "grid/ashley (cmd_diag)",
+   "autoRepair": true,
+   "slow": false
+  },
+  {
+   "id": "grid.accounts",
+   "title": "Claude accounts on the grid",
+   "layer": "grid-login",
+   "dependsOn": [
+    "grid.token-claude"
+   ],
+   "assumption": "one subscription token per person, no copied logins, and every account shares one session history (so a conversation survives a move to your API key)",
+   "manualFix": "Troubleshoot and repair links the history; remove extra accounts with: ssh wsu-grid \"ashley accounts remove NAME\"",
+   "futureRisk": "Claude Code moving where --resume looks for transcripts",
+   "source": "grid/ashley (cmd_diag)",
+   "autoRepair": true,
+   "slow": false
+  },
+  {
+   "id": "grid.lab-access",
+   "title": "Lab access",
+   "layer": "grid-login",
+   "dependsOn": [
+    "grid.token-claude",
+    "grid.token-github",
+    "grid.token-hf",
+    "grid.slurm"
+   ],
+   "assumption": "the lab folder is readable (approved), or a request is pending",
+   "manualFix": "the last wizard step: Join the lab",
+   "futureRisk": "the lab folder moving",
+   "source": "grid/ashley (cmd_diag)",
+   "autoRepair": true,
+   "slow": false
+  },
+  {
+   "id": "grid.runtime",
+   "title": "Container runtime (Apptainer)",
+   "layer": "grid-login",
+   "dependsOn": [
+    "grid.scripts"
+   ],
+   "assumption": "the configured apptainer executable exists (repair switches to the current module)",
+   "manualFix": "ask your lead to republish the container",
+   "futureRisk": "Wayne State upgrading or removing the apptainer module",
+   "source": "grid/ashley (cmd_diag)",
+   "autoRepair": true,
+   "slow": false
+  },
+  {
+   "id": "grid.container",
+   "title": "Lab Claude container",
+   "layer": "grid-login",
+   "dependsOn": [
+    "grid.lab-access",
+    "grid.runtime"
+   ],
+   "assumption": "the lab container is adopted (repair runs ashley adopt)",
+   "manualFix": "wait for lab access",
+   "futureRisk": "a republished container at a new path",
+   "source": "grid/ashley (cmd_diag)",
+   "autoRepair": true,
+   "slow": false
+  },
+  {
+   "id": "grid.relay",
+   "title": "Prompt relay on the login node",
+   "layer": "grid-login",
+   "dependsOn": [
+    "grid.scripts"
+   ],
+   "assumption": "ashley relay answers PING",
+   "manualFix": "reinstall Ashley on the grid",
+   "futureRisk": "bash changes on the login node",
+   "source": "grid/ashley (cmd_diag)",
+   "autoRepair": true,
+   "slow": false
+  },
+  {
+   "id": "grid.lab-folder",
+   "title": "Lab folder layout (admin)",
+   "layer": "grid-login",
+   "dependsOn": [
+    "grid.acl-tools"
+   ],
+   "assumption": "the lab folder is closed to other users and requests go through Slurm",
+   "manualFix": "ssh wsu-grid \"ashley access init\"",
+   "futureRisk": "someone widening permissions by hand",
+   "source": "grid/ashley (cmd_diag)",
+   "autoRepair": true,
+   "slow": false
+  },
+  {
+   "id": "grid.worker",
+   "title": "Claude workers",
+   "layer": "grid-slurm",
+   "dependsOn": [
+    "grid.container",
+    "grid.qos"
+   ],
+   "assumption": "every running worker job has a daemon that answers (heartbeat under 90 s)",
+   "manualFix": "Ashley: Stop a worker, then Start a worker",
+   "futureRisk": "node images changing under the container",
+   "source": "grid/ashleyd.js, grid/worker.sbatch.tpl",
+   "autoRepair": true,
+   "slow": false
+  },
+  {
+   "id": "grid.slurm-in-worker",
+   "title": "Slurm inside the workers",
+   "layer": "grid-login",
+   "dependsOn": [
+    "grid.worker"
+   ],
+   "assumption": "the worker's Claude can submit and watch Slurm jobs from inside its container (the host client, its library, munge and the config are bound in)",
+   "manualFix": "Troubleshoot and repair restarts a worker started before version 3; if it still fails, tell your lead (the detail names the missing piece)",
+   "futureRisk": "Wayne State moving the Slurm client, its library, munge or slurm.conf; a Slurm upgrade that needs more host libraries",
+   "source": "grid/ashley (cmd_diag)",
+   "autoRepair": true,
+   "slow": false
+  },
+  {
+   "id": "node.probe",
+   "title": "Compute node and container",
+   "layer": "grid-node",
+   "dependsOn": [
+    "grid.worker"
+   ],
+   "assumption": "inside a worker: the container runs node and Claude Code, has a pseudo-terminal and HTTPS",
+   "manualFix": "restart the worker; if it persists tell your lead",
+   "futureRisk": "a node OS or kernel update breaking the container",
+   "source": "grid/ashley (cmd_diag)",
+   "autoRepair": true,
+   "slow": true
+  },
+  {
+   "id": "grid.phone",
+   "title": "Phone access",
+   "layer": "grid-node",
+   "dependsOn": [
+    "grid.worker"
+   ],
+   "assumption": "when turned on, the worker's Remote Control session runs",
+   "manualFix": "Ashley: Phone access (sign in again if asked)",
+   "futureRisk": "Remote Control flags or login flow changing",
+   "source": "grid/phone.js",
+   "autoRepair": false,
+   "slow": false
+  },
+  {
+   "id": "vscode.mcp-bridge",
+   "title": "Claude Code bridge to the grid (MCP)",
+   "layer": "vscode",
+   "dependsOn": [
+    "vscode.claude-binary",
+    "network.grid-login"
+   ],
+   "assumption": "the ashley MCP server is registered with Claude Code and connects",
+   "manualFix": "Ashley: Connect the Claude Code extension to the grid",
+   "futureRisk": "claude mcp CLI changes; Electron-as-node removed from VS Code",
+   "source": "extension/src/vscode/mcpRegister.ts",
+   "autoRepair": true,
+   "slow": false
+  }
+ ]
+}
