@@ -1,0 +1,177 @@
+// MCP server that the Claude Code extension launches as a child process. It gives the
+// local Claude a small, typed set of tools for the Wayne State grid: check status, start a
+// worker, send a prompt to the worker Claude and wait for its answer, read small files,
+// submit a job script. Everything goes over `ssh <alias>`; nothing here needs the grid's
+// password, and nothing heavy runs on the login node.
+//
+// Configuration comes from the environment Claude Code passes:
+//   ASHLEY_GRID        ssh alias (default wsu-grid)
+//   ASHLEY_WORKER      default worker name (default "default")
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { z } from 'zod';
+import * as os from 'node:os';
+import { GridApi } from '../core/gridApi';
+import { PermissionMode } from '../core/protocol';
+
+const alias = process.env.ASHLEY_GRID || 'wsu-grid';
+const defaultWorker = process.env.ASHLEY_WORKER || 'default';
+const grid = new GridApi(alias, (l) => process.stderr.write(l + '\n'));
+
+const server = new McpServer({ name: 'ashley', version: '1.0.0' });
+
+function text(t: string) {
+  return { content: [{ type: 'text' as const, text: t }] };
+}
+
+server.registerTool(
+  'ashley_status',
+  {
+    title: 'Grid status',
+    description:
+      'Status of the Wayne State grid for this student: whether Ashley is installed and ready, running Slurm jobs, Claude workers (node, queue, accounts), home quota. Call this first.',
+    inputSchema: {},
+  },
+  async () => text(JSON.stringify(await grid.status(), null, 2)),
+);
+
+server.registerTool(
+  'ashley_workers',
+  { title: 'List Claude workers', description: 'List the persistent Claude Code workers (Slurm jobs) and their heartbeat state.', inputSchema: {} },
+  async () => text(JSON.stringify(await grid.workers(), null, 2)),
+);
+
+server.registerTool(
+  'ashley_worker_start',
+  {
+    title: 'Start a Claude worker',
+    description:
+      'Submit a Slurm job that runs a persistent Claude Code worker in a Singularity container. Returns the job id; the worker is usable once its state is idle (see ashley_workers). Use a GPU only when the work needs one.',
+    inputSchema: {
+      name: z.string().default('default').describe('worker name'),
+      hours: z.number().int().min(1).max(720).default(24),
+      cpus: z.number().int().min(1).max(64).default(4),
+      memory: z.string().default('16G'),
+      gpus: z.number().int().min(0).max(4).default(0),
+      qos: z.enum(['requeue', 'primary', 'secondary']).default('requeue').describe('requeue = shared pool, may be requeued (worker resumes); primary = dedicated'),
+      concurrency: z.number().int().min(1).max(8).default(2),
+    },
+  },
+  async (a) => {
+    const r = await grid.workerStart({ name: a.name, hours: a.hours, cpus: a.cpus, memory: a.memory, gpus: a.gpus, qos: a.qos, partition: 'reqp', concurrency: a.concurrency });
+    return text(r.message);
+  },
+);
+
+server.registerTool(
+  'ashley_ask',
+  {
+    title: 'Ask the grid Claude (wait for the answer)',
+    description:
+      'Send a prompt to the persistent Claude Code worker on the grid and wait for its answer. The worker runs with the student\'s own Claude subscription, in the given working directory on the grid, and can read/write files, run Python, submit Slurm jobs, download data. Use a session name to continue a conversation later. Long tasks: set timeout_sec high, or use ashley_send and fetch with ashley_result.',
+    inputSchema: {
+      prompt: z.string().describe('what the grid Claude should do'),
+      session: z.string().default('default').describe('conversation to continue (resumable by name)'),
+      cwd: z.string().optional().describe('working directory on the grid, e.g. ~/Student_Projects/projects/me. Sessions stay bound to their cwd.'),
+      mode: z.enum(['default', 'acceptEdits', 'plan', 'bypassPermissions']).default('acceptEdits'),
+      max_turns: z.number().int().min(1).max(500).default(50),
+      timeout_sec: z.number().int().min(10).max(86400).default(1800),
+      worker: z.string().default(defaultWorker),
+      model: z.string().optional(),
+    },
+  },
+  async (a) => {
+    const r = await grid.ask(
+      { prompt: a.prompt, session: a.session, cwd: a.cwd, mode: a.mode as PermissionMode, max_turns: a.max_turns, model: a.model, from: `mcp@${os.hostname()}` },
+      a.worker,
+      a.timeout_sec,
+    );
+    const head = `[${r.status}] request ${r.id} session=${r.session} account=${r.account ?? '?'} turns=${r.num_turns ?? '?'} cost=$${r.cost_usd ?? '?'} ${r.duration_ms ? Math.round(r.duration_ms / 1000) + 's' : ''}`;
+    return text(`${head}\n\n${r.result || r.error || ''}${r.retry_after ? `\n\nretry after ${r.retry_after}` : ''}`);
+  },
+);
+
+server.registerTool(
+  'ashley_send',
+  {
+    title: 'Queue a prompt for the grid Claude (do not wait)',
+    description: 'Queue a prompt for the worker and return the request id at once. Fetch the answer later with ashley_result.',
+    inputSchema: {
+      prompt: z.string(),
+      session: z.string().default('default'),
+      cwd: z.string().optional(),
+      mode: z.enum(['default', 'acceptEdits', 'plan', 'bypassPermissions']).default('acceptEdits'),
+      max_turns: z.number().int().min(1).max(500).default(50),
+      worker: z.string().default(defaultWorker),
+    },
+  },
+  async (a) => {
+    const r = await grid.send({ prompt: a.prompt, session: a.session, cwd: a.cwd, mode: a.mode as PermissionMode, max_turns: a.max_turns, from: `mcp@${os.hostname()}` }, a.worker);
+    return text(`queued request ${r.id} on worker ${a.worker}. ${r.message}`);
+  },
+);
+
+server.registerTool(
+  'ashley_result',
+  {
+    title: 'Fetch a queued answer',
+    description: 'Return the result of a request queued with ashley_send, or say it is not finished yet.',
+    inputSchema: { id: z.string(), worker: z.string().default(defaultWorker) },
+  },
+  async (a) => {
+    const r = await grid.result(a.id, a.worker);
+    return text(r ? JSON.stringify(r, null, 2) : `request ${a.id} has no result yet`);
+  },
+);
+
+server.registerTool(
+  'ashley_sessions',
+  { title: 'List conversations', description: 'List the named, resumable conversations kept on the grid and the directory each is bound to.', inputSchema: {} },
+  async () => text(JSON.stringify(await grid.sessions(), null, 2)),
+);
+
+server.registerTool(
+  'ashley_read_file',
+  {
+    title: 'Read a small file on the grid',
+    description: 'Read up to max_bytes of a file in the student\'s grid home (logs, results, CSV heads). Reading is cheap on the login node; large data is not.',
+    inputSchema: { path: z.string(), max_bytes: z.number().int().min(1).max(2_000_000).default(200_000) },
+  },
+  async (a) => text((await grid.readFile(a.path, a.max_bytes)).text),
+);
+
+server.registerTool(
+  'ashley_list_dir',
+  { title: 'List a directory on the grid', description: 'ls -la of a directory in the grid home.', inputSchema: { path: z.string() } },
+  async (a) => text((await grid.listDir(a.path)).text),
+);
+
+server.registerTool(
+  'ashley_squeue',
+  { title: 'My Slurm jobs', description: 'squeue for the student: job id, name, state, node, elapsed, limit, partition, reason.', inputSchema: {} },
+  async () => text(JSON.stringify(await grid.squeue(), null, 2)),
+);
+
+server.registerTool(
+  'ashley_sbatch',
+  {
+    title: 'Submit a job script',
+    description:
+      'Run sbatch on a job script that already exists on the grid (a file in the repository, never an inline script). Returns the job id. The lab rule: Claude drafts, the student sees the script, then it is submitted.',
+    inputSchema: { script: z.string().describe('path to the job script, relative to cwd'), cwd: z.string().describe('directory to submit from (SLURM_SUBMIT_DIR)'), extra_args: z.array(z.string()).default([]) },
+  },
+  async (a) => {
+    const r = await grid.sbatch(a.script, a.cwd, a.extra_args);
+    return text(r.message);
+  },
+);
+
+async function main() {
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+}
+
+main().catch((e) => {
+  process.stderr.write(`ashley mcp server failed: ${e}\n`);
+  process.exit(1);
+});

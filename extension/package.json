@@ -1,0 +1,141 @@
+{
+  "name": "ashley-wsu",
+  "displayName": "Ashley: Wayne State Research Environment",
+  "description": "Sets up a medical student's laptop for research on the Wayne State HPC grid: SSH through the login node to a compute node, tokens for GitHub, Hugging Face and Claude, a persistent Claude Code worker in a Singularity container on the grid, and a bridge so the Claude Code extension can send it work.",
+  "version": "1.0.0",
+  "publisher": "openspineconsortium",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/OpenSpineConsortium/ashley"
+  },
+  "icon": "media/icon.png",
+  "engines": {
+    "vscode": "^1.100.0"
+  },
+  "extensionKind": [
+    "ui"
+  ],
+  "categories": [
+    "Other",
+    "Machine Learning",
+    "Education"
+  ],
+  "keywords": [
+    "wayne state",
+    "hpc",
+    "slurm",
+    "claude code",
+    "remote-ssh"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      { "command": "ashley.setup", "title": "Set up my research environment (wizard)", "category": "Ashley", "icon": "$(rocket)" },
+      { "command": "ashley.doctor", "title": "Check everything (doctor)", "category": "Ashley", "icon": "$(pulse)" },
+      { "command": "ashley.connect", "title": "Open my grid files on a compute node (Remote-SSH)", "category": "Ashley", "icon": "$(remote)" },
+      { "command": "ashley.workerStart", "title": "Start a Claude worker on the grid", "category": "Ashley", "icon": "$(debug-start)" },
+      { "command": "ashley.workerStop", "title": "Stop a Claude worker", "category": "Ashley", "icon": "$(debug-stop)" },
+      { "command": "ashley.workerLogs", "title": "Show worker log", "category": "Ashley", "icon": "$(output)" },
+      { "command": "ashley.ask", "title": "Ask the grid Claude", "category": "Ashley", "icon": "$(comment-discussion)" },
+      { "command": "ashley.gridStatus", "title": "Grid status (my jobs, quota, workers)", "category": "Ashley", "icon": "$(server)" },
+      { "command": "ashley.gridBootstrap", "title": "Install or update Ashley on the grid (job)", "category": "Ashley", "icon": "$(cloud-upload)" },
+      { "command": "ashley.registerMcp", "title": "Connect the Claude Code extension to the grid (MCP)", "category": "Ashley", "icon": "$(plug)" },
+      { "command": "ashley.claudeToken", "title": "Store or replace my Claude token for the grid", "category": "Ashley", "icon": "$(key)" },
+      { "command": "ashley.manageTokens", "title": "Manage stored tokens", "category": "Ashley", "icon": "$(lock)" },
+      { "command": "ashley.openManual", "title": "Open the manual", "category": "Ashley", "icon": "$(book)" },
+      { "command": "ashley.openTerminal", "title": "Open a terminal on the grid login node", "category": "Ashley", "icon": "$(terminal)" },
+      { "command": "ashley.refresh", "title": "Refresh", "category": "Ashley", "icon": "$(refresh)" }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        { "id": "ashley", "title": "Ashley", "icon": "media/ashley.svg" }
+      ]
+    },
+    "views": {
+      "ashley": [
+        { "id": "ashley.status", "name": "Wayne State grid", "icon": "media/ashley.svg", "contextualTitle": "Ashley" }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "ashley.status",
+        "contents": "Ashley connects this laptop to the Wayne State grid and to a Claude Code worker running there.\n\n[Set up my research environment](command:ashley.setup)\n\n[Open the manual](command:ashley.openManual)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        { "command": "ashley.refresh", "when": "view == ashley.status", "group": "navigation@1" },
+        { "command": "ashley.setup", "when": "view == ashley.status", "group": "navigation@2" },
+        { "command": "ashley.doctor", "when": "view == ashley.status", "group": "navigation@3" }
+      ],
+      "view/item/context": [
+        { "command": "ashley.workerStop", "when": "view == ashley.status && viewItem == worker", "group": "inline" },
+        { "command": "ashley.workerLogs", "when": "view == ashley.status && viewItem == worker", "group": "inline" },
+        { "command": "ashley.connect", "when": "view == ashley.status && viewItem == worker", "group": "inline" }
+      ]
+    },
+    "walkthroughs": [
+      {
+        "id": "ashley.gettingStarted",
+        "title": "Ashley: research on the Wayne State grid",
+        "description": "Ten minutes from a fresh laptop to a Claude worker on the grid.",
+        "steps": [
+          { "id": "setup", "title": "Run the setup wizard", "description": "AccessID, SSH key, tokens, and the grid install.\n[Run the wizard](command:ashley.setup)", "media": { "markdown": "media/walkthrough/setup.md" }, "completionEvents": ["onCommand:ashley.setup"] },
+          { "id": "worker", "title": "Start a Claude worker", "description": "A Slurm job that keeps a Claude Code session alive for you.\n[Start a worker](command:ashley.workerStart)", "media": { "markdown": "media/walkthrough/worker.md" }, "completionEvents": ["onCommand:ashley.workerStart"] },
+          { "id": "connect", "title": "Open your grid files", "description": "Browse, edit and view images on the compute node with Remote-SSH.\n[Connect](command:ashley.connect)", "media": { "markdown": "media/walkthrough/connect.md" }, "completionEvents": ["onCommand:ashley.connect"] },
+          { "id": "mcp", "title": "Let Claude Code use the grid", "description": "Register the bridge so the Claude Code extension can dispatch work.\n[Register](command:ashley.registerMcp)", "media": { "markdown": "media/walkthrough/mcp.md" }, "completionEvents": ["onCommand:ashley.registerMcp"] }
+        ]
+      }
+    ],
+    "configuration": {
+      "title": "Ashley",
+      "properties": {
+        "ashley.accessId": { "type": "string", "default": "", "description": "Your Wayne State AccessID (two letters and four digits, e.g. ab1234)." },
+        "ashley.loginHost": { "type": "string", "default": "warrior.grid.wayne.edu", "description": "The grid login node. Used only as an SSH jump host; nothing heavy runs there." },
+        "ashley.sshAlias": { "type": "string", "default": "wsu-grid", "description": "The Host alias written to ~/.ssh/config for the login node." },
+        "ashley.nodeDomain": { "type": "string", "default": "nas.grid.wayne.edu", "description": "Domain suffix of compute nodes (voh3 -> voh3.nas.grid.wayne.edu)." },
+        "ashley.identityFile": { "type": "string", "default": "~/.ssh/id_ed25519_wsu", "description": "SSH private key used for the grid." },
+        "ashley.mirrorToWsl": { "type": "boolean", "default": true, "description": "On Windows, also copy the key and SSH config into the WSL home so tools that run in WSL reach the grid." },
+        "ashley.gridRoot": { "type": "string", "default": "", "description": "Where large files live on the grid (container, npm prefix, workspaces). Empty = /rs/rs_grp_oschome/<AccessID>/ashley when that volume is writable, else ~/ashley." },
+        "ashley.worker.partition": { "type": "string", "default": "reqp", "description": "Slurm partition for the Claude worker job." },
+        "ashley.worker.qos": { "type": "string", "default": "requeue", "enum": ["requeue", "primary", "secondary"], "description": "QoS for the worker. requeue is the shared pool (job may be requeued; the worker resumes); primary is dedicated." },
+        "ashley.worker.hours": { "type": "number", "default": 24, "minimum": 1, "maximum": 720, "description": "Wall time of the worker job in hours." },
+        "ashley.worker.cpus": { "type": "number", "default": 4, "description": "CPUs for the worker job." },
+        "ashley.worker.memory": { "type": "string", "default": "16G", "description": "Memory for the worker job." },
+        "ashley.worker.gpu": { "type": "number", "default": 0, "description": "GPUs for the worker job (0 = CPU node). With a GPU the partition becomes gmsap,gvohp,galhp and the QoS gpu." },
+        "ashley.worker.concurrency": { "type": "number", "default": 2, "description": "How many prompts the worker runs at once." },
+        "ashley.defaultSession": { "type": "string", "default": "default", "description": "Session name used by 'Ask the grid Claude' (a session is a resumable conversation)." },
+        "ashley.injectTokensIntoTerminals": { "type": "boolean", "default": true, "description": "Put GITHUB_TOKEN and HF_TOKEN into every integrated terminal. ANTHROPIC_API_KEY is never injected: it would switch the local Claude Code from your subscription to pay-per-use." }
+      }
+    }
+  },
+  "scripts": {
+    "build": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "typecheck": "tsc -p ./ --noEmit",
+    "test:unit": "node esbuild.mjs --tests && node --test dist-test/",
+    "test:vscode": "node esbuild.mjs --tests && vscode-test",
+    "test": "npm run test:unit && npm run test:vscode",
+    "package": "npm run build && vsce package --no-dependencies --out ../dist/",
+    "vscode:prepublish": "npm run build"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.30.1",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@types/mocha": "10.0.10",
+    "@types/node": "22.19.0",
+    "@types/vscode": "1.100.0",
+    "@vscode/test-cli": "0.0.15",
+    "@vscode/test-electron": "3.1.0",
+    "@vscode/vsce": "4.0.0",
+    "esbuild": "0.28.2",
+    "mocha": "11.7.1",
+    "typescript": "5.9.3"
+  }
+}

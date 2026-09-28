@@ -1,0 +1,17 @@
+node_modules/
+dist/
+dist-test/
+out/
+*.vsix
+.vscode-test/
+*.log
+.DS_Store
+Thumbs.db
+# never commit credentials
+*.token
+*.env
+!*.env.example
+secrets*
+.credentials.json
+# build intermediates for the manual
+docs/build/

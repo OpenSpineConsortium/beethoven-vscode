@@ -1,0 +1,308 @@
+#!/bin/bash
+# ashley: the grid-side command. Lives at ~/.ashley/bin/ashley; the laptop calls it over
+# ssh, students can call it from a grid shell. Bash + coreutils only, so it works on the
+# login node without any environment. Nothing heavy runs here: building the container and
+# running Claude happen in Slurm jobs.
+#
+#   ashley install [--root DIR]      layout, bashrc block, submit the bootstrap job
+#   ashley status [--json]           ready? jobs, workers, accounts, quota
+#   ashley doctor                    every check with a pass/fail line
+#   ashley worker start --name N [--hours 24 --cpus 4 --mem 16G --partition reqp --qos requeue --gpus 0 --concurrency 2]
+#   ashley worker stop|list|log|node [--name N] [--json] [--lines 80]
+#   ashley send --worker N --json    (JSON request on stdin)  -> prints "queued <id>"
+#   ashley wait [--worker N] [--timeout S] [--stream] <id>    -> result JSON (EVENT/RESULT lines with --stream)
+#   ashley ask  --worker N --json [--stream] [--timeout S]    (JSON request on stdin) = send + wait
+#   ashley result [--worker N] <id>
+#   ashley tail [--worker N] <id>
+#   ashley sessions [--json]
+#   ashley accounts list|add-token NAME|add-key NAME|enable NAME|disable NAME|remove NAME
+#   ashley bootstrap [--resubmit] [--update]
+#   ashley version
+set -uo pipefail
+ASHLEY_HOME="${ASHLEY_HOME:-$HOME/.ashley}"
+BIN="$ASHLEY_HOME/bin"
+CFG="$ASHLEY_HOME/config.env"
+VERSION=$(cat "$BIN/VERSION" 2>/dev/null || echo 0)
+die() { echo "ashley: $*" >&2; exit 1; }
+json_str() { # escape a string for JSON
+  local s=${1//\\/\\\\}; s=${s//\"/\\\"}; s=${s//$'\n'/\\n}; s=${s//$'\r'/}; s=${s//$'\t'/\\t}; printf '"%s"' "$s"
+}
+load_cfg() { [ -s "$CFG" ] && source "$CFG"; ROOT="${ROOT:-}"; RUNTIME="${RUNTIME:-}"; SANDBOX="${SANDBOX:-}"; CLAUDE_BIN="${CLAUDE_BIN:-}"; BOOTSTRAP_JOB="${BOOTSTRAP_JOB:-}"; BINDS="${BINDS:-}"; }
+is_ready() { load_cfg; [ -s "$ASHLEY_HOME/READY" ] && [ -n "$CLAUDE_BIN" ] && [ -x "$CLAUDE_BIN" ] && [ -x "$SANDBOX/usr/local/bin/node" ]; }
+job_state() { # $1 job id -> state or "" if gone
+  [ -n "${1:-}" ] || { echo ""; return; }
+  local s; s=$(squeue -j "$1" -h -o %T 2>/dev/null | head -1)
+  [ -n "$s" ] && { echo "$s"; return; }
+  sacct -j "$1" -n -X -o State -P 2>/dev/null | head -1 | cut -d' ' -f1
+}
+set_cfg() { # KEY VALUE
+  mkdir -p "$ASHLEY_HOME"; touch "$CFG"
+  { grep -v -E "^$1=" "$CFG"; printf '%s=%q\n' "$1" "$2"; } > "$CFG.part" && mv "$CFG.part" "$CFG"; chmod 600 "$CFG"
+}
+default_root() {
+  if [ -d "/rs/rs_grp_oschome/$USER" ] && [ -w "/rs/rs_grp_oschome/$USER" ]; then echo "/rs/rs_grp_oschome/$USER/ashley"; else echo "$HOME/ashley"; fi
+}
+
+cmd_install() {
+  local root="" pass=()
+  while [ $# -gt 0 ]; do case "$1" in --root) root="$2"; shift 2;; --partition|--qos) pass+=("$1" "$2"); shift 2;; *) shift;; esac; done
+  mkdir -p "$ASHLEY_HOME"/{bin,log,accounts,workers,sessions} && chmod 700 "$ASHLEY_HOME" "$ASHLEY_HOME/accounts"
+  chmod +x "$BIN"/ashley "$BIN"/*.sbatch 2>/dev/null
+  load_cfg
+  [ -n "$root" ] && set_cfg ROOT "$root"
+  load_cfg; [ -n "$ROOT" ] || set_cfg ROOT "$(default_root)"
+  load_cfg
+  mkdir -p "$ROOT" 2>/dev/null || die "cannot create ROOT=$ROOT"
+  # bashrc block (VS Code glibc sysroot + PATH), idempotent by markers
+  local rc="$HOME/.bashrc" blk="$BIN/bashrc.block"
+  touch "$rc"
+  if grep -q '# >>> ashley' "$rc"; then
+    awk -v blk="$blk" 'BEGIN{skip=0} /^# >>> ashley/{skip=1; while ((getline l < blk) > 0) print l; next} /^# <<< ashley/{skip=0; next} skip==0{print}' "$rc" > "$rc.ashley.tmp" && mv "$rc.ashley.tmp" "$rc"
+  else
+    { echo; cat "$blk"; } >> "$rc"
+  fi
+  echo "installed ashley $VERSION at $ASHLEY_HOME (ROOT=$ROOT); bashrc block written"
+  if is_ready; then echo "grid already ready: $(cat "$ASHLEY_HOME/READY")"; return 0; fi
+  cmd_bootstrap "${pass[@]}"
+}
+
+cmd_bootstrap() {
+  # The bootstrap job defaults to reqp/requeue (the lab's CPU default). When that queue sits
+  # PENDING (Priority) for long, --partition secp --qos secondary usually starts at once.
+  local resubmit=0 update=0 part="" qos=""
+  while [ $# -gt 0 ]; do case "$1" in --resubmit) resubmit=1; shift;; --update) update=1; shift;; --partition) part="$2"; shift 2;; --qos) qos="$2"; shift 2;; *) shift;; esac; done
+  load_cfg
+  if [ -n "$BOOTSTRAP_JOB" ] && [ $resubmit -eq 0 ] && [ $update -eq 0 ]; then
+    local st; st=$(job_state "$BOOTSTRAP_JOB")
+    case "$st" in PENDING|RUNNING|CONFIGURING|COMPLETING) echo "bootstrap job $BOOTSTRAP_JOB is $st"; return 0;; esac
+  fi
+  mkdir -p "$ASHLEY_HOME/log"
+  local exp="ALL"; [ $update -eq 1 ] && exp="ALL,UPDATE=1"
+  local extra=(); [ -n "$part" ] && extra+=(--partition="$part"); [ -n "$qos" ] && extra+=(--qos="$qos")
+  local id; id=$(cd "$ASHLEY_HOME/log" && sbatch --parsable --export="$exp" "${extra[@]}" "$BIN/bootstrap.sbatch" 2>&1) || die "sbatch failed: $id"
+  id=${id%%;*}
+  set_cfg BOOTSTRAP_JOB "$id"; set_cfg BOOTSTRAP_STATE "submitted"
+  echo "bootstrap job $id submitted (log: $ASHLEY_HOME/log/bootstrap_$id.out)"
+}
+
+home_quota() { # prints used_gb soft_gb or "0 0"
+  local line; line=$(pan_quota 2>/dev/null | awk 'NR>2 && $1 ~ /^[0-9.]+$/ {print $1, $2; exit}')
+  [ -n "$line" ] && { echo "$line"; return; }
+  df -BG "$HOME" 2>/dev/null | awk 'NR==2 {gsub("G","",$3); gsub("G","",$2); print $3, $2}'
+}
+
+worker_dirs() { [ -d "$ASHLEY_HOME/workers" ] && for d in "$ASHLEY_HOME"/workers/*/; do [ -d "$d" ] && basename "$d"; done; }
+worker_json() { # $1 name
+  local w="$ASHLEY_HOME/workers/$1" jid st node alive="false" state="{}"
+  jid=$(cat "$w/job.id" 2>/dev/null || echo ""); st=$(job_state "$jid"); node=$(cat "$w/node" 2>/dev/null || echo "")
+  if [ -s "$w/state.json" ]; then state=$(tr -d '\n' < "$w/state.json"); fi
+  if [ "$st" = "RUNNING" ] && [ -s "$w/state.json" ]; then
+    local beat now; beat=$(stat -c %Y "$w/state.json" 2>/dev/null || echo 0); now=$(date +%s); [ $((now - beat)) -lt 90 ] && alive="true"
+  fi
+  local q; q=$(ls "$w/inbox" 2>/dev/null | grep -c '\.json$' || true)
+  printf '{"name":%s,"job":%s,"job_state":%s,"node":%s,"alive":%s,"queued":%s,"state":%s}' "$(json_str "$1")" "$(json_str "$jid")" "$(json_str "${st:-none}")" "$(json_str "$node")" "$alive" "${q:-0}" "$state"
+}
+accounts_json() {
+  local first=1; printf '['
+  for d in "$ASHLEY_HOME"/accounts/*/; do
+    [ -d "$d" ] || continue
+    local n kind="none" en="true" cd="null"
+    n=$(basename "$d")
+    [ -s "$d/token" ] && kind="oauth-token"; [ -s "$d/apikey" ] && kind="api-key"; [ -s "$d/.credentials.json" ] && [ "$kind" = none ] && kind="login"
+    [ "$kind" = none ] && continue
+    [ -e "$d/disabled" ] && en="false"
+    if [ -s "$d/state.json" ]; then local c; c=$(grep -o '"cooldown_until": *"[^"]*"' "$d/state.json" | head -1 | sed 's/.*"\([^"]*\)"$/\1/'); [ -n "$c" ] && cd="\"$c\""; fi
+    [ $first -eq 1 ] || printf ','; first=0
+    printf '{"name":%s,"kind":"%s","enabled":%s,"cooldown_until":%s}' "$(json_str "$n")" "$kind" "$en" "$cd"
+  done; printf ']'
+}
+jobs_json() {
+  local first=1; printf '['
+  while IFS='|' read -r i j t n m l p r; do
+    [ -n "$i" ] || continue; [ $first -eq 1 ] || printf ','; first=0
+    printf '{"jobId":%s,"name":%s,"state":%s,"node":%s,"elapsed":%s,"timeLimit":%s,"partition":%s,"reason":%s}' "$(json_str "$i")" "$(json_str "$j")" "$(json_str "$t")" "$(json_str "$n")" "$(json_str "$m")" "$(json_str "$l")" "$(json_str "$p")" "$(json_str "$r")"
+  done < <(squeue -u "$USER" -h -o '%i|%j|%T|%N|%M|%l|%P|%R' 2>/dev/null); printf ']'
+}
+cmd_status() {
+  local as_json=0; [ "${1:-}" = "--json" ] && as_json=1
+  load_cfg
+  local ready=false cv="" bst=""
+  is_ready && ready=true
+  [ -s "$ASHLEY_HOME/READY" ] && cv=$(grep -o '"claude_version":"[^"]*"' "$ASHLEY_HOME/READY" | cut -d'"' -f4)
+  [ -n "$BOOTSTRAP_JOB" ] && bst=$(job_state "$BOOTSTRAP_JOB")
+  read -r used soft < <(home_quota)
+  if [ $as_json -eq 1 ]; then
+    printf '{"version":%s,"host":%s,"ready":%s,"root":%s,"runtime":%s,"claude_version":%s,"bootstrap_job":%s,"bootstrap_state":%s,"home_used_gb":%s,"home_soft_gb":%s,"workers":[' \
+      "$(json_str "$VERSION")" "$(json_str "$(hostname)")" "$ready" "$(json_str "$ROOT")" "$(json_str "$RUNTIME")" "$(json_str "$cv")" "$(json_str "$BOOTSTRAP_JOB")" "$(json_str "$bst")" "${used:-0}" "${soft:-0}"
+    local first=1; for w in $(worker_dirs); do [ $first -eq 1 ] || printf ','; first=0; worker_json "$w"; done
+    printf '],"accounts":%s,"jobs":%s}\n' "$(accounts_json)" "$(jobs_json)"
+  else
+    echo "ashley $VERSION on $(hostname)  ready=$ready  claude=${cv:-?}  root=${ROOT:-?}"
+    [ -n "$BOOTSTRAP_JOB" ] && echo "bootstrap job $BOOTSTRAP_JOB: ${bst:-finished}"
+    echo "home: ${used:-?} GB used of ${soft:-?} GB soft quota"
+    echo "accounts: $(accounts_json)"
+    echo "workers:"; for w in $(worker_dirs); do echo "  $(worker_json "$w")"; done
+    echo "jobs:"; squeue -u "$USER" -o '%.10i %.18j %.9T %.12N %.10M %.11l %.8P %R' 2>/dev/null
+  fi
+}
+
+cmd_doctor() {
+  load_cfg; local fail=0
+  ok() { echo "PASS  $*"; }; bad() { echo "FAIL  $*"; fail=1; }
+  [ -x "$BIN/ashley" ] && ok "ashley $VERSION installed at $BIN" || bad "ashley not executable"
+  grep -q '# >>> ashley' "$HOME/.bashrc" && ok "bashrc block present (VS Code glibc sysroot, PATH)" || bad "bashrc block missing: run ashley install"
+  for f in /wsu/apps/vscode/sysroot/x86_64-linux-gnu/x86_64-linux-gnu/sysroot/lib/ld-linux-x86-64.so.2 /wsu/apps/vscode/patchelf/0.19.1/bin/patchelf; do [ -e "$f" ] && ok "C&IT VS Code sysroot: $f" || bad "missing $f (C&IT moved the sysroot?)"; done
+  [ -n "$ROOT" ] && [ -w "$ROOT" ] && ok "ROOT $ROOT writable" || bad "ROOT not writable (${ROOT:-unset})"
+  if is_ready; then ok "READY: $(cat "$ASHLEY_HOME/READY")"; else bad "not ready (bootstrap job ${BOOTSTRAP_JOB:-none}: $(job_state "$BOOTSTRAP_JOB"))"; fi
+  [ -n "$RUNTIME" ] && [ -x "$RUNTIME" ] && ok "runtime $RUNTIME" || bad "runtime missing on this host (fine on the login node if the compute nodes have it)"
+  local n; n=$(accounts_json | grep -o '"name"' | wc -l); [ "$n" -gt 0 ] && ok "$n Claude account(s): $(accounts_json)" || bad "no Claude account (setup wizard step 'Claude token', or ashley accounts add-token default)"
+  [ -s "$ASHLEY_HOME/secrets.env" ] && ok "secrets.env present ($(stat -c %a "$ASHLEY_HOME/secrets.env"))" || bad "secrets.env missing (GitHub / Hugging Face tokens for the worker)"
+  read -r used soft < <(home_quota); ok "home quota ${used:-?}/${soft:-?} GB"
+  for w in $(worker_dirs); do echo "      worker $(worker_json "$w")"; done
+  [ $fail -eq 0 ] && echo "doctor: all checks passed" || echo "doctor: some checks failed"
+  return $fail
+}
+
+cmd_worker() {
+  local sub="${1:-list}"; shift || true
+  local name="default" hours=24 cpus=4 mem="16G" part="reqp" qos="requeue" gpus=0 conc=2 lines=80 as_json=0
+  while [ $# -gt 0 ]; do case "$1" in
+    --name) name="$2"; shift 2;; --hours) hours="$2"; shift 2;; --cpus) cpus="$2"; shift 2;; --mem) mem="$2"; shift 2;;
+    --partition) part="$2"; shift 2;; --qos) qos="$2"; shift 2;; --gpus) gpus="$2"; shift 2;; --concurrency) conc="$2"; shift 2;;
+    --lines) lines="$2"; shift 2;; --json) as_json=1; shift;; *) shift;; esac; done
+  [[ "$name" =~ ^[A-Za-z0-9_-]+$ ]] || die "worker name must be letters, digits, _ or -"
+  local w="$ASHLEY_HOME/workers/$name"
+  case "$sub" in
+    start)
+      is_ready || die "grid not ready yet (bootstrap job ${BOOTSTRAP_JOB:-none}: $(job_state "${BOOTSTRAP_JOB:-}")); try again when 'ashley status' says ready=true"
+      mkdir -p "$w"/{inbox,outbox,log}
+      rm -f "$w/stop"
+      local jid st; jid=$(cat "$w/job.id" 2>/dev/null || echo ""); st=$(job_state "$jid")
+      case "$st" in PENDING|RUNNING|CONFIGURING) echo "worker $name already has job $jid ($st) on $(cat "$w/node" 2>/dev/null || echo '?')"; return 0;; esac
+      [[ "$hours" =~ ^[0-9]+$ ]] || die "--hours must be an integer"
+      local time; time=$(printf '%d-%02d:00:00' $((hours / 24)) $((hours % 24)))
+      local gres="" requeue="#SBATCH --no-requeue"
+      [ "$gpus" != "0" ] && gres="#SBATCH --gres=gpu:$gpus"
+      [ "$qos" = "requeue" ] && requeue="#SBATCH --requeue"
+      sed -e "s|@NAME@|$name|g" -e "s|@PARTITION@|$part|g" -e "s|@QOS@|$qos|g" -e "s|@CPUS@|$cpus|g" -e "s|@MEM@|$mem|g" \
+          -e "s|@TIME@|$time|g" -e "s|@GRES@|$gres|g" -e "s|@REQUEUE@|$requeue|g" -e "s|@GPUS@|$gpus|g" -e "s|@CONC@|$conc|g" \
+          "$BIN/worker.sbatch.tpl" > "$w/job.sbatch"
+      local out; out=$(cd "$w" && sbatch --parsable job.sbatch 2>&1) || die "sbatch failed: $out"
+      jid=${out%%;*}; echo "$jid" > "$w/job.id"; rm -f "$w/node"
+      echo "submitted worker $name as job $jid ($part/$qos, $cpus cpu, $mem, $time, gpus=$gpus, concurrency=$conc)";;
+    stop)
+      [ -d "$w" ] || die "no worker $name"
+      touch "$w/stop"
+      local jid; jid=$(cat "$w/job.id" 2>/dev/null || echo "")
+      [ -n "$jid" ] && scancel "$jid" 2>/dev/null
+      echo "worker $name stopped (job ${jid:-none} cancelled)";;
+    list)
+      if [ $as_json -eq 1 ]; then printf '{"workers":['; local first=1; for x in $(worker_dirs); do [ $first -eq 1 ] || printf ','; first=0; worker_json "$x"; done; printf ']}\n'
+      else for x in $(worker_dirs); do worker_json "$x"; echo; done; fi;;
+    log)
+      [ -d "$w" ] || die "no worker $name"
+      echo "--- ashleyd.log"; tail -n "$lines" "$w/log/ashleyd.log" 2>/dev/null
+      echo "--- slurm"; ls -t "$w"/log/slurm_*.out 2>/dev/null | head -1 | xargs -r tail -n 40;;
+    node)
+      [ -s "$w/node" ] || die "worker $name has no node yet ($(job_state "$(cat "$w/job.id" 2>/dev/null)"))"
+      cat "$w/node";;
+    *) die "worker: start|stop|list|log|node";;
+  esac
+}
+
+# ---- requests ---------------------------------------------------------------------------
+req_id_from_stdin() { # reads JSON on stdin into $REQ, extracts id
+  REQ=$(cat); [ -n "$REQ" ] || die "expected a JSON request on stdin"
+  RID=$(printf '%s' "$REQ" | grep -o '"id": *"[^"]*"' | head -1 | sed 's/.*"\([^"]*\)"$/\1/')
+  [[ "$RID" =~ ^[A-Za-z0-9_.-]+$ ]] || die "request JSON needs an id"
+}
+enqueue() { # $1 worker; uses REQ/RID; prints the queued line
+  local worker="$1" w="$ASHLEY_HOME/workers/$1"
+  [ -d "$w" ] || die "no worker '$worker' (ashley worker start --name $worker)"
+  mkdir -p "$w/inbox" "$w/outbox"
+  printf '%s' "$REQ" > "$w/inbox/$RID.json.part" && mv "$w/inbox/$RID.json.part" "$w/inbox/$RID.json"
+  local jid st n; jid=$(cat "$w/job.id" 2>/dev/null || echo ""); st=$(job_state "$jid"); n=$(ls "$w/inbox" 2>/dev/null | grep -c '\.json$' || true)
+  echo "queued $RID on worker $worker (job ${jid:-none} ${st:-not running}; ${n:-0} waiting)"
+}
+cmd_send() {
+  local worker="default"
+  while [ $# -gt 0 ]; do case "$1" in --worker) worker="$2"; shift 2;; *) shift;; esac; done
+  req_id_from_stdin
+  enqueue "$worker"
+}
+cmd_wait() {
+  local worker="default" timeout=3600 stream=0 id=""
+  while [ $# -gt 0 ]; do case "$1" in --worker) worker="$2"; shift 2;; --timeout) timeout="$2"; shift 2;; --stream) stream=1; shift;; --json) shift;; *) id="$1"; shift;; esac; done
+  [[ "$id" =~ ^[A-Za-z0-9_.-]+$ ]] || die "wait: request id required"
+  local w="$ASHLEY_HOME/workers/$worker" out="$ASHLEY_HOME/workers/$worker/outbox/$id.json" ev="$ASHLEY_HOME/workers/$worker/outbox/$id.events.jsonl"
+  local start; start=$(date +%s); local off=0
+  while :; do
+    if [ $stream -eq 1 ] && [ -f "$ev" ]; then
+      local size; size=$(stat -c %s "$ev" 2>/dev/null || echo 0)
+      if [ "$size" -gt "$off" ]; then tail -c +$((off + 1)) "$ev" | head -c $((size - off)) | sed 's/^/EVENT /'; off=$size; fi
+    fi
+    if [ -s "$out" ]; then
+      if [ $stream -eq 1 ]; then printf 'RESULT '; tr -d '\n' < "$out"; echo; else cat "$out"; fi
+      return 0
+    fi
+    if [ $(( $(date +%s) - start )) -ge "$timeout" ]; then
+      [ $stream -eq 1 ] && echo "TIMEOUT $id"
+      echo "ashley: no result for $id after ${timeout}s (worker job $(cat "$w/job.id" 2>/dev/null) $(job_state "$(cat "$w/job.id" 2>/dev/null)"))" >&2; return 124
+    fi
+    sleep 0.5
+  done
+}
+cmd_ask() {
+  local worker="default" timeout=3600 stream=""
+  while [ $# -gt 0 ]; do case "$1" in --worker) worker="$2"; shift 2;; --timeout) timeout="$2"; shift 2;; --stream) stream="--stream"; shift;; *) shift;; esac; done
+  req_id_from_stdin
+  local msg; msg=$(enqueue "$worker") || exit 1
+  [ -n "$stream" ] && echo "QUEUED $msg"
+  # shellcheck disable=SC2086
+  cmd_wait --worker "$worker" --timeout "$timeout" $stream "$RID"
+}
+cmd_result() {
+  local worker="default" id=""
+  while [ $# -gt 0 ]; do case "$1" in --worker) worker="$2"; shift 2;; *) id="$1"; shift;; esac; done
+  local f="$ASHLEY_HOME/workers/$worker/outbox/$id.json"; [ -s "$f" ] || { echo "no result yet for $id" >&2; exit 1; }; cat "$f"
+}
+cmd_tail() {
+  local worker="default" id=""
+  while [ $# -gt 0 ]; do case "$1" in --worker) worker="$2"; shift 2;; *) id="$1"; shift;; esac; done
+  tail -n 50 -f "$ASHLEY_HOME/workers/$worker/outbox/$id.events.jsonl"
+}
+cmd_sessions() {
+  local as_json=0; [ "${1:-}" = "--json" ] && as_json=1
+  if [ $as_json -eq 1 ]; then printf '{"sessions":['; local first=1; for f in "$ASHLEY_HOME"/sessions/*.json; do [ -s "$f" ] || continue; [ $first -eq 1 ] || printf ','; first=0; tr -d '\n' < "$f"; done; printf ']}\n'
+  else for f in "$ASHLEY_HOME"/sessions/*.json; do [ -s "$f" ] && { basename "$f" .json; sed 's/^/    /' "$f"; }; done; fi
+}
+cmd_accounts() {
+  local sub="${1:-list}" name="${2:-}"; local d="$ASHLEY_HOME/accounts/$name"
+  case "$sub" in
+    list) accounts_json; echo;;
+    add-token) [[ "$name" =~ ^[A-Za-z0-9_-]+$ ]] || die "accounts add-token NAME (token on stdin)"; umask 077; mkdir -p "$d"; head -1 | tr -d '\r\n' > "$d/token"; [ -s "$d/token" ] || die "empty token"; rm -f "$d/apikey" "$d/disabled" "$d/state.json"; echo "account $name: oauth token stored";;
+    add-key) [[ "$name" =~ ^[A-Za-z0-9_-]+$ ]] || die "accounts add-key NAME (key on stdin)"; umask 077; mkdir -p "$d"; head -1 | tr -d '\r\n' > "$d/apikey"; [ -s "$d/apikey" ] || die "empty key"; rm -f "$d/token" "$d/disabled" "$d/state.json"; echo "account $name: api key stored";;
+    enable) [ -d "$d" ] || die "no account $name"; rm -f "$d/disabled" "$d/state.json"; echo "account $name enabled";;
+    disable) [ -d "$d" ] || die "no account $name"; touch "$d/disabled"; echo "account $name disabled";;
+    remove) [ -d "$d" ] || die "no account $name"; rm -rf "$d"; echo "account $name removed";;
+    *) die "accounts: list|add-token NAME|add-key NAME|enable NAME|disable NAME|remove NAME";;
+  esac
+}
+
+case "${1:-help}" in
+  install) shift; cmd_install "$@";;
+  bootstrap) shift; cmd_bootstrap "$@";;
+  status) shift; cmd_status "$@";;
+  doctor) shift; cmd_doctor "$@";;
+  worker) shift; cmd_worker "$@";;
+  send) shift; cmd_send "$@";;
+  wait) shift; cmd_wait "$@";;
+  ask) shift; cmd_ask "$@";;
+  result) shift; cmd_result "$@";;
+  tail) shift; cmd_tail "$@";;
+  sessions) shift; cmd_sessions "$@";;
+  accounts) shift; cmd_accounts "$@";;
+  version) echo "$VERSION";;
+  help|-h|--help) sed -n '2,22p' "$0";;
+  *) die "unknown command '$1' (ashley help)";;
+esac
