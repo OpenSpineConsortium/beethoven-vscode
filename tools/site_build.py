@@ -3,7 +3,7 @@ license, third-party notices, the access request page, the admin page). index.ht
 request.html, admin.html and services.json (the service addresses both pages and the extension read)
 are hand-written and left as they are; this copies the current LICENSE.txt and renders PRIVACY.md and
 THIRD_PARTY_NOTICES.md to HTML with pandoc.
-Publish the folder at https://openspineconsortium.github.io/ashley/ (copy into the site repository's
+Publish the folder at https://openspineconsortium.com/ashley/ (copy into the site repository's
 ashley/ folder). Run: python tools/site_build.py
 """
 import os

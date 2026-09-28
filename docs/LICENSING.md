@@ -58,7 +58,7 @@ the trial button tells students to ask their lead, and `issue --edition trial` i
 Who may use Ashley is a list of AccessIDs, and the service is where it lives once deployed:
 
 - **Asking.** A student opens the request page on the website
-  (`https://openspineconsortium.github.io/ashley/request.html`, `docs/site/request.html`) and gives
+  (`https://openspineconsortium.com/ashley/request.html`, `docs/site/request.html`) and gives
   their AccessID, name, `AccessID@wayne.edu` and what they will use Ashley for. The Worker checks the
   fields, stores the request as pending and opens an issue `Access request: <AccessID>` labelled
   `access-request` in the private repository. Sending the same request again tells the student where

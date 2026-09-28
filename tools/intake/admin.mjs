@@ -26,7 +26,7 @@ if (!base) { console.error('no service address: fill docs/site/services.json or 
 
 const [cmd, a1, a2, a3, a4] = process.argv.slice(2);
 async function call(route, body) {
-  const res = await fetch(`${base}/admin/${route}`, { method: body ? 'POST' : 'GET', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json', origin: 'https://openspineconsortium.github.io' }, body: body ? JSON.stringify(body) : undefined });
+  const res = await fetch(`${base}/admin/${route}`, { method: body ? 'POST' : 'GET', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json', origin: 'https://openspineconsortium.com' }, body: body ? JSON.stringify(body) : undefined });
   const text = await res.text();
   let j; try { j = JSON.parse(text); } catch { j = { raw: text }; }
   if (!res.ok) { console.error(`HTTP ${res.status}:`, JSON.stringify(j)); process.exit(1); }

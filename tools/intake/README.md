@@ -66,8 +66,8 @@ then copy `docs/site/` into the site repository's `ashley/` folder):
   "allowlist": "https://<worker>/allowlist",
   "revocation": "https://<worker>/revoked",
   "report": "https://<worker>/report",
-  "request_page": "https://openspineconsortium.github.io/ashley/request.html",
-  "support_page": "https://openspineconsortium.github.io/ashley/support.html"
+  "request_page": "https://openspineconsortium.com/ashley/request.html",
+  "support_page": "https://openspineconsortium.com/ashley/support.html"
 }
 ```
 
@@ -87,7 +87,7 @@ request reaches the Worker only from a browser that has signed in to your Cloudf
 identity provider. Zero Trust, Access, Applications, add a self-hosted application: domain the
 Worker's host, path `admin/*`; a policy that allows only your own e-mail (one-time PIN is enough).
 Because `admin.html` is served from the website and calls the Worker across origins, set the
-application's CORS settings to allow the origin `https://openspineconsortium.github.io` with
+application's CORS settings to allow the origin `https://openspineconsortium.com` with
 credentials and the headers `Authorization` and `Content-Type`; the page already sends its calls
 with credentials, so the Access session cookie rides along. `publish.sh` calls the same routes from a
 terminal: create a service token for it in Access, or run it while the policy also allows the

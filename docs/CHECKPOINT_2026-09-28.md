@@ -17,7 +17,7 @@ SHA256SUMS signed by k1). Committed and pushed as this checkpoint says below.
   TRIALS 328006d0894d4b45be7fb5e7becaec62, REPORTS 1af1580f28a248e7b51b084df7d40955, ACCESS
   d0604151a4c3417a8c372becb4e6a984. Secrets set: TRIAL_KEY_PKCS8_B64, TRIAL_KID, ADMIN_TOKEN (copy in
   `~/.ashley-vendor/admin_token`), IP_SALT; GITHUB_TOKEN/GITHUB_REPO not set (requests are stored, no
-  issue opened). `docs/site/services.json` filled; site pages pushed to openspineconsortium.github.io.
+  issue opened). `docs/site/services.json` filled; site pages pushed and served at **https://openspineconsortium.com/ashley/** (the github.io address 301-redirects to the custom domain over plain http, so every address in the extension, the Worker's SITE_ORIGIN and the docs now uses openspineconsortium.com).
   Tools: `tools/intake/deploy.sh` (idempotent; run from WSL with `~/node22/bin` on PATH: the Windows
   network path times out against Cloudflare's API), `register_subdomain.sh`, `admin.mjs`
   (list/add/approve/deny/remove). go2432 added as approved.

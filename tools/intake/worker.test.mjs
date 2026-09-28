@@ -18,7 +18,7 @@ const L = require(path.join(REPO, 'grid', 'license.js'));
 const priv = crypto.createPrivateKey(fs.readFileSync(path.join(REPO, 'extension', 'test-fixtures', 'license', 'test-signing-key.pem'), 'utf8'));
 const PKCS8_B64 = priv.export({ type: 'pkcs8', format: 'der' }).toString('base64');
 const KEYS = { test: L.rawFromPublicKey(crypto.createPublicKey(priv)) };
-const SITE = 'https://openspineconsortium.github.io';
+const SITE = 'https://openspineconsortium.com';
 const ADMIN = { authorization: 'Bearer secret-admin-token' };
 
 // Cloudflare KV, in memory: get/put/delete and a paged list (two keys a page, to exercise the cursor)

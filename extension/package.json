@@ -7,7 +7,7 @@
   "license": "SEE LICENSE IN LICENSE.txt",
   "repository": {
     "type": "git",
-    "url": "https://openspineconsortium.github.io/ashley"
+    "url": "https://openspineconsortium.com/ashley"
   },
   "icon": "media/icon.png",
   "engines": {
@@ -432,7 +432,7 @@
         },
         "ashley.servicesUrl": {
           "type": "string",
-          "default": "https://openspineconsortium.github.io/ashley/services.json",
+          "default": "https://openspineconsortium.com/ashley/services.json",
           "markdownDescription": "Where Ashley reads the lab's service addresses (access service, approved list, revocation list, error-report address, request page). Published with the support site so they can change without a new release; a non-empty address setting below always wins. Empty disables the lookup.",
           "scope": "application"
         },
@@ -512,11 +512,11 @@
     }
   },
   "pricing": "Free",
-  "homepage": "https://openspineconsortium.github.io/ashley/",
+  "homepage": "https://openspineconsortium.com/ashley/",
   "bugs": {
-    "url": "https://openspineconsortium.github.io/ashley/support.html"
+    "url": "https://openspineconsortium.com/ashley/support.html"
   },
-  "qna": "https://openspineconsortium.github.io/ashley/support.html",
+  "qna": "https://openspineconsortium.com/ashley/support.html",
   "galleryBanner": {
     "color": "#1f3b2e",
     "theme": "dark"

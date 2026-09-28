@@ -2,13 +2,13 @@
 
 **Licensed software, free in the Trial Edition.** Ashley is licensed, not sold: you receive a
 license to use it under the [Trial Edition License
-Agreement](https://openspineconsortium.github.io/ashley/license.txt) and the [Privacy Statement](https://openspineconsortium.github.io/ashley/privacy.html), accepted in a signing dialog before
+Agreement](https://openspineconsortium.com/ashley/license.txt) and the [Privacy Statement](https://openspineconsortium.com/ashley/privacy.html), accepted in a signing dialog before
 first use. The Trial Edition is for Wayne State AccessIDs the lab has approved: after your Wayne
 State sign-in, Ashley obtains an access key in your name; if you are not approved yet, [ask for
-access](https://openspineconsortium.github.io/ashley/request.html). Nothing is paid, nothing converts to a paid
+access](https://openspineconsortium.com/ashley/request.html). Nothing is paid, nothing converts to a paid
 license, and no payment details are taken. A paid Full Edition, if offered later, has [its own
-agreement](https://openspineconsortium.github.io/ashley/license-full.txt), shown when a Full Edition key is registered. Support: [the Ashley support
-page](https://openspineconsortium.github.io/ashley/support.html).
+agreement](https://openspineconsortium.com/ashley/license-full.txt), shown when a Full Edition key is registered. Support: [the Ashley support
+page](https://openspineconsortium.com/ashley/support.html).
 
 Ashley sets up a medical student's laptop for a university HPC grid and keeps a Claude Code worker
 running there, on the student's own Claude subscription, reachable from the Claude Code extension
@@ -72,6 +72,6 @@ Any of them can stop it working; section 7 of the agreement names each, and that
 
 ## Licence
 
-Proprietary: [LICENSE.txt](https://openspineconsortium.github.io/ashley/license.txt). Bundled open-source packages keep their own licences:
-[THIRD_PARTY_NOTICES.md](https://openspineconsortium.github.io/ashley/third_party_notices.html). Ashley runs Claude Code; it is not an Anthropic
+Proprietary: [LICENSE.txt](https://openspineconsortium.com/ashley/license.txt). Bundled open-source packages keep their own licences:
+[THIRD_PARTY_NOTICES.md](https://openspineconsortium.com/ashley/third_party_notices.html). Ashley runs Claude Code; it is not an Anthropic
 product, and it is not provided by or on behalf of any university.
