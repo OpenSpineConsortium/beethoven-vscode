@@ -94,13 +94,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<{ _int
     }),
   );
 
-  const reg = (id: string, fn: (...a: any[]) => Promise<unknown> | unknown) =>
+  // gateAs: the command whose gate applies (a wizard step run on its own is gated like the wizard)
+  const reg = (id: string, fn: (...a: any[]) => Promise<unknown> | unknown, gateAs = id) =>
     context.subscriptions.push(
       vscode.commands.registerCommand(id, async (...a: any[]) => {
         // the terms first (a person-run command, never a background one), then the license gate;
         // reading the manual and the log needs neither
         if (!TERMS_EXEMPT.has(id) && !(await ensureTermsAccepted(context, output, () => sharer.installId()))) return REFUSED;
-        const gate = license.allowed(id);
+        const gate = license.allowed(gateAs);
         if (!gate.ok) return license.refuse(id, gate.reason);
         try {
           return await fn(...a);
@@ -130,6 +131,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<{ _int
   reg('ashley.support', () => vscode.env.openExternal(vscode.Uri.parse(supportUrl(context))));
   reg('ashley.errorReports', () => sharer.manage());
   reg('ashley.claudeSignIn', () => commandStepOnly(context, 'claudeGrid', 'Ashley: sign in to Claude on the grid'));
+  reg('ashley.claudeLocalSignIn', () => commandStepOnly(context, 'claudeLocal', 'Ashley: sign in to Claude on this laptop'));
+  // the gate compares the license against this very sign-in, so it must be reachable before the gate opens:
+  // gated like the wizard it is a step of (ashley.setup is not gated); the terms still come first
+  reg('ashley.wsuSignIn', () => commandStepOnly(context, 'wsuSignIn', 'Ashley: sign in with Wayne State'), 'ashley.setup');
+  reg('ashley.renewToken', (id?: unknown) => commandRenewToken(context, id));
   reg('ashley.troubleshoot', () => troubleshooter!.run({ repair: true, quick: false, quiet: false }));
   reg('ashley.healthMenu', () => troubleshooter!.menu());
   reg('ashley.showLog', () => output.show(true));
@@ -270,20 +276,55 @@ async function commandTokenStep(context: vscode.ExtensionContext, id: SecretId):
   tree.refresh();
 }
 
-/** Once a day: a token the service no longer accepts gets a Renew button (it updates the grid too). */
+/**
+ * A token row in the Ashley view, the troubleshooter's Renew button, or the palette: the wizard's own
+ * step for that token. Without an id (the palette), a picker; the optional API key has no step and stays
+ * with Ashley: Manage stored tokens.
+ */
+async function commandRenewToken(context: vscode.ExtensionContext, arg?: unknown): Promise<void> {
+  const renewable = SERVICES.filter((s) => STEPS.some((st) => st.id === s.id));
+  let id = renewable.find((s) => s.id === arg)?.id;
+  if (!id) {
+    const summary = await store.secretSummary();
+    const pick = await vscode.window.showQuickPick(
+      renewable.map((s) => {
+        const x = summary.find((y) => y.id === s.id);
+        return { label: s.name.split(' (')[0], description: x?.status === 'expired' ? 'no longer accepted' : x?.present ? 'stored' : 'missing', id: s.id };
+      }),
+      { title: 'Renew which token?' },
+    );
+    if (!pick) return;
+    id = pick.id;
+  }
+  await commandTokenStep(context, id);
+}
+
+/**
+ * Once a day: a token the service no longer accepts gets a Renew button (it updates the grid too).
+ * The verdict is kept in the store, so the Ashley view can say "expired" without asking the service
+ * again; a network failure is not a verdict.
+ */
 async function checkTokensQuietly(context: vscode.ExtensionContext): Promise<void> {
   const last = context.globalState.get<number>('ashley.tokenCheck', 0);
   if (Date.now() - last < 24 * 3600e3 || !store.settings().accessId) return;
   await context.globalState.update('ashley.tokenCheck', Date.now());
+  let changed = false;
   for (const svc of SERVICES.filter((s) => ['github', 'huggingface'].includes(s.id))) {
     const v = await store.getSecret(svc.id);
     if (!v) continue;
     const c = await validateToken(svc, v);
-    if (!c.ok && !c.network) {
+    if (c.network) continue;
+    if (store.tokenCheck(svc.id)?.ok !== c.ok) changed = true;
+    await store.recordTokenCheck(svc.id, { ok: c.ok, detail: c.detail });
+    if (!c.ok) {
+      // the row says "expired" while the notice is up, whether or not it is answered
+      if (changed) tree.refresh();
+      changed = false;
       const pick = await vscode.window.showWarningMessage(`Your ${svc.name.split(' (')[0]} no longer works (${c.detail}). Renew it: one click in the browser, and the grid is updated too.`, 'Renew');
       if (pick) await commandTokenStep(context, svc.id);
     }
   }
+  if (changed) tree.refresh();
 }
 
 async function pickWorker(grid: GridApi, prompt: string, onlyRunning = true): Promise<{ name: string; node: string; state: string } | undefined> {
@@ -490,7 +531,7 @@ async function commandRegisterMcp(context: vscode.ExtensionContext, quiet = fals
 async function commandManageTokens(context: vscode.ExtensionContext): Promise<void> {
   const summary = await store.secretSummary();
   const pick = await vscode.window.showQuickPick(
-    summary.map((x) => ({ label: x.name, description: x.present ? 'stored' : 'missing', id: x.id })),
+    summary.map((x) => ({ label: x.name, description: x.status === 'expired' ? 'no longer accepted' : x.present ? 'stored' : 'missing', id: x.id })),
     { title: 'Tokens in the OS keychain' },
   );
   if (!pick) return;

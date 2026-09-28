@@ -35,7 +35,7 @@ The steps are the ten in *Getting started*.
 | Step 1: the Microsoft sign-in does not accept your account | you signed in with a personal Microsoft account | sign in with AccessID@wayne.edu |
 | Step 2: GitHub sign-in does not open a browser | VS Code's GitHub sign-in is disabled or blocked | the panel shows a pasted-token field with the token page pre-filled |
 | Steps 3 or 4: the panel does not notice the copied token | clipboard access blocked, or the copy did not happen | paste it into the field; the check is the same |
-| A token shows *no longer accepted* | it expired or was revoked | press **Renew** next to it: one click in the browser, and the grid copy is updated too |
+| A token shows *no longer accepted*, or its row in the Ashley view says *expired* | it expired or was revoked | press **Renew** next to it, or click the row: one click in the browser, and the grid copy is updated too |
 | `no matching MAC found. Their offer: hmac-sha1` | your SSH configuration lacks the Ashley block | run step 7 again (it writes the block with `MACs +hmac-sha1`) |
 | Every grid action takes 13 s | an IPv6 attempt on Windows | the block sets `AddressFamily inet`; run step 7 again if you edited the file |
 | Step 8 rejects the password or code three times | wrong password or code, a grid account not yet created, or the Authenticator not set up | check that ondemand.grid.wayne.edu logs you in, then run the wizard again. If the panel cannot reach the grid at all, it falls back to a terminal for the same two prompts |

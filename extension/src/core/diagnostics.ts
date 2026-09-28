@@ -17,6 +17,18 @@ export interface CheckResult {
   skip?: boolean;
 }
 
+/**
+ * A host command that starts the fix a person must do themselves (a sign-in, a token renewal, the
+ * license dialog): the same click-through the wizard uses for that item. Shown as a button beside
+ * the failing check; the host runs it and checks again.
+ */
+export interface FixCommand {
+  command: string;
+  /** the button's label */
+  title: string;
+  arguments?: unknown[];
+}
+
 export interface DiagNode<C = unknown> {
   id: string;
   title: string;
@@ -29,6 +41,8 @@ export interface DiagNode<C = unknown> {
   repair?(ctx: C): Promise<{ ok: boolean; detail: string }>;
   /** what to tell the student (or the lab admin) when there is no automatic repair or it failed */
   manualFix: string;
+  /** the command that starts the fix only a person can do (a sign-in, a renewal), when there is one */
+  fixCommand?: FixCommand;
   /** how a Wayne State or vendor update could break this */
   futureRisk?: string;
   /** file:line in the repository */
@@ -49,6 +63,8 @@ export interface NodeReport {
   rootCause?: string;
   repair?: string;
   manualFix?: string;
+  /** for failing nodes: the command that starts the fix a person must do (a button in the panel) */
+  fixCommand?: FixCommand;
   ms: number;
 }
 
@@ -124,7 +140,7 @@ export async function runDiagnostics<C>(nodes: DiagNode<C>[], ctx: C, opts: RunO
       if (c.skip) r = { id: n.id, title: n.title, layer: n.layer, status: 'skipped', detail: c.detail, ms: Date.now() - t0 };
       else if (c.ok) r = { id: n.id, title: n.title, layer: n.layer, status: c.warn ? 'warn' : 'ok', detail: c.detail, ms: Date.now() - t0 };
       else {
-        r = { id: n.id, title: n.title, layer: n.layer, status: 'fail', detail: c.detail, manualFix: n.manualFix, ms: Date.now() - t0 };
+        r = { id: n.id, title: n.title, layer: n.layer, status: 'fail', detail: c.detail, manualFix: n.manualFix, ...(n.fixCommand ? { fixCommand: n.fixCommand } : {}), ms: Date.now() - t0 };
         if (opts.repair && n.repair) {
           try {
             const rp = await withTimeout(n.repair(ctx), 300_000, `repair of ${n.title}`);
@@ -152,7 +168,7 @@ export async function runDiagnostics<C>(nodes: DiagNode<C>[], ctx: C, opts: RunO
 export function formatReport(rep: DiagReport): string {
   const icon: Record<NodeStatus, string> = { ok: 'PASS', warn: 'WARN', fail: 'FAIL', repaired: 'FIXD', blocked: 'BLKD', skipped: 'SKIP' };
   const lines = [`Ashley troubleshooter ${rep.started} -> ${rep.finished}: ${rep.ok ? 'everything works' : `${rep.rootCauses.length} root cause(s)`}`];
-  for (const r of rep.rootCauses) lines.push(`  ROOT CAUSE ${r.id}: ${r.detail}${r.manualFix ? `\n             fix: ${r.manualFix}` : ''}`);
+  for (const r of rep.rootCauses) lines.push(`  ROOT CAUSE ${r.id}: ${r.detail}${r.manualFix ? `\n             fix: ${r.manualFix}` : ''}${r.fixCommand ? `\n             one click: ${r.fixCommand.title} (${r.fixCommand.command})` : ''}`);
   let layer = '';
   for (const r of rep.reports) {
     if (r.layer !== layer) {

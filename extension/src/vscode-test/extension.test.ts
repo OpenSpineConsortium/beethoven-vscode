@@ -12,6 +12,7 @@ const EXT_ID = 'openspineconsortium.ashley';
 const COMMANDS = [
   'ashley.setup', 'ashley.license', 'ashley.doctor', 'ashley.troubleshoot', 'ashley.showLog', 'ashley.investigate', 'ashley.healthMenu', 'ashley.connect', 'ashley.workerStart', 'ashley.workerStop', 'ashley.workerLogs', 'ashley.ask',
   'ashley.gridStatus', 'ashley.gridBootstrap', 'ashley.access', 'ashley.phone', 'ashley.registerMcp', 'ashley.claudeSignIn', 'ashley.errorReports', 'ashley.terms', 'ashley.support', 'ashley.manageTokens', 'ashley.openManual', 'ashley.openTerminal', 'ashley.reset', 'ashley.refresh',
+  'ashley.renewToken', 'ashley.claudeLocalSignIn', 'ashley.wsuSignIn',
 ];
 
 suite('Ashley extension', () => {
@@ -53,6 +54,18 @@ suite('Ashley extension', () => {
     assert.ok(g.length >= 30, `graph has ${g.length} nodes`);
   });
 
+  // a fix button beside a failing check runs a command; every one it names must exist, and every
+  // sign-in or token the wizard collects must have one (the same click-through as the Ashley view)
+  test('every fix button names a registered command, and the account checks have one', async () => {
+    const ext = vscode.extensions.getExtension(EXT_ID)!;
+    const all = await vscode.commands.getCommands(true);
+    const g = (ext.exports as any)._internal.buildGraph();
+    for (const n of g) if (n.fixCommand) assert.ok(all.includes(n.fixCommand.command) && n.fixCommand.title, `${n.id}: fix command ${n.fixCommand.command} is not registered`);
+    const byId = Object.fromEntries(g.map((n: any) => [n.id, n]));
+    const want: Record<string, string> = { 'account.github': 'ashley.renewToken', 'account.huggingface': 'ashley.renewToken', 'account.claude': 'ashley.claudeLocalSignIn', 'account.wsu': 'ashley.wsuSignIn', 'account.license-identity': 'ashley.wsuSignIn', 'laptop.license': 'ashley.license', 'laptop.terms': 'ashley.terms', 'grid.claude-login': 'ashley.claudeSignIn' };
+    for (const [id, cmd] of Object.entries(want)) assert.equal(byId[id]?.fixCommand?.command, cmd, `${id} has the fix button ${cmd}`);
+  });
+
   // The pre-integration rule, enforced: every feature keeps its diagnostic nodes. A new feature adds
   // its nodes to src/vscode/diagNodes.ts AND its ids here, or this test fails.
   const REQUIRED_BY_FEATURE: Record<string, string[]> = {
@@ -74,7 +87,7 @@ suite('Ashley extension', () => {
     const ids = new Set((ext.exports as any)._internal.buildGraph().map((n: any) => n.id));
     for (const [feature, need] of Object.entries(REQUIRED_BY_FEATURE)) for (const id of need) assert.ok(ids.has(id), `feature ${feature} lost its diagnostic node ${id}`);
     // publish the graph for docs/DIAGNOSTICS.md
-    const g = (ext.exports as any)._internal.buildGraph().map((n: any) => ({ id: n.id, title: n.title, layer: n.layer, dependsOn: n.dependsOn, assumption: n.assumption, manualFix: n.manualFix, futureRisk: n.futureRisk ?? '', source: n.source ?? '', autoRepair: typeof n.repair === 'function', slow: !!n.slow }));
+    const g = (ext.exports as any)._internal.buildGraph().map((n: any) => ({ id: n.id, title: n.title, layer: n.layer, dependsOn: n.dependsOn, assumption: n.assumption, manualFix: n.manualFix, futureRisk: n.futureRisk ?? '', source: n.source ?? '', autoRepair: typeof n.repair === 'function', fixCommand: n.fixCommand ? { command: n.fixCommand.command, title: n.fixCommand.title } : null, slow: !!n.slow }));
     const fs = require('node:fs');
     const path = require('node:path');
     const out = path.resolve(__dirname, '..', '..', '..', '..', 'docs', 'diagnostics_graph.json');

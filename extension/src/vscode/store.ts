@@ -10,7 +10,26 @@ import { isMcpRegistered, registerMcp } from './mcpRegister';
 import type { LicenseGate } from './licenseGate';
 
 const SECRET_PREFIX = 'ashley.';
+/** what the daily token check found, per secret id (VS Code state; cleared when the token changes) */
+const TOKEN_CHECKS_KEY = 'ashley.tokenChecks';
 export const GITHUB_SCOPES = ['repo', 'workflow', 'read:org', 'gist'];
+
+/** missing: nothing stored; expired: stored but the service rejected it at the last daily check; stored: present and not known to be bad */
+export type SecretStatus = 'missing' | 'expired' | 'stored';
+export interface SecretSummary {
+  id: SecretId;
+  name: string;
+  present: boolean;
+  optional: boolean;
+  status: SecretStatus;
+  /** why the service rejected it, when it did */
+  detail?: string;
+}
+interface TokenCheck {
+  ok: boolean;
+  detail: string;
+  at: string;
+}
 
 export class AshleyStore {
   /** set by activate(): the license gate the wizard and the diagnostics use */
@@ -49,6 +68,20 @@ export class AshleyStore {
   async setSecret(id: SecretId, value: string | undefined): Promise<void> {
     if (value === undefined || value === '') await this.context.secrets.delete(SECRET_PREFIX + id);
     else await this.context.secrets.store(SECRET_PREFIX + id, value);
+    // a new value has not been checked yet: forget what the daily check said about the old one
+    await this.recordTokenCheck(id, undefined);
+  }
+
+  /** What the daily check (checkTokensQuietly) found for a token; the Ashley view reads this instead of asking the service again. */
+  tokenCheck(id: SecretId): TokenCheck | undefined {
+    return this.context.globalState.get<Record<string, TokenCheck>>(TOKEN_CHECKS_KEY, {})[id];
+  }
+
+  async recordTokenCheck(id: SecretId, result: { ok: boolean; detail: string } | undefined): Promise<void> {
+    const all = { ...this.context.globalState.get<Record<string, TokenCheck>>(TOKEN_CHECKS_KEY, {}) };
+    if (result) all[id] = { ok: result.ok, detail: result.detail, at: new Date().toISOString() };
+    else delete all[id];
+    await this.context.globalState.update(TOKEN_CHECKS_KEY, all);
   }
 
   /** keychain probe for the troubleshooter */
@@ -60,9 +93,13 @@ export class AshleyStore {
     return Promise.resolve(this.context.secrets.get(key));
   }
 
-  async secretSummary(): Promise<Array<{ id: SecretId; name: string; present: boolean }>> {
-    const out = [];
-    for (const s of SERVICES) out.push({ id: s.id, name: s.name, present: !!(await this.getSecret(s.id)) });
+  async secretSummary(): Promise<SecretSummary[]> {
+    const out: SecretSummary[] = [];
+    for (const s of SERVICES) {
+      const present = !!(await this.getSecret(s.id));
+      const c = present ? this.tokenCheck(s.id) : undefined;
+      out.push({ id: s.id, name: s.name, present, optional: s.optional, status: !present ? 'missing' : c && !c.ok ? 'expired' : 'stored', detail: c && !c.ok ? c.detail : undefined });
+    }
     return out;
   }
 

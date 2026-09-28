@@ -66,6 +66,12 @@ Every step has a button next to it. **Renew** next to a token signs you in again
 grid copy in the same click; Ashley checks your tokens once a day and offers Renew when one stops
 working. **Run again** reruns any other step.
 
+The Ashley view (the Ashley icon in the activity bar) shows the same things as rows: your tokens
+under *Tokens on this laptop*, *Claude on this laptop*, *Claude on the grid*, and *Wayne State
+sign-in* when that is what is missing. When a row says **missing**, **expired** or **not signed
+in**, click it: the same sign-in the wizard runs for that step opens, and nothing else changes. The
+troubleshooter offers the same button next to a failing check.
+
 ## Your first worker and your first question
 
 1. **Ashley: Start a Claude worker on the grid** (after your lead approved step 10): name

@@ -1,8 +1,8 @@
 // The "Ashley" view in the activity bar: connection, grid install, workers, accounts, tokens.
 import * as vscode from 'vscode';
-import { GridApi, GridStatus } from '../core/gridApi';
+import { GridApi, GridStatus, GridClaudeStatus } from '../core/gridApi';
 import { AshleyStore } from './store';
-import { testConnection } from '../core/wizard';
+import { testConnection, localClaudeStatus } from '../core/wizard';
 
 type Kind = 'root' | 'worker' | 'account' | 'token' | 'job' | 'info';
 
@@ -62,6 +62,17 @@ export class AshleyTree implements vscode.TreeDataProvider<Item> {
     if (!s.accessId) {
       return [new Item('Not set up yet', 'info', { icon: 'rocket', description: 'run the wizard', command: { command: 'ashley.setup', title: 'Set up' } })];
     }
+    // the gate checks the license against a Wayne State sign-in Ashley saw happen; without one, every other command refuses
+    if (this.store.licenseGate && !this.store.licenseGate.identity()) {
+      items.push(
+        new Item('Wayne State sign-in', 'account', {
+          description: 'not signed in: click to sign in',
+          icon: 'warning',
+          tooltip: 'Ashley checks your license against your Wayne State sign-in. Sign in once; the same step as in the wizard',
+          command: { command: 'ashley.wsuSignIn', title: 'Sign in with Wayne State' },
+        }),
+      );
+    }
     const conn = await testConnection(s.sshAlias);
     items.push(
       new Item(conn.ok ? `Connected as ${s.accessId}` : 'Cannot reach the grid', 'root', {
@@ -108,6 +119,7 @@ export class AshleyTree implements vscode.TreeDataProvider<Item> {
       (a) => new Item(a.name, 'account', { description: `${a.kind}${a.enabled ? '' : ' (disabled)'}${a.cooldown_until ? ' cooling until ' + new Date(a.cooldown_until).toLocaleTimeString() : ''}`, icon: a.kind === 'api-key' ? 'credit-card' : 'account' }),
     );
     items.push(new Item('Claude accounts on the grid', 'root', { icon: 'key', description: accounts.length ? '' : 'none', children: accounts }));
+    items.push(await this.claudeOnGrid());
     const jobs = (st.jobs ?? []).filter((j) => !j.name.startsWith('ashley_')).slice(0, 15).map((j) => new Item(`${j.jobId} ${j.name}`, 'job', { description: `${j.state} ${j.node} ${j.elapsed}/${j.timeLimit}`, icon: j.state === 'RUNNING' ? 'play' : 'clock' }));
     items.push(new Item('Other Slurm jobs', 'root', { icon: 'list-ordered', description: `${jobs.length}`, children: jobs }));
     try {
@@ -124,13 +136,56 @@ export class AshleyTree implements vscode.TreeDataProvider<Item> {
     } catch {
       /* grid did not answer */
     }
+    items.push(await this.claudeOnLaptop(s.claudeExecutable));
     const secrets = await this.store.secretSummary();
+    const manage = { command: 'ashley.manageTokens', title: 'Manage' };
     items.push(
       new Item('Tokens on this laptop', 'root', {
         icon: 'lock',
-        children: secrets.map((x) => new Item(x.name.split(' (')[0], 'token', { description: x.present ? 'stored' : 'missing', icon: x.present ? 'pass' : 'circle-outline', command: { command: 'ashley.manageTokens', title: 'Manage' } })),
+        children: secrets.map((x) => {
+          const name = x.name.split(' (')[0];
+          // the optional API key is not a sign-in and has no wizard step: it keeps the token manager
+          if (x.optional && x.status !== 'expired') return new Item(name, 'token', { description: x.present ? 'stored' : 'optional, not set', icon: x.present ? 'pass' : 'circle-outline', command: manage });
+          // a missing or rejected token starts the wizard's own step for it; "expired" is what the daily check found, not a new call to the service
+          const renew = { command: 'ashley.renewToken', title: 'Renew', arguments: [x.id] };
+          if (x.status === 'missing') return new Item(name, 'token', { description: 'missing: click to sign in', icon: 'circle-outline', command: renew });
+          if (x.status === 'expired') return new Item(name, 'token', { description: 'expired: click to renew', icon: 'warning', tooltip: `no longer accepted (${x.detail ?? 'the service rejected it'}); renewing updates the grid copy too`, command: renew });
+          return new Item(name, 'token', { description: 'stored', icon: 'pass', command: manage });
+        }),
       }),
     );
     return items;
+  }
+
+  /** Claude Code's own sign-in on this laptop (status only, the wizard's step "Claude on this laptop"). */
+  private async claudeOnLaptop(claudeExecutable: string): Promise<Item> {
+    const lc = await localClaudeStatus(claudeExecutable);
+    const tooltip = 'Claude Code on this laptop, signed in with your own Claude Pro or Max subscription. Ashley only checks; it stores nothing';
+    if (!lc.ok) return new Item('Claude on this laptop', 'account', { description: lc.detail, icon: 'warning', tooltip });
+    if (lc.loggedIn && lc.subscription) return new Item('Claude on this laptop', 'account', { description: lc.detail, icon: 'pass', tooltip });
+    return new Item('Claude on this laptop', 'account', {
+      description: `${lc.detail}: click to sign in`,
+      icon: lc.loggedIn ? 'warning' : 'circle-outline',
+      tooltip,
+      command: { command: 'ashley.claudeLocalSignIn', title: 'Sign in to Claude on this laptop' },
+    });
+  }
+
+  /** The sign-in on the grid as Claude Code reports it (ashley claude status --json); read once per refresh like the other grid rows. */
+  private async claudeOnGrid(): Promise<Item> {
+    const signIn = { command: 'ashley.claudeSignIn', title: 'Sign in to Claude on the grid' };
+    const tooltip = 'Claude Code keeps its own sign-in in your grid account (~/.ashley/claude); Ashley never sees it. It lasts about a month';
+    let cs: GridClaudeStatus | null = null;
+    try {
+      cs = await this.grid().claudeStatus();
+    } catch {
+      /* grid did not answer */
+    }
+    if (!cs) return new Item('Claude on the grid', 'account', { description: 'the grid did not answer', icon: 'warning', tooltip });
+    const phone = cs.consent ? '; phone access enabled' : '';
+    if (cs.login?.loggedIn) return new Item('Claude on the grid', 'account', { description: `signed in${cs.login.email ? ` as ${cs.login.email}` : ''}${phone}`, icon: 'pass', tooltip });
+    if (cs.login && cs.login.loggedIn === false && cs.dir_present) return new Item('Claude on the grid', 'account', { description: 'sign-in ended: click to sign in', icon: 'warning', tooltip, command: signIn });
+    if (cs.dir_present) return new Item('Claude on the grid', 'account', { description: `signed in (a running worker will confirm it)${phone}`, icon: 'pass', tooltip });
+    return new Item('Claude on the grid', 'account', { description: 'not signed in: click to sign in', icon: 'circle-outline', tooltip, command: signIn });
   }
 }

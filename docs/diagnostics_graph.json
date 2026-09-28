@@ -77,6 +77,7 @@
    "futureRisk": "a new OS release changing OpenSSH or the keychain",
    "source": "extension/src/extension.ts",
    "autoRepair": false,
+   "fixCommand": null,
    "slow": false
   },
   {
@@ -91,6 +92,7 @@
    "futureRisk": "an OpenSSH release dropping hmac-sha1, which the grid still needs",
    "source": "extension/src/core/shell.ts",
    "autoRepair": false,
+   "fixCommand": null,
    "slow": false
   },
   {
@@ -105,6 +107,7 @@
    "futureRisk": "",
    "source": "extension/src/core/wizard.ts (stepSshKey)",
    "autoRepair": false,
+   "fixCommand": null,
    "slow": false
   },
   {
@@ -119,6 +122,7 @@
    "futureRisk": "API removals in a future VS Code",
    "source": "extension/package.json (engines)",
    "autoRepair": false,
+   "fixCommand": null,
    "slow": false
   },
   {
@@ -133,6 +137,7 @@
    "futureRisk": "the extension renamed or its commands changed",
    "source": "extension/src/extension.ts",
    "autoRepair": true,
+   "fixCommand": null,
    "slow": false
   },
   {
@@ -147,6 +152,7 @@
    "futureRisk": "the extension renamed or its commands changed",
    "source": "extension/src/extension.ts",
    "autoRepair": true,
+   "fixCommand": null,
    "slow": false
   },
   {
@@ -161,6 +167,7 @@
    "futureRisk": "the extension moving its bundled binary",
    "source": "extension/src/vscode/store.ts (findClaudeExecutable)",
    "autoRepair": false,
+   "fixCommand": null,
    "slow": false
   },
   {
@@ -175,6 +182,7 @@
    "futureRisk": "",
    "source": "extension/src/vscode/panel.ts (runCapturing)",
    "autoRepair": true,
+   "fixCommand": null,
    "slow": false
   },
   {
@@ -189,6 +197,7 @@
    "futureRisk": "a keychain backend change",
    "source": "extension/src/vscode/store.ts",
    "autoRepair": false,
+   "fixCommand": null,
    "slow": false
   },
   {
@@ -203,6 +212,7 @@
    "futureRisk": "Remote-SSH changing its timeout semantics",
    "source": "extension/src/extension.ts (commandConnect)",
    "autoRepair": true,
+   "fixCommand": null,
    "slow": false
   },
   {
@@ -217,6 +227,7 @@
    "futureRisk": "",
    "source": "extension/src/core/wizard.ts (validateToken)",
    "autoRepair": false,
+   "fixCommand": null,
    "slow": false
   },
   {
@@ -231,6 +242,10 @@
    "futureRisk": "a new terms version (every installation is asked again); the record folder deleted by hand",
    "source": "extension/src/core/terms.ts, extension/src/vscode/termsPanel.ts",
    "autoRepair": false,
+   "fixCommand": {
+    "command": "ashley.terms",
+    "title": "Accept the terms"
+   },
    "slow": false
   },
   {
@@ -245,6 +260,10 @@
    "futureRisk": "the signing key rotating (a new release trusts the new key); the revocation list address moving",
    "source": "grid/license.js, extension/src/core/license.ts, extension/src/vscode/licenseGate.ts",
    "autoRepair": false,
+   "fixCommand": {
+    "command": "ashley.license",
+    "title": "Enter the key"
+   },
    "slow": false
   },
   {
@@ -260,6 +279,10 @@
    "futureRisk": "Wayne State changing the sign-in e-mail format (AccessID@wayne.edu)",
    "source": "grid/license.js (identityMatches), extension/src/core/wizard.ts (stepWsuSignIn)",
    "autoRepair": false,
+   "fixCommand": {
+    "command": "ashley.wsuSignIn",
+    "title": "Sign in with Wayne State"
+   },
    "slow": false
   },
   {
@@ -275,6 +298,10 @@
    "futureRisk": "the WSU tenant blocking VS Code sign-in",
    "source": "extension/src/core/wizard.ts (stepWsuSignIn)",
    "autoRepair": false,
+   "fixCommand": {
+    "command": "ashley.wsuSignIn",
+    "title": "Sign in with Wayne State"
+   },
    "slow": false
   },
   {
@@ -285,10 +312,14 @@
     "account.wsu"
    ],
    "assumption": "GitHub token stored in the keychain and accepted by the service",
-   "manualFix": "press Renew next to \"GitHub personal access token\" in the setup panel",
+   "manualFix": "press Renew next to \"GitHub personal access token\" in the setup panel, or click its row in the Ashley view",
    "futureRisk": "token formats or scopes changing",
    "source": "extension/src/core/wizard.ts (tokenStep)",
    "autoRepair": false,
+   "fixCommand": {
+    "command": "ashley.renewToken",
+    "title": "Renew"
+   },
    "slow": false
   },
   {
@@ -299,10 +330,14 @@
     "account.wsu"
    ],
    "assumption": "Hugging Face token stored in the keychain and accepted by the service",
-   "manualFix": "press Renew next to \"Hugging Face access token\" in the setup panel",
+   "manualFix": "press Renew next to \"Hugging Face access token\" in the setup panel, or click its row in the Ashley view",
    "futureRisk": "token formats or scopes changing",
    "source": "extension/src/core/wizard.ts (tokenStep)",
    "autoRepair": false,
+   "fixCommand": {
+    "command": "ashley.renewToken",
+    "title": "Renew"
+   },
    "slow": false
   },
   {
@@ -318,6 +353,10 @@
    "futureRisk": "claude auth status changing its output; plan names changing",
    "source": "extension/src/core/wizard.ts (stepClaudeLocal)",
    "autoRepair": false,
+   "fixCommand": {
+    "command": "ashley.claudeLocalSignIn",
+    "title": "Sign in"
+   },
    "slow": false
   },
   {
@@ -333,6 +372,7 @@
    "futureRisk": "",
    "source": "extension/src/core/wizard.ts (stepSshKey)",
    "autoRepair": false,
+   "fixCommand": null,
    "slow": false
   },
   {
@@ -347,6 +387,7 @@
    "futureRisk": "the grid dropping hmac-sha1 or renaming nodes",
    "source": "extension/src/core/sshConfig.ts",
    "autoRepair": true,
+   "fixCommand": null,
    "slow": false
   },
   {
@@ -362,6 +403,7 @@
    "futureRisk": "the login host renamed, 2FA enforced for keys",
    "source": "extension/src/core/wizard.ts (testConnection)",
    "autoRepair": false,
+   "fixCommand": null,
    "slow": false
   },
   {
@@ -376,6 +418,7 @@
    "futureRisk": "",
    "source": "extension/src/core/relay.ts",
    "autoRepair": false,
+   "fixCommand": null,
    "slow": false
   },
   {
@@ -390,6 +433,7 @@
    "futureRisk": "a home directory restore or clean-up removing ~/.ashley",
    "source": "grid/ashley (cmd_diag)",
    "autoRepair": true,
+   "fixCommand": null,
    "slow": false
   },
   {
@@ -404,6 +448,7 @@
    "futureRisk": "a new default .bashrc from C&IT",
    "source": "grid/ashley (cmd_diag)",
    "autoRepair": true,
+   "fixCommand": null,
    "slow": false
   },
   {
@@ -418,6 +463,7 @@
    "futureRisk": "Wayne State moving or upgrading the sysroot (repair rediscovers it)",
    "source": "grid/ashley (cmd_diag)",
    "autoRepair": true,
+   "fixCommand": null,
    "slow": false
   },
   {
@@ -432,6 +478,7 @@
    "futureRisk": "a Slurm upgrade changing output formats",
    "source": "grid/ashley (cmd_diag)",
    "autoRepair": true,
+   "fixCommand": null,
    "slow": false
   },
   {
@@ -446,6 +493,7 @@
    "futureRisk": "C&IT enabling PrivateData=jobs",
    "source": "grid/ashley (cmd_diag)",
    "autoRepair": true,
+   "fixCommand": null,
    "slow": false
   },
   {
@@ -460,6 +508,7 @@
    "futureRisk": "QoS renamed by C&IT",
    "source": "grid/ashley (cmd_diag)",
    "autoRepair": true,
+   "fixCommand": null,
    "slow": false
   },
   {
@@ -474,6 +523,7 @@
    "futureRisk": "a proxy introduced on the grid",
    "source": "grid/ashley (cmd_diag)",
    "autoRepair": true,
+   "fixCommand": null,
    "slow": false
   },
   {
@@ -488,6 +538,7 @@
    "futureRisk": "the lab volume moved to a filesystem without ACLs",
    "source": "grid/ashley (cmd_diag)",
    "autoRepair": true,
+   "fixCommand": null,
    "slow": false
   },
   {
@@ -502,6 +553,7 @@
    "futureRisk": "quota policy changes",
    "source": "grid/ashley (cmd_diag)",
    "autoRepair": true,
+   "fixCommand": null,
    "slow": false
   },
   {
@@ -517,6 +569,7 @@
    "futureRisk": "GitHub token expiry policies",
    "source": "grid/ashley (cmd_diag)",
    "autoRepair": true,
+   "fixCommand": null,
    "slow": false
   },
   {
@@ -532,6 +585,7 @@
    "futureRisk": "Hugging Face token changes",
    "source": "grid/ashley (cmd_diag)",
    "autoRepair": true,
+   "fixCommand": null,
    "slow": false
   },
   {
@@ -547,6 +601,10 @@
    "futureRisk": "Anthropic changing the login flow or its lifetime",
    "source": "grid/ashley (cmd_diag)",
    "autoRepair": true,
+   "fixCommand": {
+    "command": "ashley.claudeSignIn",
+    "title": "Sign in on the grid"
+   },
    "slow": false
   },
   {
@@ -562,6 +620,7 @@
    "futureRisk": "a worker template older than the license check",
    "source": "grid/ashley (cmd_diag, license_fp), grid/ashleyd.js (checkLicense)",
    "autoRepair": true,
+   "fixCommand": null,
    "slow": false
   },
   {
@@ -576,6 +635,7 @@
    "futureRisk": "Claude Code moving where --resume looks for transcripts",
    "source": "grid/ashley (cmd_diag)",
    "autoRepair": true,
+   "fixCommand": null,
    "slow": false
   },
   {
@@ -593,6 +653,7 @@
    "futureRisk": "the lab folder moving",
    "source": "grid/ashley (cmd_diag)",
    "autoRepair": true,
+   "fixCommand": null,
    "slow": false
   },
   {
@@ -607,6 +668,7 @@
    "futureRisk": "Wayne State upgrading or removing the apptainer module",
    "source": "grid/ashley (cmd_diag)",
    "autoRepair": true,
+   "fixCommand": null,
    "slow": false
   },
   {
@@ -622,6 +684,7 @@
    "futureRisk": "a republished container at a new path",
    "source": "grid/ashley (cmd_diag)",
    "autoRepair": true,
+   "fixCommand": null,
    "slow": false
   },
   {
@@ -636,6 +699,7 @@
    "futureRisk": "bash changes on the login node",
    "source": "grid/ashley (cmd_diag)",
    "autoRepair": true,
+   "fixCommand": null,
    "slow": false
   },
   {
@@ -650,6 +714,7 @@
    "futureRisk": "someone widening permissions by hand",
    "source": "grid/ashley (cmd_diag)",
    "autoRepair": true,
+   "fixCommand": null,
    "slow": false
   },
   {
@@ -665,6 +730,7 @@
    "futureRisk": "node images changing under the container",
    "source": "grid/ashleyd.js, grid/worker.sbatch.tpl",
    "autoRepair": true,
+   "fixCommand": null,
    "slow": false
   },
   {
@@ -679,6 +745,7 @@
    "futureRisk": "Wayne State moving the Slurm client, its library, munge or slurm.conf; a Slurm upgrade that needs more host libraries",
    "source": "grid/ashley (cmd_diag)",
    "autoRepair": true,
+   "fixCommand": null,
    "slow": false
   },
   {
@@ -693,6 +760,7 @@
    "futureRisk": "a node OS or kernel update breaking the container",
    "source": "grid/ashley (cmd_diag)",
    "autoRepair": true,
+   "fixCommand": null,
    "slow": true
   },
   {
@@ -707,6 +775,7 @@
    "futureRisk": "Remote Control flags or login flow changing",
    "source": "grid/phone.js",
    "autoRepair": false,
+   "fixCommand": null,
    "slow": false
   },
   {
@@ -722,6 +791,7 @@
    "futureRisk": "claude mcp CLI changes; Electron-as-node removed from VS Code",
    "source": "extension/src/vscode/mcpRegister.ts",
    "autoRepair": true,
+   "fixCommand": null,
    "slow": false
   }
  ]

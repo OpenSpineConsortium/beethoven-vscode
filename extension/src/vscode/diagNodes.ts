@@ -202,6 +202,7 @@ export function buildGraph(): DiagNode<DiagCtx>[] {
     id: 'laptop.terms', title: 'License terms accepted', layer: 'account', dependsOn: ['vscode.version'],
     assumption: 'the current version of the agreement and privacy statement was accepted in the signing dialog, and the record with the texts is on this laptop',
     manualFix: 'run any Ashley command: the signing dialog appears; Ashley: Read the license terms shows the text',
+    fixCommand: { command: 'ashley.terms', title: 'Accept the terms' },
     futureRisk: 'a new terms version (every installation is asked again); the record folder deleted by hand',
     source: 'extension/src/core/terms.ts, extension/src/vscode/termsPanel.ts',
     async check(ctx) {
@@ -214,6 +215,7 @@ export function buildGraph(): DiagNode<DiagCtx>[] {
     id: 'laptop.license', title: 'Ashley license', layer: 'account', dependsOn: ['laptop.terms'],
     assumption: 'a license key signed by a key this release trusts, in date (or in its grace period), not withdrawn',
     manualFix: 'Ashley: License, then paste the key your lead sent; a new key if it ended or was withdrawn',
+    fixCommand: { command: 'ashley.license', title: 'Enter the key' },
     futureRisk: 'the signing key rotating (a new release trusts the new key); the revocation list address moving',
     source: 'grid/license.js, extension/src/core/license.ts, extension/src/vscode/licenseGate.ts',
     async check(ctx) {
@@ -228,6 +230,7 @@ export function buildGraph(): DiagNode<DiagCtx>[] {
     id: 'account.license-identity', title: 'License names the signed-in person', layer: 'account', dependsOn: ['laptop.license', 'account.wsu'],
     assumption: 'the AccessID (or e-mail, or site domain) in the license matches the Wayne State sign-in Ashley recorded',
     manualFix: 'sign in with the account the license names (setup step "Sign in with Wayne State"), or ask your lead for a license in your name',
+    fixCommand: { command: 'ashley.wsuSignIn', title: 'Sign in with Wayne State' },
     futureRisk: 'Wayne State changing the sign-in e-mail format (AccessID@wayne.edu)',
     source: 'grid/license.js (identityMatches), extension/src/core/wizard.ts (stepWsuSignIn)',
     async check(ctx) {
@@ -243,10 +246,13 @@ export function buildGraph(): DiagNode<DiagCtx>[] {
   // ---------------------------------------------------------------- accounts (the wizard's own checks)
   add({ id: 'account.wsu', title: 'Wayne State sign-in and the lab list', layer: 'account', dependsOn: ['vscode.version', 'laptop.license'], assumption: 'signed in with AccessID@wayne.edu; AccessID on the pre-approved list',
     manualFix: 'run the wizard step "Sign in with Wayne State"; if not on the list, ask your lead', futureRisk: 'the WSU tenant blocking VS Code sign-in', source: 'extension/src/core/wizard.ts (stepWsuSignIn)',
+    fixCommand: { command: 'ashley.wsuSignIn', title: 'Sign in with Wayne State' },
     check: (ctx) => stepCheck(stepWsuSignIn, ctx) });
+  // the fix button and the token's row in the Ashley view run the wizard's own step for that token
   const tokenNode = (id: string, step: typeof stepGithub, title: string): DiagNode<DiagCtx> => ({
     id, title, layer: 'account', dependsOn: ['account.wsu'], assumption: `${title} stored in the keychain and accepted by the service`,
-    manualFix: `press Renew next to "${step.title}" in the setup panel`, futureRisk: 'token formats or scopes changing', source: 'extension/src/core/wizard.ts (tokenStep)',
+    manualFix: `press Renew next to "${step.title}" in the setup panel, or click its row in the Ashley view`, futureRisk: 'token formats or scopes changing', source: 'extension/src/core/wizard.ts (tokenStep)',
+    fixCommand: { command: 'ashley.renewToken', title: 'Renew', arguments: [step.id] },
     check: (ctx) => stepCheck(step, ctx),
   });
   add(tokenNode('account.github', stepGithub, 'GitHub token'));
@@ -254,6 +260,7 @@ export function buildGraph(): DiagNode<DiagCtx>[] {
   add({ id: 'account.claude', title: 'Claude on this laptop', layer: 'account', dependsOn: ['account.wsu', 'vscode.claude-binary'],
     assumption: 'Claude Code on this laptop is signed in with the student\'s own Claude Pro or Max subscription (Ashley reads status only)',
     manualFix: 'sign in to Claude Code on this laptop (setup step "Claude on this laptop")', futureRisk: 'claude auth status changing its output; plan names changing', source: 'extension/src/core/wizard.ts (stepClaudeLocal)',
+    fixCommand: { command: 'ashley.claudeLocalSignIn', title: 'Sign in' },
     check: (ctx) => stepCheck(stepClaudeLocal, ctx) });
 
   // ---------------------------------------------------------------- SSH to the grid
@@ -314,7 +321,8 @@ export function buildGraph(): DiagNode<DiagCtx>[] {
   const pushRepair: DiagNode<DiagCtx>['repair'] = async (ctx) => { const r = await pushTokens(ctx.env); await ctx.grid(true); return r; };
   add(gridNode('grid.token-github', 'GitHub token on the grid', ['grid.internet', 'account.github'], 'the grid copy of the GitHub token verifies', 'press Renew next to GitHub', 'GitHub token expiry policies', pushRepair));
   add(gridNode('grid.token-hf', 'Hugging Face token on the grid', ['grid.internet', 'account.huggingface'], 'the grid copy of the Hugging Face token verifies', 'press Renew next to Hugging Face', 'Hugging Face token changes', pushRepair));
-  add(gridNode('grid.claude-login', 'Claude signed in on the grid', ['grid.scripts', 'account.claude'], 'Claude Code on the grid reports its own sign-in (made by the student with ashley claude login; Ashley never touches the credential)', 'run Ashley: Sign in to Claude on the grid (the sign-in lasts about a month)', 'Anthropic changing the login flow or its lifetime', undefined));
+  add({ ...gridNode('grid.claude-login', 'Claude signed in on the grid', ['grid.scripts', 'account.claude'], 'Claude Code on the grid reports its own sign-in (made by the student with ashley claude login; Ashley never touches the credential)', 'run Ashley: Sign in to Claude on the grid (the sign-in lasts about a month)', 'Anthropic changing the login flow or its lifetime', undefined),
+    fixCommand: { command: 'ashley.claudeSignIn', title: 'Sign in on the grid' } });
   add({
     id: 'grid.license', title: 'Ashley license on the grid', layer: 'grid-login', dependsOn: ['grid.scripts', 'account.license-identity'],
     assumption: 'the grid has the same license key as this laptop, and every running worker accepts it for this grid account',

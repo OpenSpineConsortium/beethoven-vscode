@@ -158,6 +158,24 @@
         "icon": "$(sign-in)"
       },
       {
+        "command": "ashley.claudeLocalSignIn",
+        "title": "Sign in to Claude on this laptop",
+        "category": "Ashley",
+        "icon": "$(sign-in)"
+      },
+      {
+        "command": "ashley.wsuSignIn",
+        "title": "Sign in with Wayne State",
+        "category": "Ashley",
+        "icon": "$(account)"
+      },
+      {
+        "command": "ashley.renewToken",
+        "title": "Renew a token",
+        "category": "Ashley",
+        "icon": "$(refresh)"
+      },
+      {
         "command": "ashley.manageTokens",
         "title": "Manage stored tokens",
         "category": "Ashley",

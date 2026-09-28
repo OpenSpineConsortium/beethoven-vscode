@@ -22,6 +22,16 @@ export interface GridStatus {
   error?: string;
 }
 
+/** `ashley claude status --json`: whether Claude Code's own sign-in exists on the grid, never the credential. */
+export interface GridClaudeStatus {
+  /** Claude Code's credential file exists in ~/.ashley/claude */
+  dir_present: boolean;
+  /** the student answered Claude Code's Remote Control question (phone access) */
+  consent: boolean;
+  /** what the newest running worker's Claude Code reported about the sign-in; null when no worker runs */
+  login: { loggedIn?: boolean; detail?: string; email?: string } | null;
+}
+
 export interface AskEvents {
   onEvent?(event: Record<string, unknown>): void;
   onLine?(line: string): void;
@@ -64,6 +74,11 @@ export class GridApi {
     const j = r.code === 0 ? parseLastJson<any>(r.stdout) : null;
     if (!j || !j.available) return { available: false, containers: {} };
     return { available: true, root: j.root, default: j.library?.default, containers: j.library?.containers ?? {} };
+  }
+
+  async claudeStatus(): Promise<GridClaudeStatus | null> {
+    const r = await this.ashley(['claude', 'status', '--json'], { timeoutMs: 60_000 });
+    return r.code === 0 ? parseLastJson(r.stdout) : null;
   }
 
   async accessWhoami(): Promise<{ user: string; admin: boolean; lab_admin: string; granted: boolean; state: string } | null> {

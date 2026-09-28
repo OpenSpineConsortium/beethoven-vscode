@@ -136,12 +136,29 @@ export class Troubleshooter implements vscode.Disposable {
       if (m?.type === 'log') this.output.show(true);
       else if (m?.type === 'claude') await this.investigate();
       else if (m?.type === 'again') await this.run({ repair: true, quick: false, quiet: true }).then((rep) => rep && p.webview.postMessage({ type: 'done', rep }));
+      else if (m?.type === 'fix' && typeof m.id === 'string') await this.fix(m.id, p);
       else if (m?.type === 'copy' && this.last) {
         await vscode.env.clipboard.writeText(formatReport(this.last));
         void vscode.window.showInformationMessage('The report is on your clipboard (paste it to your lead).');
       }
     });
     return p;
+  }
+
+  /**
+   * The button beside a failing check: start the fix only a person can do (a sign-in, a renewal), then
+   * check again. The webview names the node; the command comes from the graph, never from the page.
+   */
+  private async fix(id: string, p: vscode.WebviewPanel): Promise<void> {
+    const fc = this.last?.rootCauses.find((r) => r.id === id)?.fixCommand;
+    if (!fc) return;
+    try {
+      await vscode.commands.executeCommand(fc.command, ...(fc.arguments ?? []));
+    } catch (e) {
+      this.output.appendLine(`fix for ${id} (${fc.command}): ${(e as Error).message}`);
+    }
+    const rep = await this.run({ repair: true, quick: false, quiet: true });
+    if (rep) p.webview.postMessage({ type: 'done', rep });
   }
 
   private async openReport(rep: DiagReport): Promise<void> {
@@ -201,9 +218,12 @@ window.addEventListener('message',e=>{const m=e.data;
  if(m.type==='node'){row(m.r);$('bar').style.width=Math.round(100*m.done/m.total)+'%';$('sub').textContent='Checked '+m.done+' of '+m.total}
  if(m.type==='done'){const rep=m.rep;$('bar').style.width='100%';$('sub').textContent='Finished '+new Date(rep.finished).toLocaleTimeString();
   $('ok').style.display=rep.ok?'block':'none';
-  $('causes').innerHTML=rep.rootCauses.map(c=>'<div class="cause"><b>'+esc(c.title)+'</b>'+esc(c.detail)+(c.repair?'<div class="fix">Tried: '+esc(c.repair)+'</div>':'')+(c.manualFix?'<div class="fix">What to do: '+esc(c.manualFix)+'</div>':'')+'</div>').join('');
+  $('causes').innerHTML=rep.rootCauses.map(c=>'<div class="cause"><b>'+esc(c.title)+'</b>'+esc(c.detail)+(c.repair?'<div class="fix">Tried: '+esc(c.repair)+'</div>':'')+(c.manualFix?'<div class="fix">What to do: '+esc(c.manualFix)+'</div>':'')+(c.fixCommand?'<div class="fix"><button class="fixbtn" data-id="'+esc(c.id)+'">'+esc(c.fixCommand.title)+'</button></div>':'')+'</div>').join('');
+  document.querySelectorAll('.fixbtn').forEach(b=>b.onclick=()=>fix(b.dataset.id));
   if(!document.querySelector('.row')){layer='';rep.reports.forEach(row)} }});
-$('again').onclick=()=>{$('list').innerHTML='';layer='';$('causes').innerHTML='';$('ok').style.display='none';vscode.postMessage({type:'again'})};
+function clear(){$('list').innerHTML='';layer='';$('causes').innerHTML='';$('ok').style.display='none'}
+function fix(id){clear();$('sub').textContent='Checking again once that is done...';vscode.postMessage({type:'fix',id})}
+$('again').onclick=()=>{clear();vscode.postMessage({type:'again'})};
 $('claude').onclick=()=>vscode.postMessage({type:'claude'});$('copy').onclick=()=>vscode.postMessage({type:'copy'});$('log').onclick=()=>vscode.postMessage({type:'log'});
 </script></body></html>`;
   }
