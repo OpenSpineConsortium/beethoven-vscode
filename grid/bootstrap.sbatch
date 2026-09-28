@@ -59,7 +59,7 @@ say "runtime candidates: ${candidates[*]}"
 
 BINDS=(-B "$HOME")
 [ -d "/rs/rs_grp_oschome/$USER" ] && BINDS+=(-B "/rs/rs_grp_oschome/$USER")
-case "$ROOT" in /rs/rs_grp_oschome/*|"$HOME"/*) ;; *) BINDS+=(-B "$ROOT");; esac
+case "$ROOT" in "/rs/rs_grp_oschome/$USER"/*|"$HOME"/*) ;; *) BINDS+=(-B "$ROOT");; esac   # a shared ROOT is not under the user dir: bind it
 
 build_with() { # $1 runtime
   local rt="$1"

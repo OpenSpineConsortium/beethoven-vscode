@@ -91,7 +91,7 @@ cmd_adopt() { # use a shared container instead of building: writes config.env + 
   load_cfg; [ -n "$ROOT" ] || set_cfg ROOT "$(default_root)"; load_cfg
   mkdir -p "$ROOT/workspaces" 2>/dev/null
   local binds="-B $HOME"; [ -d "/rs/rs_grp_oschome/$USER" ] && binds="$binds -B /rs/rs_grp_oschome/$USER"
-  case "$ROOT" in /rs/rs_grp_oschome/*|"$HOME"/*) ;; *) binds="$binds -B $ROOT";; esac
+  case "$ROOT" in "/rs/rs_grp_oschome/$USER"/*|"$HOME"/*) ;; *) binds="$binds -B $ROOT";; esac
   binds="$binds -B $LIBRARY_ROOT"
   set_cfg RUNTIME "$runtime"; set_cfg SANDBOX "$sandbox"; set_cfg CLAUDE_BIN "$claude"; set_cfg BINDS "$binds"; set_cfg CONTAINER "$name"; set_cfg SOURCE "shared"; set_cfg BOOTSTRAP_STATE "adopted"
   printf '{"claude_version":"%s","runtime":"%s","sandbox":"%s","container":"%s","source":"shared","adopted":"%s","host":"%s"}\n' "$ver" "$runtime" "$sandbox" "$name" "$(date -u +%FT%TZ)" "$(hostname)" > "$ASHLEY_HOME/READY.part" && mv "$ASHLEY_HOME/READY.part" "$ASHLEY_HOME/READY"
