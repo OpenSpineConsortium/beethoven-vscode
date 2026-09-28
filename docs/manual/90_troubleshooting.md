@@ -11,7 +11,8 @@ when the connection works, the grid's own checks.
 | Step 5: GitHub sign-in does not open a browser | VS Code's GitHub sign-in is disabled or blocked | the panel shows a pasted-token field with the token page pre-filled |
 | Step 6/7: the panel does not notice the copied token | clipboard access blocked, or the copy did not happen | paste it into the field; the check is the same |
 | `Permission denied (publickey...)` after step 4 | the key was not appended to `authorized_keys` | rerun step 4; on the grid, `cat ~/.ssh/authorized_keys` should contain "ashley" |
-| Ashley view: *Grid installing* for more than 30 min | the bootstrap job is queued | `ssh wsu-grid squeue -u $USER`; if it pends for long, `ssh wsu-grid "~/.ashley/bin/ashley bootstrap --resubmit --partition secp --qos secondary"` |
+| Ashley view: *Waiting for lab access* | your request (the last setup step) is pending | your lead approves it in Ashley; nothing to do. If you never filed it, run the wizard again |
+| *Join the lab* refuses | a step above is not finished, or a token does not verify | the panel lists what is missing; fix that step and run the wizard again |
 | Worker shows PENDING for long | the `requeue` QoS pool is busy | start it with the `secp`/`secondary` settings (`ashley.worker.partition`, `ashley.worker.qos`) |
 | Ask returns `no enabled Claude account` | step 7 was skipped | **Ashley: Store or replace my Claude token for the grid** |
 | Ask returns `Failed to authenticate` | the token expired or was revoked | run `claude setup-token` again and store the new token |

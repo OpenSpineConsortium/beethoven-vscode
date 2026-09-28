@@ -733,8 +733,10 @@ creates their own request file and cannot list or touch others’),
 volume): <code>r-x</code> plus a default ACL on <code>shared/</code>,
 and <code>r-X</code> recursively with default ACLs on everything under
 it except <code>access/</code>, so folders the admin adds later are
-covered too. Deny, remove and reset take it away; the student never
-joins the <code>oschome</code> unix group. The admin’s own tree
+covered too. Deny, remove and reset take it away; the student does not
+need the <code>oschome</code> unix group (that lives in the university
+directory and C&amp;IT changes it on the admin’s email; the admin page
+drafts that email). The admin’s own tree
 (<code>/rs/rs_grp_oschome/&lt;admin&gt;</code>, 2750) stays
 private.</li>
 <li><strong>The request is the wizard’s last step
@@ -748,8 +750,9 @@ token: 200 = valid, 401 = invalid or revoked;
 above), and GitHub and Hugging Face tokens that verify. The shared
 container is <strong>not</strong> a requirement: it is what access
 gives. Until approval <code>ashley install</code> does not build a
-private copy (it marks <code>awaiting_access</code>);
-<code>ashley install --build-own</code> is the escape hatch. After
+private copy (it marks <code>awaiting_access</code>). Students are never
+offered a private build; <code>ashley install --build-own</code> exists
+only for the lab admin (the first bootstrap, testing a new image). After
 approval, the next <code>worker start</code> or wizard run adopts the
 lab container in a second.</li>
 <li>Integrity of the drop-box: the admin’s ingest (run as the admin)
@@ -1025,10 +1028,9 @@ libsecret)</td>
 </tbody>
 </table>
 <p>On the grid it writes <code>~/.ashley/</code> (scripts, tokens with
-mode 600, workers, sessions), a block in <code>~/.bashrc</code>, and
-large files under
-<code>/rs/rs_grp_oschome/&lt;AccessID&gt;/ashley</code> or
-<code>~/ashley</code>.</p>
+mode 600, workers, sessions) and a block in <code>~/.bashrc</code>. The
+Claude container is the lab’s shared one; nothing large is stored in
+your space.</p>
 <p>To undo: remove the block from <code>~/.ssh/config</code>, delete the
 key, run <strong>Ashley: Manage stored tokens</strong> to delete tokens,
 uninstall the extension; on the grid, <code>rm -rf ~/.ashley</code> and
@@ -1165,10 +1167,16 @@ pre-filled</td>
 should contain “ashley”</td>
 </tr>
 <tr>
-<td>Ashley view: <em>Grid installing</em> for more than 30 min</td>
-<td>the bootstrap job is queued</td>
-<td><code>ssh wsu-grid squeue -u $USER</code>; if it pends for long,
-<code>ssh wsu-grid &quot;~/.ashley/bin/ashley bootstrap --resubmit --partition secp --qos secondary&quot;</code></td>
+<td>Ashley view: <em>Waiting for lab access</em></td>
+<td>your request (the last setup step) is pending</td>
+<td>your lead approves it in Ashley; nothing to do. If you never filed
+it, run the wizard again</td>
+</tr>
+<tr>
+<td><em>Join the lab</em> refuses</td>
+<td>a step above is not finished, or a token does not verify</td>
+<td>the panel lists what is missing; fix that step and run the wizard
+again</td>
 </tr>
 <tr>
 <td>Worker shows PENDING for long</td>

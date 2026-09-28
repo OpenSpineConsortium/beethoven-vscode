@@ -126,7 +126,7 @@ cmd_install() {
   # wizard's last step): do not spend 1.8 GB and seven minutes of the student's space on a copy.
   if [ $build_own -eq 0 ] && [ -d "$ACCESS_ROOT/inbox" ]; then
     set_cfg AWAITING_ACCESS 1
-    echo "the lab's shared container comes with lab access: request it as the wizard's last step (Ashley: Lab access). To work before that: ashley install --build-own"
+    echo "the lab's shared container comes with lab access: request it as the wizard's last step (Ashley: Lab access)"
     return 0
   fi
   cmd_bootstrap "${pass[@]}"
@@ -251,7 +251,7 @@ cmd_worker() {
     start)
       # access granted since the last install: adopt the lab's container on the spot
       if ! is_ready && lib_readable; then cmd_adopt "$(lib_default)" >/dev/null 2>&1; load_cfg; fi
-      if ! is_ready && [ -z "${BOOTSTRAP_JOB:-}" ] && [ -d "$ACCESS_ROOT/inbox" ]; then die "no container yet: it comes with lab access (Ashley: Lab access to the shared library), or build your own with 'ashley install --build-own'"; fi
+      if ! is_ready && [ -z "${BOOTSTRAP_JOB:-}" ] && [ -d "$ACCESS_ROOT/inbox" ]; then die "no container yet: it comes with lab access (the last setup step; your lead approves it)"; fi
       is_ready || die "grid not ready yet (bootstrap job ${BOOTSTRAP_JOB:-none}: $(job_state "${BOOTSTRAP_JOB:-}")); try again when 'ashley status' says ready=true"
       mkdir -p "$w"/{inbox,outbox,log}
       rm -f "$w/stop"
@@ -544,8 +544,17 @@ cmd_access() {
       done
       case "$act" in
         list)
-          if [ "${1:-}" = "--json" ]; then printf '{"admin":%s,"requests":[' "$(json_str "$USER")"; local first=1; for f in "$ACCESS_ROOT"/status/*.json; do [ -s "$f" ] || continue; [ $first -eq 1 ] || printf ','; first=0; tr -d '\n' < "$f"; done; echo ']}'
-          else for f in "$ACCESS_ROOT"/status/*.json; do [ -s "$f" ] && cat "$f"; done; fi;;
+          # group membership lives in the university directory: C&IT adds people on the admin's
+          # email. Report who is already in the unix group so the admin knows whom to send.
+          local members; members=",$(getent group "$(stat -c %G "$SHARED")" | cut -d: -f4),"
+          if [ "${1:-}" = "--json" ]; then
+            printf '{"admin":%s,"group":%s,"requests":[' "$(json_str "$USER")" "$(json_str "$(stat -c %G "$SHARED")")"; local first=1
+            for f in "$ACCESS_ROOT"/status/*.json; do
+              [ -s "$f" ] || continue; [ $first -eq 1 ] || printf ','; first=0
+              local u; u=$(basename "$f" .json)
+              tr -d '\n' < "$f" | sed 's/}$//'; printf ',"in_group":%s}' "$(case "$members" in *",$u,"*) echo true;; *) echo false;; esac)"
+            done; echo ']}'
+          else for f in "$ACCESS_ROOT"/status/*.json; do [ -s "$f" ] && cat "$f"; done; echo "unix group members: ${members//,/ }"; fi;;
         approve|grant)
           local id="${1:?approve ID}"; getent passwd "$id" >/dev/null || die "no grid user $id"
           local n r; n=$(grep -o '"note": *"[^"]*"' "$(status_file "$id")" 2>/dev/null | head -1 | sed 's/.*"\([^"]*\)"$/\1/'); r=$(grep -o '"requested": *"[^"]*"' "$(status_file "$id")" 2>/dev/null | head -1 | sed 's/.*"\([^"]*\)"$/\1/')

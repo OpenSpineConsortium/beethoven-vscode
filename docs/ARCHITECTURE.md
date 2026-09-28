@@ -173,7 +173,8 @@ own home), so one copy serves the whole lab. `/rs/rs_grp_oschome/shared/ashley/`
   `setfacl` (CephFS honours POSIX ACLs and the admin owns the volume): `r-x` plus a default ACL on
   `shared/`, and `r-X` recursively with default ACLs on everything under it except `access/`, so
   folders the admin adds later are covered too. Deny, remove and reset take it away; the student
-  never joins the `oschome` unix group. The admin's own tree (`/rs/rs_grp_oschome/<admin>`, 2750)
+  does not need the `oschome` unix group (that lives in the university directory and C&IT changes it on
+  the admin's email; the admin page drafts that email). The admin's own tree (`/rs/rs_grp_oschome/<admin>`, 2750)
   stays private.
 - **The request is the wizard's last step (`labAccess`) and is refused until the environment works
   the way the lab works:** every earlier step done; the Claude Code and Remote-SSH extensions and
@@ -182,7 +183,8 @@ own home), so one copy serves the whole lab. `/rs/rs_grp_oschome/shared/ashley/`
   401 = invalid or revoked; `claude setup-token` only issues tokens to Pro/Max and above), and
   GitHub and Hugging Face tokens that verify. The shared container is **not** a requirement: it is
   what access gives. Until approval `ashley install` does not build a private copy (it marks
-  `awaiting_access`); `ashley install --build-own` is the escape hatch. After approval, the next
+  `awaiting_access`). Students are never offered a private build; `ashley install --build-own` exists
+  only for the lab admin (the first bootstrap, testing a new image). After approval, the next
   `worker start` or wizard run adopts the lab container in a second.
 - Integrity of the drop-box: the admin's ingest (run as the admin) accepts a request only if it is
   a regular file, not a symlink, under 4 KB, and owned by the user it names; anything else is moved

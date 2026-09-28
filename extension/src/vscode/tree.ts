@@ -78,9 +78,9 @@ export class AshleyTree implements vscode.TreeDataProvider<Item> {
       return items;
     }
     items.push(
-      new Item(st.ready ? 'Grid ready' : 'Grid installing', 'root', {
-        description: st.ready ? `Claude Code ${st.claude_version ?? ''}${(st as any).source === 'shared' ? `, shared container ${(st as any).container}` : ''}` : st.bootstrap_job ? `job ${st.bootstrap_job} ${st.bootstrap_state ?? ''}` : 'no bootstrap job',
-        icon: st.ready ? 'pass' : 'sync~spin',
+      new Item(st.ready ? 'Grid ready' : (st as any).awaiting_access ? 'Waiting for lab access' : 'Grid installing', 'root', {
+        description: st.ready ? `Claude Code ${st.claude_version ?? ''}${(st as any).source === 'shared' ? `, shared container ${(st as any).container}` : ''}` : (st as any).awaiting_access ? 'the last setup step; your lead approves it' : st.bootstrap_job ? `job ${st.bootstrap_job} ${st.bootstrap_state ?? ''}` : 'installing',
+        icon: st.ready ? 'pass' : (st as any).awaiting_access ? 'clock' : 'sync~spin',
         tooltip: `scripts v${st.version}; root ${st.root}; runtime ${st.runtime ?? '?'}`,
       }),
     );

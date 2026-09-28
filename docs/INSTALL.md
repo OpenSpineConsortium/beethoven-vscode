@@ -23,8 +23,8 @@ through ondemand.grid.wayne.edu, Interactive Apps, 2FA Setup (VPN required for O
 | OS keychain (Windows Credential Manager / macOS Keychain / libsecret) | GitHub, Hugging Face, Claude tokens |
 | VS Code user settings `ashley.*` | your AccessID and preferences |
 
-On the grid it writes `~/.ashley/` (scripts, tokens with mode 600, workers, sessions), a block in
-`~/.bashrc`, and large files under `/rs/rs_grp_oschome/<AccessID>/ashley` or `~/ashley`.
+On the grid it writes `~/.ashley/` (scripts, tokens with mode 600, workers, sessions) and a block in
+`~/.bashrc`. The Claude container is the lab's shared one; nothing large is stored in your space.
 
 To undo: remove the block from `~/.ssh/config`, delete the key, run **Ashley: Manage stored tokens**
 to delete tokens, uninstall the extension; on the grid, `rm -rf ~/.ashley` and the block in

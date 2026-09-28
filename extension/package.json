@@ -339,7 +339,7 @@
         "ashley.container": {
           "type": "string",
           "default": "auto",
-          "description": "Which container a new worker runs: 'auto' = the lab's shared default when readable (no build, consistent across students), 'own' = the container built in your storage, or the name of a shared-library entry (Ashley: Start a Claude worker lets you pick)."
+          "description": "Which lab container a new worker runs: 'auto' = the lab's default, or the name of another container your lead published."
         },
         "ashley.twoFactorDone": {
           "type": "boolean",

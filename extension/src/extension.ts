@@ -273,8 +273,7 @@ async function commandWorkerStart(grid: GridApi): Promise<void> {
     if (pref !== 'auto' && pref !== 'own' && lib.containers[pref]) container = pref;
     else if (pref === 'auto' || pref === 'own') {
       const items = Object.entries(lib.containers).map(([name, e]) => ({ label: name + (name === lib.default ? '  (lab default)' : ''), description: `${e.purpose ?? ''}${e.gpu ? '  GPU' : ''}  ${e.claude_version ?? ''}`, name }));
-      items.push({ label: 'my own build', description: 'the container built in your storage (ashley install --build-own)', name: '' });
-      const pick = await vscode.window.showQuickPick(items, { title: 'Which container? (shared containers need no build and are identical for every student)' });
+      const pick = items.length === 1 ? items[0] : await vscode.window.showQuickPick(items, { title: 'Which lab container?' });
       if (!pick) return;
       container = pick.name || undefined;
     }
@@ -467,11 +466,20 @@ async function commandAccess(context: vscode.ExtensionContext, grid: GridApi): P
       const rows = await grid.accessList();
       const order = { pending: 0, approved: 1, denied: 2, removed: 3 } as Record<string, number>;
       rows.sort((a, b) => (order[a.state] ?? 9) - (order[b.state] ?? 9) || a.user.localeCompare(b.user));
-      const items = rows.map((r) => ({ label: `${r.state === 'pending' ? '$(bell) ' : r.state === 'approved' ? '$(pass) ' : '$(circle-slash) '}${r.user}`, description: r.state, detail: [r.note ? `note: ${r.note}` : '', r.requested ? `requested ${r.requested}` : '', r.message ? `message: ${r.message}` : ''].filter(Boolean).join('   '), user: r.user }));
-      items.push({ label: '$(add) Grant a user directly', description: 'no request needed', detail: 'setfacl on the shared library for an AccessID you type', user: '' });
+      const items = rows.map((r) => ({ label: `${r.state === 'pending' ? '$(bell) ' : r.state === 'approved' ? '$(pass) ' : '$(circle-slash) '}${r.user}`, description: `${r.state}${r.state === 'approved' ? ((r as any).in_group ? ', in the unix group' : ', folder access only (not yet in the unix group)') : ''}`, detail: [r.note ? `note: ${r.note}` : '', r.requested ? `requested ${r.requested}` : '', r.message ? `message: ${r.message}` : ''].filter(Boolean).join('   '), user: r.user }));
+      items.push({ label: '$(add) Grant a user directly', description: 'no request needed', detail: 'opens the lab folder for an AccessID you type', user: '' });
+      const toGroup = rows.filter((r) => r.state === 'approved' && !(r as any).in_group).map((r) => r.user);
+      if (toGroup.length) items.push({ label: `$(mail) Email C&IT to add ${toGroup.length} approved student(s) to the unix group`, description: toGroup.join(', '), detail: 'opens a drafted email to hpc@wayne.edu in your mail program; you send it', user: '__email__' });
       const pick = await vscode.window.showQuickPick(items, { title: `Shared library access: ${rows.filter((r) => r.state === 'pending').length} pending, ${rows.filter((r) => r.state === 'approved').length} approved (lab admin ${who.user})`, matchOnDetail: true });
       if (!pick) return;
       let user = pick.user;
+      if (user === '__email__') {
+        const ids = rows.filter((r) => r.state === 'approved' && !(r as any).in_group).map((r) => r.user);
+        const subject = 'Please add lab members to the oschome group (Ceph volume rs_grp_oschome)';
+        const body = `Hello,\n\nAs the administrator of the oschome group, please add these AccessIDs to the group:\n\n${ids.join('\n')}\n\nThank you,\n${who.user}`;
+        await vscode.env.openExternal(vscode.Uri.parse(`mailto:hpc@wayne.edu?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`));
+        continue;
+      }
       if (!user) {
         user = (await vscode.window.showInputBox({ title: 'AccessID to grant', validateInput: (v) => (/^[a-z]{2}\d{4}$/.test(v) ? undefined : 'ab1234') })) ?? '';
         if (!user) continue;
