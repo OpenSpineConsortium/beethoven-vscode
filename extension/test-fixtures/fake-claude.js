@@ -24,7 +24,9 @@ if (args[0] === '--version') {
 }
 const AUTH_VARS = ['CLAUDE_CODE_OAUTH_TOKEN', 'ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_BASE_URL', 'CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR', 'CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR', 'CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC'];
 if (args[0] === 'auth' && args[1] === 'status') {
-  console.log(JSON.stringify({ loggedIn: fs.existsSync(path.join(cfg, 'fake_logged_in')) }));
+  // like Claude Code 2.1.283: JSON with loggedIn and authMethod; the e-mail when signed in
+  const on = fs.existsSync(path.join(cfg, 'fake_logged_in'));
+  console.log(JSON.stringify(on ? { loggedIn: true, authMethod: 'claude.ai', email: 'ab1234@wayne.edu', subscriptionType: 'pro' } : { loggedIn: false, authMethod: 'none' }));
   process.exit(0);
 }
 if (args[0] === 'auth' && args[1] === 'login') {
@@ -61,6 +63,11 @@ if (args[0] === 'remote-control') {
   return;
 }
 fs.writeFileSync(path.join(process.cwd(), 'fake_argv.json'), JSON.stringify({ args, env: { CLAUDE_CONFIG_DIR: cfg, CLAUDE_CODE_OAUTH_TOKEN: process.env.CLAUDE_CODE_OAUTH_TOKEN || null, ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY || null, HF_TOKEN: process.env.HF_TOKEN || null } }));
+// -p needs a credential: the stored sign-in (fake_logged_in in the config folder) or an API key in the environment
+if (!fs.existsSync(path.join(cfg, 'fake_logged_in')) && !process.env.ANTHROPIC_API_KEY && !process.env.CLAUDE_CODE_OAUTH_TOKEN) {
+  process.stdout.write('Not logged in · Please run /login\n');
+  process.exit(1);
+}
 const transcriptDir = path.join(cfg, 'projects', process.cwd().replace(/[^A-Za-z0-9]/g, '-'));
 const transcript = path.join(transcriptDir, `${sessionId}.jsonl`);
 if (resumeIdx >= 0 && !fs.existsSync(transcript)) {

@@ -1,0 +1,16 @@
+name = "ashley-service"
+main = "worker.js"
+compatibility_date = "2026-09-01"
+
+[vars]
+ALLOWED_DOMAINS = "wayne.edu"
+TRIAL_DAYS = "30"
+
+# paste the ids that `wrangler kv namespace create` prints
+[[kv_namespaces]]
+binding = "TRIALS"
+id = "REPLACE_WITH_TRIALS_ID"
+
+[[kv_namespaces]]
+binding = "REPORTS"
+id = "REPLACE_WITH_REPORTS_ID"

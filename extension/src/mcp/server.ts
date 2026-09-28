@@ -14,6 +14,9 @@ import * as os from 'node:os';
 import { GridApi } from '../core/gridApi';
 import { GridRelay } from '../core/relay';
 import { PermissionMode } from '../core/protocol';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import { checkLicense, readIdentity, unlicensedMessage } from '../core/license';
 
 const alias = process.env.ASHLEY_GRID || 'wsu-grid';
 const defaultWorker = process.env.ASHLEY_WORKER || 'default';
@@ -22,7 +25,30 @@ const relay = new GridRelay(alias, { onStatus: (s, d) => process.stderr.write(`r
 const grid = new GridApi(alias, (l) => process.stderr.write(l + '\n'), relay);
 process.on('exit', () => relay.close());
 
-const server = new McpServer({ name: 'ashley', version: '1.0.0' });
+const server = new McpServer({ name: 'ashley', version: '2.0.0' });
+
+// Every tool refuses without a valid license on this computer, checked on each call (a key entered
+// or renewed in VS Code takes effect at once). The identity is the Wayne State sign-in the extension recorded.
+function bundledRevoked(): string {
+  try {
+    return fs.readFileSync(path.join(__dirname, '..', 'media', 'revoked.txt'), 'utf8');
+  } catch {
+    return '';
+  }
+}
+function licenseRefusal(): string | null {
+  const c = checkLicense({ identity: readIdentity(), bundledRevoked: bundledRevoked() });
+  if (!c.ok) return unlicensedMessage(c);
+  if (c.identity === null) return 'Ashley is licensed on this computer, but the setup is not finished: run the Ashley setup in VS Code (Sign in with Wayne State).';
+  return null;
+}
+const registerTool = server.registerTool.bind(server);
+(server as unknown as { registerTool: (name: unknown, def: unknown, handler: (...a: unknown[]) => unknown) => unknown }).registerTool = (name: unknown, def: unknown, handler: (...a: unknown[]) => unknown) =>
+  registerTool(name as never, def as never, (async (...a: unknown[]) => {
+    const refusal = licenseRefusal();
+    if (refusal) return { content: [{ type: 'text' as const, text: refusal }], isError: true };
+    return handler(...a);
+  }) as never);
 
 function text(t: string) {
   return { content: [{ type: 'text' as const, text: t }] };

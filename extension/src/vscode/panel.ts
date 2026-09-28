@@ -103,7 +103,7 @@ export class SetupPanel implements WizardUI, vscode.Disposable {
   }
   /**
    * Shell integration lets the extension read what a command prints in the terminal, so the token
-   * that `claude setup-token` prints is captured without the student copying it. If the shell has
+   * that a command prints is captured without the student copying it. If the shell has
    * no integration within a few seconds, falls back to the plain terminal (clipboard capture).
    */
   async runCapturing(title: string, command: string, args: string[], pattern: RegExp): Promise<{ code: number | null; match?: string }> {
@@ -344,7 +344,7 @@ function renderSteps(steps, reports, current){
     const r = byId[s.id];
     const st = current === s.id ? 'current' : r ? r.status : '';
     const mark = st === 'done' ? '✓' : st === 'failed' ? '!' : st === 'skipped' ? '–' : '';
-    const tokenStep = ['github','huggingface','claudeOauth'].includes(s.id);
+    const tokenStep = ['github', 'huggingface'].includes(s.id);
     const act = !current && r ? '<button class="act secondary" data-step="' + s.id + '">' + (tokenStep ? 'Renew' : (r.status === 'done' ? 'Run again' : 'Run')) + '</button>' : '';
     return '<li class="' + (current === s.id ? 'current ' : '') + (r && r.status === 'failed' ? 'failed' : '') + '"><span class="dot ' + st + '">' + mark + '</span><div><div class="t">' + (i+1) + '. ' + esc(s.title) + '</div><div class="b">' + esc(s.blurb) + '</div>' + (r ? '<div class="d">' + esc(r.detail) + '</div>' : '') + act + '</div></li>';
   }).join('');

@@ -70,9 +70,7 @@ test('token patterns accept real shapes and reject junk', () => {
   const gh = SERVICES.find((s) => s.id === 'github')!;
   assert.ok(gh.pattern!.test('ghp_' + 'a'.repeat(36)));
   assert.ok(!gh.pattern!.test('https://github.com/settings/tokens'));
-  const claude = SERVICES.find((s) => s.id === 'claudeOauth')!;
-  assert.ok(claude.pattern!.test('sk-ant-oat01-' + 'x'.repeat(40)));
-  assert.ok(!claude.pattern!.test('sk-ant-api03-' + 'x'.repeat(40)));
+  assert.equal(SERVICES.find((s) => s.id === ('claudeOauth' as string)), undefined, 'Ashley stores no Claude credential');
   assert.equal(SERVICES.find((s) => s.id === 'anthropicApiKey')!.injectLocally, false);
 });
 

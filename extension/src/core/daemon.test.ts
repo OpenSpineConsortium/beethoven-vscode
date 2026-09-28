@@ -7,14 +7,26 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { spawn, ChildProcess } from 'node:child_process';
+import * as crypto from 'node:crypto';
+import * as L from '../../../grid/license.js';
 
 const here = __dirname; // dist-test/unit/core
 const repo = path.resolve(here, '..', '..', '..', '..');
-const daemon = path.join(repo, 'grid', 'ashleyd.js');
 const fake = path.join(repo, 'extension', 'test-fixtures', 'fake-claude.js');
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ashley-test-'));
+// The daemon runs from a copy that trusts the test signing key (grid/license_keys.json holds the
+// release keys, whose private half is not in the repository).
+const bin = path.join(tmp, 'bin');
+fs.mkdirSync(bin, { recursive: true });
+for (const f of ['ashleyd.js', 'phone.js', 'license.js']) fs.copyFileSync(path.join(repo, 'grid', f), path.join(bin, f));
+const testKey = crypto.createPrivateKey(fs.readFileSync(path.join(repo, 'extension', 'test-fixtures', 'license', 'test-signing-key.pem'), 'utf8'));
+fs.writeFileSync(path.join(bin, 'license_keys.json'), JSON.stringify({ test: L.rawFromPublicKey(crypto.createPublicKey(testKey)) }));
+const daemon = path.join(bin, 'ashleyd.js');
+const user = os.userInfo().username;
+const licenseFor = (sub: string, days = 30) => L.signLicense({ kid: 'test', sub, exp: Math.floor(Date.now() / 1000) + days * 86400 } as never, testKey);
 const home = path.join(tmp, 'ashley-home');
 const worker = path.join(home, 'workers', 'w1');
+const claudeHome = path.join(home, 'claude');
 const root = path.join(tmp, 'root');
 let child: ChildProcess;
 
@@ -42,16 +54,19 @@ function result(id: string): any {
 before(async () => {
   assert.ok(fs.existsSync(daemon), `daemon missing at ${daemon}`);
   for (const d of ['inbox', 'outbox', 'log']) fs.mkdirSync(path.join(worker, d), { recursive: true });
-  fs.mkdirSync(path.join(home, 'accounts', 'default'), { recursive: true });
-  fs.writeFileSync(path.join(home, 'accounts', 'default', 'token'), 'sk-ant-oat01-fake\n');
+  // the student's own sign-in, as Claude Code stores it (the fake reads the marker; the daemon only checks presence)
+  fs.mkdirSync(claudeHome, { recursive: true });
+  fs.writeFileSync(path.join(claudeHome, '.credentials.json'), '{"fake":true}\n');
+  fs.writeFileSync(path.join(claudeHome, 'fake_logged_in'), '');
   fs.mkdirSync(path.join(home, 'accounts', 'apikey'), { recursive: true });
   fs.writeFileSync(path.join(home, 'accounts', 'apikey', 'apikey'), 'sk-ant-api03-fake\n');
   fs.writeFileSync(path.join(home, 'secrets.env'), 'HF_TOKEN=hf_fake\nGITHUB_TOKEN=ghp_fake\n');
+  fs.writeFileSync(path.join(home, 'license.key'), licenseFor(user) + '\n');
   fs.writeFileSync(path.join(worker, 'node'), 'testnode\n');
   fs.writeFileSync(path.join(worker, 'job.id'), '123\n');
   // the daemon runs a .js "claude" with its own node binary (Windows cannot spawn .cmd wrappers without a shell)
   child = spawn(process.execPath, [daemon, '--worker-dir', worker, '--claude', fake, '--concurrency', '2', '--poll-ms', '200'], {
-    env: { ...process.env, ASHLEY_HOME: home, ASHLEY_ROOT: root },
+    env: { ...process.env, ASHLEY_HOME: home, ASHLEY_ROOT: root, ASHLEY_LICENSE_RECHECK_MS: '300' },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   child.stdout?.on('data', () => {});
@@ -71,7 +86,7 @@ test('a request is answered, with events and a saved session', async () => {
   const r = result('r1');
   assert.equal(r.status, 'ok');
   assert.equal(r.result, 'echo: hello grid');
-  assert.equal(r.account, 'default');
+  assert.equal(r.account, 'claude');
   assert.equal(r.node, 'testnode');
   assert.equal(r.num_turns, 2);
   const events = fs.readFileSync(path.join(worker, 'outbox', 'r1.events.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l));
@@ -83,10 +98,10 @@ test('a request is answered, with events and a saved session', async () => {
   assert.ok(sess.cwd.startsWith(root), 'session cwd under ASHLEY_ROOT/workspaces');
   const argv = JSON.parse(fs.readFileSync(path.join(sess.cwd, 'fake_argv.json'), 'utf8'));
   assert.ok(argv.args.includes('--session-id'), 'first turn sets the session id');
-  assert.equal(argv.env.CLAUDE_CODE_OAUTH_TOKEN, 'sk-ant-oat01-fake');
+  assert.equal(argv.env.CLAUDE_CODE_OAUTH_TOKEN, null, 'Ashley passes no Claude credential: Claude Code uses the sign-in it stored');
   assert.equal(argv.env.ANTHROPIC_API_KEY, null, 'subscription runs never see the API key');
   assert.equal(argv.env.HF_TOKEN, 'hf_fake');
-  assert.ok(argv.env.CLAUDE_CONFIG_DIR.endsWith(path.join('accounts', 'default')));
+  assert.ok(argv.env.CLAUDE_CONFIG_DIR.endsWith('claude'), `config dir is the sign-in folder (${argv.env.CLAUDE_CONFIG_DIR})`);
   assert.equal(fs.existsSync(path.join(worker, 'inbox', 'r1.json.claimed')), false, 'claim removed');
 });
 
@@ -100,18 +115,18 @@ test('the second turn of a session resumes it', async () => {
 });
 
 test('a rate-limited account is cooled down and the request moves to the next credential', async () => {
-  fs.writeFileSync(path.join(home, 'accounts', 'default', 'fake_rate_limit'), '');
+  fs.writeFileSync(path.join(claudeHome, 'fake_rate_limit'), '');
   send({ v: 1, id: 'r3', prompt: 'limited', session: 's2', mode: 'acceptEdits', max_turns: 5, created: new Date().toISOString(), from: 'test' });
   assert.ok(await waitFor(() => !!result('r3')));
   const r = result('r3');
   assert.equal(r.status, 'ok');
   assert.equal(r.account, 'apikey', 'fell over to the API key');
-  const st = JSON.parse(fs.readFileSync(path.join(home, 'accounts', 'default', 'state.json'), 'utf8'));
-  assert.ok(st.cooldown_until && new Date(st.cooldown_until) > new Date(), 'default account on cooldown');
+  const st = JSON.parse(fs.readFileSync(path.join(claudeHome, 'state.json'), 'utf8'));
+  assert.ok(st.cooldown_until && new Date(st.cooldown_until) > new Date(), 'the sign-in account is on cooldown');
   const argv = JSON.parse(fs.readFileSync(path.join(root, 'workspaces', 's2', 'fake_argv.json'), 'utf8'));
   assert.equal(argv.env.ANTHROPIC_API_KEY, 'sk-ant-api03-fake');
   assert.equal(argv.env.CLAUDE_CODE_OAUTH_TOKEN, null);
-  fs.rmSync(path.join(home, 'accounts', 'default', 'fake_rate_limit'));
+  fs.rmSync(path.join(claudeHome, 'fake_rate_limit'));
 });
 
 test('when every account is limited the result says rate_limited with a retry time', async () => {
@@ -128,14 +143,14 @@ test('when every account is limited the result says rate_limited with a retry ti
 });
 
 test('a crash without a result is reported as error, not lost', async () => {
-  fs.rmSync(path.join(home, 'accounts', 'default', 'state.json'), { force: true });
-  fs.writeFileSync(path.join(home, 'accounts', 'default', 'fake_crash'), '');
+  fs.rmSync(path.join(claudeHome, 'state.json'), { force: true });
+  fs.writeFileSync(path.join(claudeHome, 'fake_crash'), '');
   send({ v: 1, id: 'r5', prompt: 'boom', session: 's4', mode: 'acceptEdits', max_turns: 5, created: new Date().toISOString(), from: 'test' });
   assert.ok(await waitFor(() => !!result('r5')));
   const r = result('r5');
   assert.equal(r.status, 'error');
   assert.match(r.error, /without a result/);
-  fs.rmSync(path.join(home, 'accounts', 'default', 'fake_crash'));
+  fs.rmSync(path.join(claudeHome, 'fake_crash'));
 });
 
 test('a forced account is honoured and the heartbeat has the expected shape', async () => {
@@ -153,19 +168,79 @@ test('a forced account is honoured and the heartbeat has the expected shape', as
 test('a session that moves to the API key on a limit keeps its conversation (shared history)', async () => {
   // Claude Code looks for a session only under the running account's CLAUDE_CONFIG_DIR/projects;
   // without the shared history the resume on the API key fails with "No conversation found".
-  fs.rmSync(path.join(home, 'accounts', 'default', 'state.json'), { force: true });
+  fs.rmSync(path.join(claudeHome, 'state.json'), { force: true });
   fs.rmSync(path.join(home, 'accounts', 'apikey', 'state.json'), { force: true });
-  fs.writeFileSync(path.join(home, 'accounts', 'default', 'fake_rate_limit'), '');
+  fs.writeFileSync(path.join(claudeHome, 'fake_rate_limit'), '');
   send({ v: 1, id: 'r20', prompt: 'continue on the key', session: 's1', mode: 'acceptEdits', max_turns: 5, created: new Date().toISOString(), from: 'test' });
   assert.ok(await waitFor(() => !!result('r20')));
   const r = result('r20');
-  fs.rmSync(path.join(home, 'accounts', 'default', 'fake_rate_limit'));
+  fs.rmSync(path.join(claudeHome, 'fake_rate_limit'));
   assert.equal(r.status, 'ok', `status ${r.status}: ${r.error ?? ''}`);
   assert.equal(r.account, 'apikey');
   assert.match(r.result, /\(resumed\)/);
   assert.equal(r.session_id, result('r1').session_id, 'the same conversation');
-  for (const a of ['default', 'apikey']) {
-    const l = fs.lstatSync(path.join(home, 'accounts', a, 'projects'));
-    assert.ok(l.isSymbolicLink(), `${a}/projects links to the shared history`);
+  for (const d of [claudeHome, path.join(home, 'accounts', 'apikey')]) {
+    const l = fs.lstatSync(path.join(d, 'projects'));
+    assert.ok(l.isSymbolicLink(), `${path.basename(d)}/projects links to the shared history`);
   }
+});
+
+test('without a valid license the worker refuses work, says why, and resumes when a good key returns', async () => {
+  const lic = path.join(home, 'license.key');
+  const good = fs.readFileSync(lic, 'utf8');
+  const state = () => JSON.parse(fs.readFileSync(path.join(worker, 'state.json'), 'utf8'));
+  // a license for another grid account
+  fs.writeFileSync(lic, licenseFor('zz9999') + '\n');
+  assert.ok(await waitFor(() => state().license?.status === 'wrong-person'), 'heartbeat reports wrong-person');
+  assert.equal(state().status, 'unlicensed');
+  send({ v: 1, id: 'r30', prompt: 'not for you', session: 's9', mode: 'acceptEdits', max_turns: 5, created: new Date().toISOString(), from: 'test' });
+  assert.ok(await waitFor(() => !!result('r30')));
+  assert.equal(result('r30').status, 'error');
+  assert.match(result('r30').error, /license/i);
+  // no key at all
+  fs.rmSync(lic);
+  assert.ok(await waitFor(() => state().license?.status === 'missing'));
+  // an ended key past its grace
+  fs.writeFileSync(lic, licenseFor(user, -20) + '\n');
+  assert.ok(await waitFor(() => state().license?.status === 'expired'));
+  // the good key again
+  fs.writeFileSync(lic, good);
+  assert.ok(await waitFor(() => state().license?.ok === true), 'accepted again');
+  send({ v: 1, id: 'r31', prompt: 'licensed again', session: 's9', mode: 'acceptEdits', max_turns: 5, created: new Date().toISOString(), from: 'test' });
+  assert.ok(await waitFor(() => !!result('r31')));
+  assert.equal(result('r31').status, 'ok');
+});
+
+test('a withdrawn license is refused by the worker', async () => {
+  const lic = path.join(home, 'license.key');
+  const lid = L.verifyLicense(fs.readFileSync(lic, 'utf8').trim(), { keys: { test: L.rawFromPublicKey(crypto.createPublicKey(testKey)) } }).payload!.lid;
+  fs.writeFileSync(path.join(home, 'license.revoked'), L.signRevocationList([lid], 'test', testKey) + '\n');
+  const state = () => JSON.parse(fs.readFileSync(path.join(worker, 'state.json'), 'utf8'));
+  assert.ok(await waitFor(() => state().license?.status === 'revoked'), 'heartbeat reports revoked');
+  fs.rmSync(path.join(home, 'license.revoked'));
+  assert.ok(await waitFor(() => state().license?.ok === true));
+});
+
+test('when the sign-in is gone the worker says how to sign in, and picks it up again by itself', async () => {
+  const state = () => JSON.parse(fs.readFileSync(path.join(worker, 'state.json'), 'utf8'));
+  fs.rmSync(path.join(claudeHome, 'state.json'), { force: true }); // no cooldown left over from the limit tests
+  fs.rmSync(path.join(home, 'accounts', 'apikey', 'state.json'), { force: true });
+  assert.equal(state().claude_login?.loggedIn, true, 'heartbeat reports the sign-in');
+  assert.equal(state().claude_login?.email, 'ab1234@wayne.edu');
+  fs.rmSync(path.join(claudeHome, 'fake_logged_in'));
+  fs.writeFileSync(path.join(claudeHome, '.credentials.json'), '{"fake":true,"changed":1}\n'); // the daemon watches this file
+  fs.writeFileSync(path.join(home, 'accounts', 'apikey', 'disabled'), '');
+  assert.ok(await waitFor(() => state().claude_login?.loggedIn === false, 20000), 'heartbeat notices the sign-in is gone');
+  send({ v: 1, id: 'r40', prompt: 'nobody home', session: 's12', mode: 'acceptEdits', max_turns: 5, created: new Date().toISOString(), from: 'test' });
+  assert.ok(await waitFor(() => !!result('r40')));
+  assert.equal(result('r40').status, 'error');
+  assert.match(result('r40').error, /Sign in to Claude on the grid/);
+  fs.writeFileSync(path.join(claudeHome, 'fake_logged_in'), '');
+  fs.writeFileSync(path.join(claudeHome, '.credentials.json'), '{"fake":true,"changed":2}\n');
+  fs.rmSync(path.join(home, 'accounts', 'apikey', 'disabled'));
+  assert.ok(await waitFor(() => state().claude_login?.loggedIn === true, 20000), 'signed in again');
+  send({ v: 1, id: 'r41', prompt: 'back', session: 's12', mode: 'acceptEdits', max_turns: 5, created: new Date().toISOString(), from: 'test' });
+  assert.ok(await waitFor(() => !!result('r41')));
+  assert.equal(result('r41').status, 'ok');
+  assert.equal(result('r41').account, 'claude');
 });

@@ -6,7 +6,6 @@
     "lib": ["ES2022"],
     "types": ["node", "vscode", "mocha"],
     "outDir": "out",
-    "rootDir": "src",
     "strict": true,
     "noImplicitOverride": true,
     "noUnusedLocals": true,
@@ -16,6 +15,6 @@
     "sourceMap": true,
     "resolveJsonModule": true
   },
-  "include": ["src/**/*.ts"],
+  "include": ["src/**/*.ts", "../grid/license.d.ts"],
   "exclude": ["node_modules", ".vscode-test", "dist", "dist-test"]
 }

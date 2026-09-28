@@ -1,42 +1,68 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 400" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="13">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 470" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="13">
   <defs>
     <marker id="c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#555"/></marker>
     <style>
       .st{fill:#fff;stroke:#333;stroke-width:1.4;rx:8}
       .you{fill:#fff8e1;stroke:#b8860b;stroke-width:1.4;rx:8}
       .lab{fill:#e8f5e9;stroke:#2e7d32;stroke-width:1.6;rx:8}
-      .n{font-weight:600;fill:#222}.s{fill:#555;font-size:11.5px}
+      .n{font-weight:600;fill:#222}.s{fill:#555;font-size:11.5px}.b{fill:#333;font-size:12.5px;font-weight:600}
       .a{stroke:#555;stroke-width:1.3;fill:none;marker-end:url(#c)}
-      .band{fill:#555;font-size:12px;font-weight:600}
-      .legend{fill:#555;font-size:12px}
+      .band{fill:none;stroke:#bbb;stroke-dasharray:4 4;rx:12}
     </style>
   </defs>
-  <text x="20" y="26" font-size="15" font-weight="600" fill="#222">The wizard: strict order, one panel, each step skipped when already done</text>
-  <text x="20" y="46" class="legend">gold = you do one thing in the browser or the panel; white = automatic; green = the gate to the lab, last</text>
-  <text x="20" y="72" class="band">WHO YOU ARE, THEN YOUR ACCOUNTS (tokens stay on this laptop)</text>
-  <g transform="translate(20,82)">
-    <rect class="you" x="0" y="0" width="190" height="70"/><text x="10" y="22" class="n">1 Sign in with Wayne State</text><text x="10" y="40" class="s">AccessID@wayne.edu in the browser;</text><text x="10" y="55" class="s">pre-approved AccessIDs only</text>
-    <rect class="you" x="210" y="0" width="150" height="70"/><text x="220" y="22" class="n">2 GitHub</text><text x="220" y="40" class="s">sign in; the token</text><text x="220" y="55" class="s">arrives by itself</text>
-    <rect class="you" x="380" y="0" width="160" height="70"/><text x="390" y="22" class="n">3 Hugging Face</text><text x="390" y="40" class="s">Create token, Copy;</text><text x="390" y="55" class="s">the panel takes it</text>
-    <rect class="you" x="560" y="0" width="190" height="70"/><text x="570" y="22" class="n">4 Claude</text><text x="570" y="40" class="s">claude.ai in the browser,</text><text x="570" y="55" class="s">Authorize; token arrives itself</text>
-    <path class="a" d="M190 35 L210 35"/><path class="a" d="M360 35 L380 35"/><path class="a" d="M540 35 L560 35"/>
-  </g>
-  <text x="20" y="182" class="band">THE GRID (everything above goes there in one pass)</text>
-  <g transform="translate(20,192)">
-    <rect class="you" x="0" y="0" width="190" height="70"/><text x="10" y="22" class="n">5 Grid account, Authenticator</text><text x="10" y="40" class="s">campus Wi-Fi or VPN, OnDemand</text><text x="10" y="55" class="s">2FA Setup, scan one QR code</text>
-    <rect class="st" x="210" y="0" width="110" height="70"/><text x="220" y="22" class="n">6 SSH key</text><text x="220" y="40" class="s">automatic</text>
-    <rect class="st" x="340" y="0" width="120" height="70"/><text x="350" y="22" class="n">7 SSH config</text><text x="350" y="40" class="s">automatic</text>
-    <rect class="you" x="480" y="0" width="140" height="70"/><text x="490" y="22" class="n">8 Log in once</text><text x="490" y="40" class="s">password + code,</text><text x="490" y="55" class="s">in the panel</text>
-    <rect class="st" x="640" y="0" width="200" height="70"/><text x="650" y="22" class="n">9 Install on the grid</text><text x="650" y="40" class="s">scripts and all tokens,</text><text x="650" y="55" class="s">one pass, private files</text>
-    <path class="a" d="M190 35 L210 35"/><path class="a" d="M320 35 L340 35"/><path class="a" d="M460 35 L480 35"/><path class="a" d="M620 35 L640 35"/>
-  </g>
-  <text x="20" y="292" class="band">THE LAB</text>
-  <g transform="translate(20,302)">
-    <rect class="lab" x="0" y="0" width="840" height="70"/>
-    <text x="14" y="24" class="n">10 Join the lab (last)</text>
-    <text x="14" y="44" class="s">allowed only when 1 to 9 are green and the tokens work; one request to your lead; approval lets you read the lab folder</text>
-    <text x="14" y="60" class="s">(datasets, Claude containers, software). You never write there: your science lives in your own grid account.</text>
-  </g>
-  <path class="a" d="M860 117 C 935 117, 935 227, 860 227"/>
-  <path class="a" d="M860 227 C 935 227, 935 337, 860 337"/>
+  <text x="30" y="26" font-size="15" font-weight="600" fill="#222">The setup, in order: a step starts only when every step above it is green</text>
+  <rect class="band" x="20" y="46" width="940" height="100"/>
+  <text class="b" x="30" y="64">You and your accounts (kept on this laptop)</text>
+  <rect class="you" x="30" y="76" width="168" height="56"/>
+  <text class="n" x="42" y="99">1 License</text>
+  <text class="s" x="42" y="118">your key, or a trial</text>
+  <rect class="you" x="212" y="76" width="168" height="56"/>
+  <text class="n" x="224" y="99">2 Wayne State</text>
+  <text class="s" x="224" y="118">Microsoft sign-in</text>
+  <line class="a" x1="199" y1="104.0" x2="210" y2="104.0"/>
+  <rect class="you" x="394" y="76" width="168" height="56"/>
+  <text class="n" x="406" y="99">3 GitHub</text>
+  <text class="s" x="406" y="118">browser, one click</text>
+  <line class="a" x1="381" y1="104.0" x2="392" y2="104.0"/>
+  <rect class="you" x="576" y="76" width="168" height="56"/>
+  <text class="n" x="588" y="99">4 Hugging Face</text>
+  <text class="s" x="588" y="118">copy the token</text>
+  <line class="a" x1="563" y1="104.0" x2="574" y2="104.0"/>
+  <rect class="you" x="758" y="76" width="168" height="56"/>
+  <text class="n" x="770" y="99">5 Claude here</text>
+  <text class="s" x="770" y="118">Claude Code signed in</text>
+  <line class="a" x1="745" y1="104.0" x2="756" y2="104.0"/>
+  <rect class="band" x="20" y="162" width="940" height="100"/>
+  <text class="b" x="30" y="180">The grid (one pass)</text>
+  <rect class="st" x="30" y="192" width="168" height="56"/>
+  <text class="n" x="42" y="215">6 Account + 2FA</text>
+  <text class="s" x="42" y="234">OnDemand</text>
+  <rect class="st" x="212" y="192" width="168" height="56"/>
+  <text class="n" x="224" y="215">7 SSH key</text>
+  <text class="s" x="224" y="234">made for you</text>
+  <line class="a" x1="199" y1="220.0" x2="210" y2="220.0"/>
+  <rect class="st" x="394" y="192" width="168" height="56"/>
+  <text class="n" x="406" y="215">8 SSH config</text>
+  <text class="s" x="406" y="234">written for you</text>
+  <line class="a" x1="381" y1="220.0" x2="392" y2="220.0"/>
+  <rect class="st" x="576" y="192" width="168" height="56"/>
+  <text class="n" x="588" y="215">9 Log in once</text>
+  <text class="s" x="588" y="234">password + code</text>
+  <line class="a" x1="563" y1="220.0" x2="574" y2="220.0"/>
+  <rect class="st" x="758" y="192" width="168" height="56"/>
+  <text class="n" x="770" y="215">10 Install</text>
+  <text class="s" x="770" y="234">scripts, tokens, license</text>
+  <line class="a" x1="745" y1="220.0" x2="756" y2="220.0"/>
+  <path class="a" d="M842.0 132 C 842.0 154, 114.0 166, 114.0 190"/>
+  <rect class="band" x="20" y="278" width="940" height="100"/>
+  <text class="b" x="30" y="296">The lab</text>
+  <rect class="lab" x="30" y="308" width="168" height="56"/>
+  <text class="n" x="42" y="331">11 Join the lab</text>
+  <text class="s" x="42" y="350">one request; approval = ACL</text>
+  <rect class="lab" x="212" y="308" width="168" height="56"/>
+  <text class="n" x="224" y="331">12 Claude on the grid</text>
+  <text class="s" x="224" y="350">you sign in, once, in a terminal</text>
+  <line class="a" x1="199" y1="336.0" x2="210" y2="336.0"/>
+  <path class="a" d="M842.0 248 C 842.0 270, 114.0 282, 114.0 306"/>
+  <text class="s" x="30" y="402">Renew next to a token signs you in again and updates the grid. Ashley never sees your Claude sign-in: Claude Code makes it and keeps it, on the laptop and in your grid account.</text>
 </svg>

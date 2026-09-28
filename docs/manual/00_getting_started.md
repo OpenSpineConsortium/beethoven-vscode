@@ -20,7 +20,7 @@ it never asks you to build or install anything under the hood.
 
 ## Install
 
-VS Code, then the extensions **Claude Code**, **Remote - SSH**, and `ashley-wsu-1.0.0.vsix`
+VS Code, then the extensions **Claude Code**, **Remote - SSH**, and `ashley-2.0.0.vsix`
 (Extensions view, `...`, *Install from VSIX*). Ashley offers its wizard on first start; or press
 Ctrl/Cmd+Shift+P and type **Ashley: Set up my research environment**.
 
@@ -28,23 +28,32 @@ Ctrl/Cmd+Shift+P and type **Ashley: Set up my research environment**.
 
 One panel: the steps on the left with their state, the current question on the right, a
 progress bar on top, the log one click away. The order is strict: a step does not start until
-every step above it is green. Your accounts come first and their tokens are kept on this laptop;
-the grid comes next and receives everything in one pass; joining the lab is last.
+every step above it is green. Your license and your accounts come first and their tokens are kept on this laptop; the grid
+comes next and receives everything in one pass; joining the lab comes after that, and your Claude
+sign-in on the grid is last, because it happens inside the lab's container.
 
 ![The wizard's steps](figures/wizard.svg)
 
 | Step | What you see | What you do |
 |---|---|---|
-| 1 Sign in with Wayne State | your browser opens the WSU sign-in | sign in with AccessID@wayne.edu. If your AccessID is not on the lab's list, ask your lead |
-| 2 GitHub | your browser opens GitHub | sign in and approve; the token arrives by itself |
-| 3 Hugging Face | a button opens the token page, pre-filled | press *Create token*, then *Copy*; the panel takes it |
-| 4 Claude | your browser opens claude.ai | sign in with the account you made with your WSU e-mail and press *Authorize*; the token arrives by itself |
-| 5 Grid account and Authenticator | a menu (the panel says whether you are on the campus Wi-Fi or the VPN) | if you have no grid account, apply; on OnDemand open 2FA Setup and scan the QR code; then *continue* |
-| 6 SSH key | a spinner | nothing |
-| 7 SSH configuration | a spinner | nothing |
-| 8 Log in to the grid once | a password field, then a code field | your grid password, then the six-digit Authenticator code. Once; the grid never asks again |
-| 9 Install on the grid | a progress line | nothing: scripts and all your tokens go to the grid in one pass |
-| 10 Join the lab | a note field, only when everything above is green and your tokens work | a sentence for your lead (project, lead). One request; your lead approves it in Ashley, and from then on you read the lab folder and your workers use the lab's Claude container |
+| 1 License | a field for your key, or a free-trial button | paste the key your lead sent (copying it is enough), or start a trial: one per person, in your name, it ends by itself |
+| 2 Sign in with Wayne State | your browser opens the WSU sign-in | sign in with AccessID@wayne.edu. Your license must name you; if your AccessID is not on the lab's list either, ask your lead |
+| 3 GitHub | your browser opens GitHub | sign in and approve; the token arrives by itself |
+| 4 Hugging Face | a button opens the token page, pre-filled | press *Create token*, then *Copy*; the panel takes it |
+| 5 Claude on this laptop | a check of Claude Code's own sign-in | sign in to Claude Code with the account you made with your WSU e-mail (Claude Pro at the minimum). Ashley only looks at whether you are signed in |
+| 6 Grid account and Authenticator | a menu (the panel says whether you are on the campus Wi-Fi or the VPN) | if you have no grid account, apply; on OnDemand open 2FA Setup and scan the QR code; then *continue* |
+| 7 SSH key | a spinner | nothing |
+| 8 SSH configuration | a spinner | nothing |
+| 9 Log in to the grid once | a password field, then a code field | your grid password, then the six-digit Authenticator code. Once; the grid never asks again |
+| 10 Install on the grid | a progress line | nothing: scripts, your GitHub and Hugging Face tokens and your license go to the grid in one pass |
+| 11 Join the lab | a note field, only when everything above is green | a sentence for your lead (project, lead). One request; your lead approves it in Ashley, and from then on you read the lab folder and your workers use the lab's Claude container |
+| 12 Sign in to Claude on the grid | a terminal on the grid | Claude Code signs you in inside your own grid account: click the link it prints, sign in with the same Claude account, press Authorize, paste the code back. Once a month or so; Ashley says when. Ashley never sees this sign-in |
+
+The first time Ashley runs it shows the license terms and asks one question: whether it may send
+its maintainer an error report when one of its checks fails. A report says which check failed and
+why, with names, paths and anything secret replaced; never your prompts, files, tokens or AccessID.
+Say no there, or later in Settings, and nothing is ever sent. **Ashley: Error reports** shows exactly
+what a report contains and every report kept on your laptop.
 
 Every step has a button next to it. **Renew** next to a token signs you in again and updates the
 grid copy in the same click; Ashley checks your tokens once a day and offers Renew when one stops

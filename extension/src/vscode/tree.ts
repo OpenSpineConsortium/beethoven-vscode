@@ -55,6 +55,10 @@ export class AshleyTree implements vscode.TreeDataProvider<Item> {
   private async build(): Promise<Item[]> {
     const s = this.store.settings();
     const items: Item[] = [];
+    const lic = this.store.licenseGate?.check();
+    if (lic && !lic.ok) {
+      return [new Item('Ashley needs a license', 'info', { icon: 'key', description: lic.detail, command: { command: 'ashley.license', title: 'License' } })];
+    }
     if (!s.accessId) {
       return [new Item('Not set up yet', 'info', { icon: 'rocket', description: 'run the wizard', command: { command: 'ashley.setup', title: 'Set up' } })];
     }

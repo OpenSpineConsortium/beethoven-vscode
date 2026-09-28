@@ -8,7 +8,10 @@ alias_=${ASHLEY_SSH_ALIAS:-wsu-grid}
 ( cd "$here/extension" && node esbuild.mjs --tests >/dev/null )
 stage=$(mktemp -d)
 mkdir -p "$stage/grid" "$stage/extension/test-fixtures" "$stage/extension/dist-test/unit/core"
-for f in phone.js ashleyd.js; do tr -d '\r' < "$here/grid/$f" > "$stage/grid/$f"; done
+for f in phone.js ashleyd.js license.js; do tr -d '\r' < "$here/grid/$f" > "$stage/grid/$f"; done
+mkdir -p "$stage/extension/test-fixtures/license"
+cp "$here/extension/test-fixtures/license/test-signing-key.pem" "$stage/extension/test-fixtures/license/"
+cp "$here/grid/license_keys.json" "$stage/grid/"
 tr -d '\r' < "$here/extension/test-fixtures/fake-claude.js" > "$stage/extension/test-fixtures/fake-claude.js"
 for f in phone daemon; do cp "$here/extension/dist-test/unit/core/$f.test.js" "$stage/extension/dist-test/unit/core/"; done
 cat > "$stage/run.sh" <<'EOS'

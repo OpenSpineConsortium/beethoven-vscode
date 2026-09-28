@@ -1,7 +1,9 @@
-// Phone access (grid/phone.js) with a fake claude: one host at a time, hand-over when phone access
-// moves, take-over of an abandoned lease, the onboarding seed, and a clean environment for Remote
-// Control. phone.js drives Claude through util-linux `script` (a pseudo-terminal), so this suite
-// runs where `script` exists: the grid container, or any Linux machine. It skips elsewhere.
+// Phone access (grid/phone.js) with a fake claude: it waits for the student's own sign-in and their
+// one-time Remote Control consent, hosts on one worker at a time, hands over when phone access
+// moves, takes over an abandoned lease, seeds Claude Code's first-run settings, and starts Remote
+// Control with a clean environment. phone.js drives Claude through util-linux `script` (a
+// pseudo-terminal), so this suite runs where `script` exists: the grid container, or any Linux
+// machine. It skips elsewhere.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
@@ -18,8 +20,9 @@ const skip = hasScript ? false : 'needs util-linux script (runs on the grid; see
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ashley-phone-'));
 const home = path.join(tmp, 'ashley-home');
 const root = path.join(tmp, 'root');
-const cfg = path.join(home, 'remote', 'config');
+const cfg = path.join(home, 'claude'); // the student's own sign-in, stored by Claude Code
 const lease = path.join(home, 'remote', 'host.lock');
+const consent = path.join(cfg, '.ashley-remote-consent');
 type Phone = { tick(): void; stop(): void; phase(): string };
 let A: Phone;
 let B: Phone;
@@ -57,12 +60,11 @@ before(() => {
   const { startPhone } = require(path.join(repo, 'grid', 'phone.js'));
   for (const w of ['wa', 'wb']) fs.mkdirSync(path.join(home, 'workers', w), { recursive: true });
   fs.mkdirSync(cfg, { recursive: true });
-  fs.writeFileSync(path.join(cfg, 'fake_logged_in'), ''); // signed in already; the sign-in has its own test
   // credentials that must never reach Remote Control
   process.env.ANTHROPIC_AUTH_TOKEN = 'leak-auth';
   process.env.ANTHROPIC_BASE_URL = 'https://elsewhere.invalid';
   process.env.CLAUDE_CODE_OAUTH_TOKEN = 'leak-oauth';
-  const mk = (w: string, job: string) => startPhone({ workerDir: path.join(home, 'workers', w), ashleyHome: home, root, claude: fake, node: `node-${w}`, job, log: (m: string) => logs.push(`${w}: ${m}`) });
+  const mk = (w: string, job: string) => startPhone({ workerDir: path.join(home, 'workers', w), ashleyHome: home, claudeHome: cfg, root, claude: fake, node: `node-${w}`, job, log: (m: string) => logs.push(`${w}: ${m}`) });
   A = mk('wa', '101');
   B = mk('wb', '202');
 });
@@ -73,8 +75,22 @@ after(() => {
   B.stop();
 });
 
-test('the first worker to turn phone access on hosts it, and runs Remote Control with a clean environment', { skip }, async () => {
+test('without the student\'s own sign-in, phone access waits and says what to do; Ashley signs nobody in', { skip }, async () => {
   enable('wa', true);
+  assert.ok(await tickUntil(A, () => status('wa').phase === 'need_login', 10000), `need_login (${JSON.stringify(status('wa'))})`);
+  assert.match(status('wa').message, /ashley claude login/);
+  assert.ok(!fs.existsSync(path.join(home, 'workers', 'wa', 'rc', 'login.log')), 'no sign-in was attempted by Ashley');
+});
+
+test('signed in but without the one-time Remote Control consent, it waits for the student\'s answer', { skip }, async () => {
+  fs.writeFileSync(path.join(cfg, 'fake_logged_in'), '');
+  fs.writeFileSync(path.join(cfg, '.credentials.json'), '{"fake":true}');
+  assert.ok(await tickUntil(A, () => status('wa').phase === 'need_consent', 70000), `need_consent (${JSON.stringify(status('wa'))})`);
+  assert.match(status('wa').message, /remote-consent/);
+});
+
+test('with consent, the first worker to turn phone access on hosts it, with a clean environment and seeded settings', { skip }, async () => {
+  fs.writeFileSync(consent, new Date().toISOString());
   assert.ok(await tickUntil(A, () => status('wa').phase === 'running'), `wa running (${JSON.stringify(status('wa'))})`);
   assert.match(status('wa').session_url ?? '', /claude\.ai\/code\/session_fake123/);
   const holder = JSON.parse(fs.readFileSync(path.join(lease, 'holder.json'), 'utf8'));
@@ -115,16 +131,13 @@ test('an abandoned lease (no beat for over 60 s) is taken over', { skip }, async
   assert.equal(JSON.parse(fs.readFileSync(path.join(lease, 'holder.json'), 'utf8')).worker, 'wa');
 });
 
-test('the sign-in answers a wrong code and accepts the right one', { skip }, async () => {
-  enable('wa', false);
-  assert.ok(await tickUntil(A, () => status('wa').phase === 'off', 5000));
+test('when the sign-in ends, phone access stops and asks for a new sign-in; Ashley never runs logout', { skip }, async () => {
   fs.rmSync(path.join(cfg, 'fake_logged_in'));
+  // the running session ends as the real one does when its login expires
+  const log = path.join(home, 'workers', 'wa', 'rc', 'session.log');
+  A.stop();
   enable('wa', true);
-  assert.ok(await tickUntil(A, () => status('wa').phase === 'need_code', 20000), `link shown (${JSON.stringify(status('wa'))})`);
-  assert.match(status('wa').url, /oauth\/authorize/);
-  const code = path.join(home, 'workers', 'wa', 'rc', 'code');
-  fs.writeFileSync(code, 'wrongcode\n');
-  assert.ok(await tickUntil(A, () => status('wa').phase === 'need_code' && /did not accept/.test(status('wa').message), 15000), `wrong code reported (${JSON.stringify(status('wa'))})`);
-  fs.writeFileSync(code, 'goodcode\n');
-  assert.ok(await tickUntil(A, () => status('wa').phase === 'running', 30000), `signed in and running (${JSON.stringify(status('wa'))})`);
+  assert.ok(await tickUntil(A, () => status('wa').phase === 'need_login', 70000), `need_login again (${JSON.stringify(status('wa'))})`);
+  assert.ok(!logs.some((l) => /logout/.test(l)), 'no logout in the log');
+  assert.ok(fs.existsSync(log));
 });

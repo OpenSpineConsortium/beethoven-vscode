@@ -18,7 +18,7 @@ dist/        the built .vsix
 
 ## Quick start
 
-1. Install `dist/ashley-wsu-1.0.0.vsix` in VS Code (Extensions view, `...`, *Install from VSIX*).
+1. Install `dist/ashley-2.0.0.vsix` in VS Code (Extensions view, `...`, *Install from VSIX*). Accept the terms; enter your license key or start a trial.
 2. `Ashley: Set up my research environment (wizard)`.
 3. `Ashley: Start a Claude worker on the grid`, then `Ashley: Ask the grid Claude`, or open the
    Claude Code panel and say "check the grid status".
@@ -28,48 +28,35 @@ Everything else: [docs/manual.html](docs/manual.html) (also `docs/manual.pdf`, 2
 [docs/LIMITS.md](docs/LIMITS.md), [docs/PITCH.md](docs/PITCH.md), [docs/RESEARCH.md](docs/RESEARCH.md),
 [docs/DIAGNOSTICS.md](docs/DIAGNOSTICS.md).
 
-## Status (2026-09-28): version 1, ready for testing
+## Status (2026-09-28): version 2.0.0, licensed
 
-Ten wizard steps in a fixed order: *Sign in with Wayne State* (a Microsoft sign-in, checked against
-the lab's pre-approved AccessIDs), GitHub, Hugging Face and Claude by browser click, the grid
-account and Authenticator, SSH key and configuration, one password-and-code login, the grid
-install (scripts and every token in one pass), and *Join the lab*. Each token has **Renew**, which
-also updates the grid copy.
+Version 2 is the first licensed release. It changes three things students notice and one they do
+not.
 
-- **Lab access.** A request is a held Slurm job, so Slurm vouches for who sent it; the lab admin
-  approves, denies (with a message), removes or resets in *Ashley: Lab access*. Approval is a
-  read-only ACL on the lab folder. Students never build containers.
-- **Workers.** A persistent Claude Code worker per student in the lab's container on a compute
-  node; prompts arrive over one persistent ssh session in about 0.2 s. Workers message each other.
-- **Phone access.** Claude Code Remote Control hosted by the worker, so the Claude app drives a
-  grid session with no workstation. One worker hosts it at a time.
-- **Troubleshooter.** A status-bar item over a 42-node dependency graph; it names the root cause,
-  repairs what is safe, keeps a log, and can ask Claude to research a failure. Every feature must
-  add its nodes before it is integrated (`docs/DIAGNOSTICS.md`).
-- **Grid scripts version 3.** Five fixes from a study of claude-swap and cswap-desktop
-  (`docs/research/claude_swap_notes.md`): shared session history across one person's accounts, a
-  single phone host, full removal of overriding credential variables, the phone's first-run seed,
-  and one subscription per person. Workers can now use Slurm from inside their container, and
-  `ashley worker restart` re-renders the job from the current template.
-- **Dependency study.** 370 assumptions mapped (`docs/DEPENDENCY_MAP.md`); twelve defect claims were
-  checked on the grid or laptop and fixed where real, among them a first-install failure on fresh
-  grid accounts (a quoted `~`) and an MCP registration that broke on every upgrade
-  (`docs/DIAGNOSTICS.md`).
+- **A license key per person**, checked against the Wayne State sign-in; free trials, one per
+  AccessID, issued in the student's own name; the extension, its CLI, its MCP server and the grid
+  worker all refuse to work without a valid key. Terms are accepted in a first-run dialog that also
+  asks about error reports.
+- **Claude sign-in through Claude Code's own flow only.** Ashley no longer captures, stores or
+  copies a Claude token. The student signs in to Claude Code on the laptop and, once, in a terminal
+  inside their own grid account; Claude Code keeps its own credential and Ashley only points at it.
+  This follows the compliance research in `docs/research/reports/` (Anthropic's Claude Code terms
+  forbid third-party tools from handling Claude credentials).
+- **Error reports, opt-out at first run**, scrubbed of identity, feeding a maintenance pipeline that
+  runs on the maintainer's own accounts and proposes reviewed pull requests.
+- The extension id is now `openspineconsortium.ashley` (the university's name is not in a product
+  name), and the source is proprietary: `LICENSE`, `extension/LICENSE.txt`, `extension/PRIVACY.md`,
+  `extension/THIRD_PARTY_NOTICES.md`.
 
-Tests: 31 laptop unit tests (5 more skip on Windows), 7 VS Code integration tests, a live
-troubleshooter run against the grid, and 12 tests inside the lab container on a compute node
-(`tools/grid_tests.sh`).
+Version 1 (`ac64e4f`) was released under MIT and stays so; 2.0.0 is the first release under these
+terms. The rest of version 1's status (workers, relay, lab access, phone access, troubleshooter,
+dependency study) is in `docs/CHECKPOINT_2026-09-28.md`.
 
-Still needs a person: the Claude *Authorize* click and a real subscription token on the grid; the
-Wayne State sign-in in the university tenant; a phone sign-in with a real code; a second student
-account to confirm the lab-access ACLs from the student side.
-
-Next release: usage and reset times from Claude Code's own rate-limit events, a status-bar usage
-meter, and read-only cooperation with claude-swap on the laptop (plan in
-`docs/research/claude_swap_notes.md`, section 5).
-
-Repository: https://github.com/GregorySchwing/ashley (private).
+Still needs a person: the Claude sign-in on the grid and a first prompt through a worker; a phone
+session with a real code; the Wayne State sign-in in the university tenant; a second student account;
+the three written answers the compliance report asks for (Anthropic, the university's technology
+office, counsel on the licensor entity). `docs/LICENSING.md` has the release and issuing steps.
 
 ## Licence
 
-MIT, like the lab's other student-facing repositories.
+Proprietary: `LICENSE` and `extension/LICENSE.txt`. Use requires a license key. Bundled open-source packages keep their own licences (`extension/THIRD_PARTY_NOTICES.md`).

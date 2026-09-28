@@ -1,4 +1,5 @@
 #!/bin/bash
+# Ashley (c) 2026 OpenSpineConsortium. Licensed software: use requires a license key. See LICENSE.txt.
 # Ashley worker "@NAME@": a persistent Claude Code session for one student, in a Singularity
 # container on a compute node. It watches ~/.ashley/workers/@NAME@/inbox and answers into
 # outbox. Resumable: `ashley worker start --name @NAME@` again; queued requests survive.

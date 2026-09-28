@@ -102,32 +102,39 @@ this shares nothing between people.
 
 ## Credentials
 
-Each `~/.ashley/accounts/<name>/` is both a credential and a `CLAUDE_CONFIG_DIR`, so accounts
-keep separate settings and caches, and share only the session history (above):
+The rule, since version 2: **Ashley never reads, stores, copies or relays a Claude credential.**
+Anthropic's Claude Code terms permit an end user to sign in to the unmodified binary with their own
+subscription, including where a platform hosts it, and forbid a third-party developer to collect,
+store or intermediate Claude.ai credentials or tokens (`docs/research/reports/`, the compliance
+report). Version 1 captured the output of `claude setup-token` and copied it to the grid; that
+was on the wrong side of the line and is gone.
 
-- `token`: a long-lived subscription token from `claude setup-token` (the normal case). Exported
-  to Claude Code as `CLAUDE_CODE_OAUTH_TOKEN`.
-- `apikey`: an Anthropic API key (pay-per-use overflow). Exported as `ANTHROPIC_API_KEY`.
-- A copied `.credentials.json` is no longer used. A copy shares a refresh-token chain with the
-  machine it came from, and the first refresh on either side revokes the other (claude-swap
-  issues #164 and #381; our own probe saw a copy rejected after eight idle days). The phone's
-  login is the one exception, and it is made on the grid, not copied (below).
+What happens instead:
 
-Order of use: subscriptions before API keys, `default` first. When a run ends with an error that
-matches the limit patterns in `protocol.ts` ("hit your limit", "rate_limit", "429", ...), the
-account gets `state.json` with `cooldown_until` (the reset time Claude printed, else one hour), the
-request is re-queued for the next enabled account, and if none is left the result is written
-with `status: rate_limited` and `retry_after`. The worker's heartbeat reports `blocked` with
-`blocked_until` so the laptop can say "your window resets at 3 pm" instead of failing.
+- `~/.ashley/claude` is a `CLAUDE_CONFIG_DIR` in the student's own grid account, mode 700. The
+  student runs `ashley claude login` once (the extension opens the terminal): inside their own Slurm
+  allocation, in the lab container, the unmodified `claude auth login` prints its link, the student
+  authorises in the browser and pastes the code, and Claude Code writes its own credential there.
+  Ashley wrote nothing but Claude Code's first-run settings.
+- Every Claude Code process Ashley starts on the grid (the worker's `claude -p`, Remote Control)
+  gets `CLAUDE_CONFIG_DIR=~/.ashley/claude` and an environment with every credential variable
+  removed (`CLAUDE_CODE_OAUTH_TOKEN`, `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`,
+  `ANTHROPIC_BASE_URL` and the file-descriptor variants). Claude Code uses what it stored.
+- The daemon asks `claude auth status` at start, every 30 minutes and when the credential file
+  changes, and puts the answer (signed in or not, the e-mail Claude Code reports) in its heartbeat.
+  The laptop shows it; the diagnostics node `grid.claude-login` reads it; a prompt sent while not
+  signed in is answered with the command that fixes it.
+- One person, one Claude account. The only other credential is the student's own Anthropic Console
+  key (`~/.ashley/accounts/apikey/apikey`, Commercial Terms), used only when the subscription
+  window is exhausted, and only in that process's environment.
+- On the laptop, the wizard checks `claude auth status` of the student's own Claude Code and
+  requires a subscription sign-in (Pro or Max), because the lab works on subscriptions; it stores
+  nothing.
+- A copied `.credentials.json` is never used: a copy shares a refresh-token chain with the machine it
+  came from, and the first refresh on either side revokes the other.
 
-One person, one token. Pooling several people's subscriptions into one worker would breach the
-Consumer Terms (each account is for the person who holds it); the rotation exists for a student's
-own second credential, typically an API key with a spending cap. `ashley accounts add-token`
-refuses a second subscription token under another name (replacing the one you have is allowed),
-and records when the token was made (`minted_at`), since a setup-token carries no expiry of its
-own. Before every run the daemon removes every variable that could override or redirect the
-chosen credential: `CLAUDE_CODE_OAUTH_TOKEN`, `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`,
-`ANTHROPIC_BASE_URL` and the two file-descriptor variants, then sets only the chosen one.
+The sign-in lasts about a month (a user report; Anthropic's docs give a three-day warning before
+expiry). The heartbeat notices when it ends; the extension asks for step 12 again.
 
 ## Secrets: where they are and where they are not
 
@@ -247,28 +254,49 @@ made with AccessID@wayne.edu.
 
 Claude Code's Remote Control lets the Claude app (or claude.ai/code) drive a session running
 elsewhere, over outbound HTTPS only. On the grid the worker hosts it (`grid/phone.js`, inside the
-worker job; no extra process to manage). Remote Control needs a claude.ai login on that machine:
-the one-year token the worker uses for prompts is refused for it ("You must be logged in to use
-Remote Control"). So the first time, the worker runs `claude auth login` in a pseudo-terminal
-(`script`), the extension opens the printed link on the laptop, the student presses Authorize and
-copies the code the page shows, and the worker types it in. That login lives in its own folder
-(`~/.ashley/remote/config`, never mixed with the prompt accounts) and lasts about 30 days. Then the
-worker runs `claude remote-control` in a pretrusted folder (`workspaces/phone`), restarts it if it
-exits, and the session appears in the app for the same account. Measured on asx1: the sign-in link
-appears within seconds; a wrong code is answered at once ("Invalid code") and the panel asks again.
+worker job). It uses the same sign-in as the worker (`~/.ashley/claude`): Remote Control needs a full
+login, which is what `ashley claude login` makes. Two things are the student's own acts, in a
+terminal, because Anthropic's flow and its consent belong to the account holder: the sign-in, and
+Claude Code's one-time question "Enable Remote Control?", which `ashley claude remote-consent`
+puts in front of them; their answer is recorded in a marker file and repeated to Claude Code if it
+asks again. Until both exist, phone access waits and says which one is missing.
 
-Only one worker hosts phone access. All workers share the one phone login, and two hosts, or two
-sign-ins, on one refresh-token chain would revoke each other. The host holds a lease: a directory
-`~/.ashley/remote/host.lock` made with `mkdir` (atomic on the shared home, where `flock` is not
-reliable across nodes), with a beat every 5 s, treated as abandoned after 60 s. These are the
-timings Claude Code uses for its own credential locks. `ashley phone on --worker B` turns phone access
-off on the other workers; B shows *elsewhere* for about a second and then takes over (measured
-between the two workers on asx1). Turning phone access off only stops processes: `claude auth
-logout` would revoke the login, so Ashley never runs it. The phone's config is seeded with
-`hasCompletedOnboarding` and a theme so the pseudo-terminal shows no first-run prompts, and the
-same six credential variables are removed before Remote Control starts (`ANTHROPIC_BASE_URL`
-would also switch Remote Control off). The handlers act only for the current sign-in or session,
-so output from a stopped process can neither change the status nor raise inside the daemon.
+Only one worker hosts phone access. All workers share the one sign-in, and two hosts on it would
+fight. The host holds a lease: a directory `~/.ashley/remote/host.lock` made with `mkdir` (atomic on
+the shared home, where `flock` is not reliable across nodes), with a beat every 5 s, treated as
+abandoned after 60 s, the timings Claude Code uses for its own credential locks. `ashley phone on
+--worker B` turns phone access off on the other workers; B shows *elsewhere* for about a second and
+then takes over. Turning phone access off only stops processes: `claude auth logout` would revoke
+the login, so Ashley never runs it. The handlers act only for the current session, so output from a
+stopped process can neither change the status nor raise inside the daemon.
+
+Students are told, in the terminal and in the manual, that while the phone is connected the session
+transcript, tool activity included, is stored on Anthropic's servers; confidential data stays out of
+phone sessions.
+
+## Licenses
+
+Every copy of Ashley needs a license key for the person using it (`docs/LICENSING.md`). Keys are
+offline, Ed25519-signed (`grid/license.js`, one implementation for the extension, the CLI, the MCP
+server and the grid daemon), name an AccessID or e-mail, carry an edition, dates and a grace period,
+and are checked against the Wayne State sign-in the extension recorded. The extension refuses every
+command but the ones that get you a key; the daemon refuses work; both compare the key against a
+signed revocation list bundled with the release and, where the lab publishes one, fetched daily. A
+clock set back does not revive a key: the latest time seen is kept. Trials are keys of edition
+`trial`, one per AccessID, issued by the lab's licence service (`tools/intake/`) after it has asked
+Microsoft who the signed-in person is, or by the lead with the issuing tool.
+
+## Error reports
+
+With the student's permission, given at first run and changeable at any time, the extension sends
+the maintainer one report per distinct failure per day after a troubleshooter run that found a
+failure or made a repair (`extension/src/core/diagReport.ts`, `diagShare.ts`). The report holds
+versions, the checks' ids and verdicts, and the failing checks' messages with e-mails, AccessIDs,
+paths, hostnames, addresses, job numbers and token-shaped strings replaced. VS Code's own telemetry
+setting is honoured; with no report address configured nothing is sent; every report is kept on the
+laptop for the student to read. On the maintainer's side the service files it as a GitHub issue and
+the triage workflow (`.github/workflows/triage.yml`) has Claude Code, on the maintainer's own API
+key, propose a reviewed draft pull request. Nothing in this path touches a student's Claude account.
 
 ## Diagnostics
 

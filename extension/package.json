@@ -1,10 +1,10 @@
 {
-  "name": "ashley-wsu",
-  "displayName": "Ashley: Wayne State Research Environment",
-  "description": "Sets up a medical student's laptop for research on the Wayne State HPC grid: SSH through the login node to a compute node, tokens for GitHub, Hugging Face and Claude, a persistent Claude Code worker in a Singularity container on the grid, and a bridge so the Claude Code extension can send it work.",
-  "version": "1.0.0",
+  "name": "ashley",
+  "displayName": "Ashley: grid research environment",
+  "description": "Sets up a medical student's laptop for research on the the university HPC grid: SSH through the login node to a compute node, tokens for GitHub, Hugging Face and Claude, a persistent Claude Code worker in a Singularity container on the grid, and a bridge so the Claude Code extension can send it work.",
+  "version": "2.0.0",
   "publisher": "openspineconsortium",
-  "license": "MIT",
+  "license": "SEE LICENSE IN LICENSE.txt",
   "repository": {
     "type": "git",
     "url": "https://github.com/GregorySchwing/ashley"
@@ -39,6 +39,18 @@
         "title": "Set up my research environment (wizard)",
         "category": "Ashley",
         "icon": "$(rocket)"
+      },
+      {
+        "command": "ashley.license",
+        "title": "License",
+        "category": "Ashley",
+        "icon": "$(key)"
+      },
+      {
+        "command": "ashley.errorReports",
+        "title": "Error reports",
+        "category": "Ashley",
+        "icon": "$(report)"
       },
       {
         "command": "ashley.doctor",
@@ -130,10 +142,10 @@
         "icon": "$(plug)"
       },
       {
-        "command": "ashley.claudeToken",
-        "title": "Store or replace my Claude token for the grid",
+        "command": "ashley.claudeSignIn",
+        "title": "Sign in to Claude on the grid",
         "category": "Ashley",
-        "icon": "$(key)"
+        "icon": "$(sign-in)"
       },
       {
         "command": "ashley.manageTokens",
@@ -394,19 +406,49 @@
           "type": "string",
           "default": "",
           "description": "Optional: where a newer list of the lab's pre-approved AccessIDs is published (JSON {\"accessIds\": [...]}). Empty = the list shipped with this build."
+        },
+        "ashley.licenseRevocationUrl": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Where Ashley fetches the signed list of withdrawn license keys (checked daily; the list bundled with each release is always used). Leave empty unless your lead gives you an address.",
+          "scope": "application"
+        },
+        "ashley.diagnostics.share": {
+          "type": "string",
+          "enum": [
+            "on",
+            "off"
+          ],
+          "default": "on",
+          "markdownDescription": "Send Ashley's maintainer an error report when a check fails (versions, which checks failed, messages with names, paths and secrets replaced). Never prompts, files, tokens or your AccessID. Off, or VS Code's own telemetry off, means nothing is sent. `Ashley: Error reports` shows what a report contains and what was sent.",
+          "scope": "application"
+        },
+        "ashley.diagnostics.endpoint": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Where error reports go (set by the lab; empty means reports stay on this laptop).",
+          "scope": "application"
+        },
+        "ashley.licenseServiceUrl": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "The lab's licence service, for free trials (empty means your lead issues keys by hand).",
+          "scope": "application"
         }
       }
     }
   },
   "scripts": {
     "build": "node esbuild.mjs",
+    "build:release": "node esbuild.mjs --production",
     "watch": "node esbuild.mjs --watch",
     "typecheck": "tsc -p ./ --noEmit",
-    "test:unit": "node esbuild.mjs --tests && node --test dist-test/",
-    "test:vscode": "node esbuild.mjs --tests && vscode-test",
+    "test:unit": "node esbuild.mjs --tests && node --test \"dist-test/unit/**/*.test.js\"",
+    "test:vscode": "node esbuild.mjs --tests && vscode-test --label unit",
     "test": "npm run test:unit && npm run test:vscode",
-    "package": "npm run build && vsce package --no-dependencies --out ../dist/",
-    "vscode:prepublish": "npm run build"
+    "notices": "node ../tools/third_party_notices.mjs",
+    "package": "node esbuild.mjs --production && node ../tools/third_party_notices.mjs && vsce package --no-dependencies --out ../dist/ && node ../tools/release_check.mjs ../dist/ashley-wsu-2.0.0.vsix",
+    "vscode:prepublish": "node esbuild.mjs --production"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.30.1",

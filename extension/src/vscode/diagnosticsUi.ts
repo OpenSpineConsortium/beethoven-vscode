@@ -17,7 +17,13 @@ export class Troubleshooter implements vscode.Disposable {
   private running = false;
   private timer: NodeJS.Timeout | undefined;
 
-  constructor(private context: vscode.ExtensionContext, private store: AshleyStore, private output: vscode.OutputChannel) {
+  constructor(
+    private context: vscode.ExtensionContext,
+    private store: AshleyStore,
+    private output: vscode.OutputChannel,
+    /** called with every finished report (error reports to the maintainer, when the person allows them) */
+    private afterRun?: (rep: DiagReport, gridScriptsVersion: string | null) => Promise<string>,
+  ) {
     this.item = vscode.window.createStatusBarItem('ashley.health', vscode.StatusBarAlignment.Left, 50);
     this.item.name = 'Ashley health';
     this.item.command = 'ashley.healthMenu';
@@ -106,6 +112,14 @@ export class Troubleshooter implements vscode.Disposable {
       const text = formatReport(rep);
       this.output.appendLine(text);
       fs.writeFileSync(path.join(this.reportsDir(), `${rep.started.replace(/[:.]/g, '-')}.json`), JSON.stringify(rep, null, 1));
+      if (this.afterRun) {
+        try {
+          const gv = (await ctx.grid())?.version ?? null;
+          this.output.appendLine(`error reports: ${await this.afterRun(rep, gv == null ? null : String(gv))}`);
+        } catch (e) {
+          this.output.appendLine(`error reports: ${(e as Error).message}`);
+        }
+      }
       panel?.webview.postMessage({ type: 'done', rep });
       if (!o.quiet && rep.ok) void vscode.window.showInformationMessage(`Ashley: everything works${rep.reports.some((r) => r.status === 'repaired') ? ` (repaired: ${rep.reports.filter((r) => r.status === 'repaired').map((r) => r.title).join(', ')})` : ''}.`);
       return rep;

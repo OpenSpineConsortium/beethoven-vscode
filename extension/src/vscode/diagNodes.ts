@@ -6,7 +6,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { DiagNode, CheckResult } from '../core/diagnostics';
 import { run, ssh } from '../core/shell';
-import { WizardEnv, stepWsuSignIn, stepGithub, stepHuggingFace, stepClaudeToken, stepSshKey, stepSshConfig, stepGridInstall, testConnection, pushTokens } from '../core/wizard';
+import { WizardEnv, stepWsuSignIn, stepGithub, stepHuggingFace, stepSshKey, stepSshConfig, stepGridInstall, testConnection, pushTokens, licenseFingerprint, stepClaudeLocal } from '../core/wizard';
 import { GridRelay } from '../core/relay';
 import { AshleyStore, findClaudeExecutable } from './store';
 import { isMcpRegistered, registerMcp } from './mcpRegister';
@@ -142,7 +142,7 @@ export function buildGraph(): DiagNode<DiagCtx>[] {
     },
   });
   add(extNode('vscode.remote-ssh', 'ms-vscode-remote.remote-ssh', 'Remote-SSH extension', 'opening grid files and images'));
-  add(extNode('vscode.claude-code', 'anthropic.claude-code', 'Claude Code extension', 'the local Claude, setup-token, the bridge'));
+  add(extNode('vscode.claude-code', 'anthropic.claude-code', 'Claude Code extension', 'the local Claude, its own sign-in, the bridge'));
   add({
     id: 'vscode.claude-binary', title: 'Claude Code program', layer: 'vscode', dependsOn: ['vscode.claude-code'],
     assumption: 'the claude executable bundled with the Claude Code extension runs', manualFix: 'reinstall the Claude Code extension',
@@ -195,8 +195,39 @@ export function buildGraph(): DiagNode<DiagCtx>[] {
     },
   });
 
+  // ---------------------------------------------------------------- the license (everything personal waits on it)
+  add({
+    id: 'laptop.license', title: 'Ashley license', layer: 'account', dependsOn: ['vscode.version'],
+    assumption: 'a license key signed by a key this release trusts, in date (or in its grace period), not withdrawn',
+    manualFix: 'Ashley: License, then paste the key your lead sent; a new key if it ended or was withdrawn',
+    futureRisk: 'the signing key rotating (a new release trusts the new key); the revocation list address moving',
+    source: 'grid/license.js, extension/src/core/license.ts, extension/src/vscode/licenseGate.ts',
+    async check(ctx) {
+      const g = ctx.store.licenseGate;
+      if (!g) return skip('no license gate in this host');
+      const c = g.check(true);
+      if (!c.ok) return fail(c.detail);
+      return ok(`${c.payload?.edition} license ${c.payload?.lid}: ${c.detail}`, c.status === 'grace' || (c.daysLeft ?? 999) <= 30);
+    },
+  });
+  add({
+    id: 'account.license-identity', title: 'License names the signed-in person', layer: 'account', dependsOn: ['laptop.license', 'account.wsu'],
+    assumption: 'the AccessID (or e-mail, or site domain) in the license matches the Wayne State sign-in Ashley recorded',
+    manualFix: 'sign in with the account the license names (setup step "Sign in with Wayne State"), or ask your lead for a license in your name',
+    futureRisk: 'Wayne State changing the sign-in e-mail format (AccessID@wayne.edu)',
+    source: 'grid/license.js (identityMatches), extension/src/core/wizard.ts (stepWsuSignIn)',
+    async check(ctx) {
+      const g = ctx.store.licenseGate;
+      if (!g) return skip('no license gate in this host');
+      const c = g.check(true);
+      if (c.identity === true) return ok(`the license is for ${g.identity()?.accessId ?? g.identity()?.email}`);
+      if (c.identity === null) return fail('no Wayne State sign-in recorded yet: run the setup step "Sign in with Wayne State"');
+      return fail(c.detail);
+    },
+  });
+
   // ---------------------------------------------------------------- accounts (the wizard's own checks)
-  add({ id: 'account.wsu', title: 'Wayne State sign-in and the lab list', layer: 'account', dependsOn: ['vscode.version'], assumption: 'signed in with AccessID@wayne.edu; AccessID on the pre-approved list',
+  add({ id: 'account.wsu', title: 'Wayne State sign-in and the lab list', layer: 'account', dependsOn: ['vscode.version', 'laptop.license'], assumption: 'signed in with AccessID@wayne.edu; AccessID on the pre-approved list',
     manualFix: 'run the wizard step "Sign in with Wayne State"; if not on the list, ask your lead', futureRisk: 'the WSU tenant blocking VS Code sign-in', source: 'extension/src/core/wizard.ts (stepWsuSignIn)',
     check: (ctx) => stepCheck(stepWsuSignIn, ctx) });
   const tokenNode = (id: string, step: typeof stepGithub, title: string): DiagNode<DiagCtx> => ({
@@ -206,7 +237,10 @@ export function buildGraph(): DiagNode<DiagCtx>[] {
   });
   add(tokenNode('account.github', stepGithub, 'GitHub token'));
   add(tokenNode('account.huggingface', stepHuggingFace, 'Hugging Face token'));
-  add(tokenNode('account.claude', stepClaudeToken, 'Claude subscription token'));
+  add({ id: 'account.claude', title: 'Claude on this laptop', layer: 'account', dependsOn: ['account.wsu', 'vscode.claude-binary'],
+    assumption: 'Claude Code on this laptop is signed in with the student\'s own Claude Pro or Max subscription (Ashley reads status only)',
+    manualFix: 'sign in to Claude Code on this laptop (setup step "Claude on this laptop")', futureRisk: 'claude auth status changing its output; plan names changing', source: 'extension/src/core/wizard.ts (stepClaudeLocal)',
+    check: (ctx) => stepCheck(stepClaudeLocal, ctx) });
 
   // ---------------------------------------------------------------- SSH to the grid
   add({ id: 'laptop.ssh-key', title: 'SSH key for the grid', layer: 'laptop', dependsOn: ['laptop.ssh-keygen', 'account.wsu'], assumption: '~/.ssh/id_ed25519_wsu and .pub exist',
@@ -266,9 +300,26 @@ export function buildGraph(): DiagNode<DiagCtx>[] {
   const pushRepair: DiagNode<DiagCtx>['repair'] = async (ctx) => { const r = await pushTokens(ctx.env); await ctx.grid(true); return r; };
   add(gridNode('grid.token-github', 'GitHub token on the grid', ['grid.internet', 'account.github'], 'the grid copy of the GitHub token verifies', 'press Renew next to GitHub', 'GitHub token expiry policies', pushRepair));
   add(gridNode('grid.token-hf', 'Hugging Face token on the grid', ['grid.internet', 'account.huggingface'], 'the grid copy of the Hugging Face token verifies', 'press Renew next to Hugging Face', 'Hugging Face token changes', pushRepair));
-  add(gridNode('grid.token-claude', 'Claude token on the grid', ['grid.internet', 'account.claude'], 'the grid copy of the Claude subscription token is accepted (HTTP 200)', 'press Renew next to Claude', 'the one-year token expiring; Anthropic changing OAuth', pushRepair));
-  add(gridNode('grid.accounts', 'Claude accounts on the grid', ['grid.token-claude'], 'one subscription token per person, no copied logins, and every account shares one session history (so a conversation survives a move to your API key)', 'Troubleshoot and repair links the history; remove extra accounts with: ssh wsu-grid "ashley accounts remove NAME"', 'Claude Code moving where --resume looks for transcripts', undefined));
-  add(gridNode('grid.lab-access', 'Lab access', ['grid.token-claude', 'grid.token-github', 'grid.token-hf', 'grid.slurm'], 'the lab folder is readable (approved), or a request is pending', 'the last wizard step: Join the lab', 'the lab folder moving'));
+  add(gridNode('grid.claude-login', 'Claude signed in on the grid', ['grid.scripts', 'account.claude'], 'Claude Code on the grid reports its own sign-in (made by the student with ashley claude login; Ashley never touches the credential)', 'run Ashley: Sign in to Claude on the grid (the sign-in lasts about a month)', 'Anthropic changing the login flow or its lifetime', undefined));
+  add({
+    id: 'grid.license', title: 'Ashley license on the grid', layer: 'grid-login', dependsOn: ['grid.scripts', 'account.license-identity'],
+    assumption: 'the grid has the same license key as this laptop, and every running worker accepts it for this grid account',
+    manualFix: 'Troubleshoot and repair copies it; a worker started before licensing needs a restart (Ashley: Stop a worker, then Start)',
+    futureRisk: 'a worker template older than the license check', source: 'grid/ashley (cmd_diag, license_fp), grid/ashleyd.js (checkLicense)',
+    async check(ctx) {
+      const d = await ctx.grid();
+      const n = d?.nodes.find((x) => x.id === 'grid.license');
+      if (!n) return fail('this grid version does not check licenses (install on the grid again)');
+      if (!n.ok) return fail(n.detail);
+      const here = licenseFingerprint(ctx.store.licenseGate?.key());
+      const there = /license ([0-9a-f]{16})/.exec(n.detail)?.[1];
+      if (here && there && here !== there) return fail('the grid has a different license key than this laptop (repair copies this one)');
+      return ok(n.detail);
+    },
+    repair: pushRepair,
+  });
+  add(gridNode('grid.accounts', 'Claude accounts on the grid', ['grid.claude-login'], 'one subscription token per person, no copied logins, and every account shares one session history (so a conversation survives a move to your API key)', 'Troubleshoot and repair links the history; remove extra accounts with: ssh wsu-grid "ashley accounts remove NAME"', 'Claude Code moving where --resume looks for transcripts', undefined));
+  add(gridNode('grid.lab-access', 'Lab access', ['account.claude', 'grid.token-github', 'grid.token-hf', 'grid.slurm'], 'the lab folder is readable (approved), or a request is pending', 'the last wizard step: Join the lab', 'the lab folder moving'));
   add(gridNode('grid.runtime', 'Container runtime (Apptainer)', ['grid.scripts'], 'the configured apptainer executable exists (repair switches to the current module)', 'ask your lead to republish the container', 'Wayne State upgrading or removing the apptainer module'));
   add(gridNode('grid.container', 'Lab Claude container', ['grid.lab-access', 'grid.runtime'], 'the lab container is adopted (repair runs ashley adopt)', 'wait for lab access', 'a republished container at a new path'));
   add(gridNode('grid.relay', 'Prompt relay on the login node', ['grid.scripts'], 'ashley relay answers PING', 'reinstall Ashley on the grid', 'bash changes on the login node'));

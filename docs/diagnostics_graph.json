@@ -15,7 +15,7 @@
    "grid.vscode-sysroot",
    "grid.token-github",
    "grid.token-hf",
-   "grid.token-claude"
+   "grid.claude-login"
   ],
   "workers": [
    "grid.slurm",
@@ -50,6 +50,15 @@
   ],
   "accounts": [
    "grid.accounts"
+  ],
+  "licensing": [
+   "laptop.license",
+   "account.license-identity",
+   "grid.license"
+  ],
+  "claude_signin": [
+   "account.claude",
+   "grid.claude-login"
   ],
   "token_capture": [
    "vscode.shell-integration",
@@ -210,11 +219,41 @@
    "slow": false
   },
   {
+   "id": "laptop.license",
+   "title": "Ashley license",
+   "layer": "account",
+   "dependsOn": [
+    "vscode.version"
+   ],
+   "assumption": "a license key signed by a key this release trusts, in date (or in its grace period), not withdrawn",
+   "manualFix": "Ashley: License, then paste the key your lead sent; a new key if it ended or was withdrawn",
+   "futureRisk": "the signing key rotating (a new release trusts the new key); the revocation list address moving",
+   "source": "grid/license.js, extension/src/core/license.ts, extension/src/vscode/licenseGate.ts",
+   "autoRepair": false,
+   "slow": false
+  },
+  {
+   "id": "account.license-identity",
+   "title": "License names the signed-in person",
+   "layer": "account",
+   "dependsOn": [
+    "laptop.license",
+    "account.wsu"
+   ],
+   "assumption": "the AccessID (or e-mail, or site domain) in the license matches the Wayne State sign-in Ashley recorded",
+   "manualFix": "sign in with the account the license names (setup step \"Sign in with Wayne State\"), or ask your lead for a license in your name",
+   "futureRisk": "Wayne State changing the sign-in e-mail format (AccessID@wayne.edu)",
+   "source": "grid/license.js (identityMatches), extension/src/core/wizard.ts (stepWsuSignIn)",
+   "autoRepair": false,
+   "slow": false
+  },
+  {
    "id": "account.wsu",
    "title": "Wayne State sign-in and the lab list",
    "layer": "account",
    "dependsOn": [
-    "vscode.version"
+    "vscode.version",
+    "laptop.license"
    ],
    "assumption": "signed in with AccessID@wayne.edu; AccessID on the pre-approved list",
    "manualFix": "run the wizard step \"Sign in with Wayne State\"; if not on the list, ask your lead",
@@ -253,15 +292,16 @@
   },
   {
    "id": "account.claude",
-   "title": "Claude subscription token",
+   "title": "Claude on this laptop",
    "layer": "account",
    "dependsOn": [
-    "account.wsu"
+    "account.wsu",
+    "vscode.claude-binary"
    ],
-   "assumption": "Claude subscription token stored in the keychain and accepted by the service",
-   "manualFix": "press Renew next to \"Claude subscription token for the grid\" in the setup panel",
-   "futureRisk": "token formats or scopes changing",
-   "source": "extension/src/core/wizard.ts (tokenStep)",
+   "assumption": "Claude Code on this laptop is signed in with the student's own Claude Pro or Max subscription (Ashley reads status only)",
+   "manualFix": "sign in to Claude Code on this laptop (setup step \"Claude on this laptop\")",
+   "futureRisk": "claude auth status changing its output; plan names changing",
+   "source": "extension/src/core/wizard.ts (stepClaudeLocal)",
    "autoRepair": false,
    "slow": false
   },
@@ -480,17 +520,32 @@
    "slow": false
   },
   {
-   "id": "grid.token-claude",
-   "title": "Claude token on the grid",
+   "id": "grid.claude-login",
+   "title": "Claude signed in on the grid",
    "layer": "grid-login",
    "dependsOn": [
-    "grid.internet",
+    "grid.scripts",
     "account.claude"
    ],
-   "assumption": "the grid copy of the Claude subscription token is accepted (HTTP 200)",
-   "manualFix": "press Renew next to Claude",
-   "futureRisk": "the one-year token expiring; Anthropic changing OAuth",
+   "assumption": "Claude Code on the grid reports its own sign-in (made by the student with ashley claude login; Ashley never touches the credential)",
+   "manualFix": "run Ashley: Sign in to Claude on the grid (the sign-in lasts about a month)",
+   "futureRisk": "Anthropic changing the login flow or its lifetime",
    "source": "grid/ashley (cmd_diag)",
+   "autoRepair": true,
+   "slow": false
+  },
+  {
+   "id": "grid.license",
+   "title": "Ashley license on the grid",
+   "layer": "grid-login",
+   "dependsOn": [
+    "grid.scripts",
+    "account.license-identity"
+   ],
+   "assumption": "the grid has the same license key as this laptop, and every running worker accepts it for this grid account",
+   "manualFix": "Troubleshoot and repair copies it; a worker started before licensing needs a restart (Ashley: Stop a worker, then Start)",
+   "futureRisk": "a worker template older than the license check",
+   "source": "grid/ashley (cmd_diag, license_fp), grid/ashleyd.js (checkLicense)",
    "autoRepair": true,
    "slow": false
   },
@@ -499,7 +554,7 @@
    "title": "Claude accounts on the grid",
    "layer": "grid-login",
    "dependsOn": [
-    "grid.token-claude"
+    "grid.claude-login"
    ],
    "assumption": "one subscription token per person, no copied logins, and every account shares one session history (so a conversation survives a move to your API key)",
    "manualFix": "Troubleshoot and repair links the history; remove extra accounts with: ssh wsu-grid \"ashley accounts remove NAME\"",
@@ -513,7 +568,7 @@
    "title": "Lab access",
    "layer": "grid-login",
    "dependsOn": [
-    "grid.token-claude",
+    "account.claude",
     "grid.token-github",
     "grid.token-hf",
     "grid.slurm"

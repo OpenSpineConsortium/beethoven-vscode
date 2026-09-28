@@ -254,7 +254,7 @@ through both.</li>
 </ol>
 <h3 id="install">Install</h3>
 <p>VS Code, then the extensions <strong>Claude Code</strong>,
-<strong>Remote - SSH</strong>, and <code>ashley-wsu-1.0.0.vsix</code>
+<strong>Remote - SSH</strong>, and <code>ashley-2.0.0.vsix</code>
 (Extensions view, <code>...</code>, <em>Install from VSIX</em>). Ashley
 offers its wizard on first start; or press Ctrl/Cmd+Shift+P and type
 <strong>Ashley: Set up my research environment</strong>.</p>
@@ -262,11 +262,12 @@ offers its wizard on first start; or press Ctrl/Cmd+Shift+P and type
 <p>One panel: the steps on the left with their state, the current
 question on the right, a progress bar on top, the log one click away.
 The order is strict: a step does not start until every step above it is
-green. Your accounts come first and their tokens are kept on this
-laptop; the grid comes next and receives everything in one pass; joining
-the lab is last.</p>
+green. Your license and your accounts come first and their tokens are
+kept on this laptop; the grid comes next and receives everything in one
+pass; joining the lab comes after that, and your Claude sign-in on the
+grid is last, because it happens inside the lab’s container.</p>
 <figure>
-<img role="img" aria-label="The wizard’s steps" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA5ODAgNDAwIiBmb250LWZhbWlseT0iU2Vnb2UgVUksIEhlbHZldGljYSwgQXJpYWwsIHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTMiPgogIDxkZWZzPgogICAgPG1hcmtlciBpZD0iYyIgdmlld0JveD0iMCAwIDEwIDEwIiByZWZYPSI5IiByZWZZPSI1IiBtYXJrZXJXaWR0aD0iNyIgbWFya2VySGVpZ2h0PSI3IiBvcmllbnQ9ImF1dG8iPjxwYXRoIGQ9Ik0wLDAgTDEwLDUgTDAsMTAgeiIgZmlsbD0iIzU1NSIvPjwvbWFya2VyPgogICAgPHN0eWxlPgogICAgICAuc3R7ZmlsbDojZmZmO3N0cm9rZTojMzMzO3N0cm9rZS13aWR0aDoxLjQ7cng6OH0KICAgICAgLnlvdXtmaWxsOiNmZmY4ZTE7c3Ryb2tlOiNiODg2MGI7c3Ryb2tlLXdpZHRoOjEuNDtyeDo4fQogICAgICAubGFie2ZpbGw6I2U4ZjVlOTtzdHJva2U6IzJlN2QzMjtzdHJva2Utd2lkdGg6MS42O3J4Ojh9CiAgICAgIC5ue2ZvbnQtd2VpZ2h0OjYwMDtmaWxsOiMyMjJ9LnN7ZmlsbDojNTU1O2ZvbnQtc2l6ZToxMS41cHh9CiAgICAgIC5he3N0cm9rZTojNTU1O3N0cm9rZS13aWR0aDoxLjM7ZmlsbDpub25lO21hcmtlci1lbmQ6dXJsKCNjKX0KICAgICAgLmJhbmR7ZmlsbDojNTU1O2ZvbnQtc2l6ZToxMnB4O2ZvbnQtd2VpZ2h0OjYwMH0KICAgICAgLmxlZ2VuZHtmaWxsOiM1NTU7Zm9udC1zaXplOjEycHh9CiAgICA8L3N0eWxlPgogIDwvZGVmcz4KICA8dGV4dCB4PSIyMCIgeT0iMjYiIGZvbnQtc2l6ZT0iMTUiIGZvbnQtd2VpZ2h0PSI2MDAiIGZpbGw9IiMyMjIiPlRoZSB3aXphcmQ6IHN0cmljdCBvcmRlciwgb25lIHBhbmVsLCBlYWNoIHN0ZXAgc2tpcHBlZCB3aGVuIGFscmVhZHkgZG9uZTwvdGV4dD4KICA8dGV4dCB4PSIyMCIgeT0iNDYiIGNsYXNzPSJsZWdlbmQiPmdvbGQgPSB5b3UgZG8gb25lIHRoaW5nIGluIHRoZSBicm93c2VyIG9yIHRoZSBwYW5lbDsgd2hpdGUgPSBhdXRvbWF0aWM7IGdyZWVuID0gdGhlIGdhdGUgdG8gdGhlIGxhYiwgbGFzdDwvdGV4dD4KICA8dGV4dCB4PSIyMCIgeT0iNzIiIGNsYXNzPSJiYW5kIj5XSE8gWU9VIEFSRSwgVEhFTiBZT1VSIEFDQ09VTlRTICh0b2tlbnMgc3RheSBvbiB0aGlzIGxhcHRvcCk8L3RleHQ+CiAgPGcgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoMjAsODIpIj4KICAgIDxyZWN0IGNsYXNzPSJ5b3UiIHg9IjAiIHk9IjAiIHdpZHRoPSIxOTAiIGhlaWdodD0iNzAiLz48dGV4dCB4PSIxMCIgeT0iMjIiIGNsYXNzPSJuIj4xIFNpZ24gaW4gd2l0aCBXYXluZSBTdGF0ZTwvdGV4dD48dGV4dCB4PSIxMCIgeT0iNDAiIGNsYXNzPSJzIj5BY2Nlc3NJREB3YXluZS5lZHUgaW4gdGhlIGJyb3dzZXI7PC90ZXh0Pjx0ZXh0IHg9IjEwIiB5PSI1NSIgY2xhc3M9InMiPnByZS1hcHByb3ZlZCBBY2Nlc3NJRHMgb25seTwvdGV4dD4KICAgIDxyZWN0IGNsYXNzPSJ5b3UiIHg9IjIxMCIgeT0iMCIgd2lkdGg9IjE1MCIgaGVpZ2h0PSI3MCIvPjx0ZXh0IHg9IjIyMCIgeT0iMjIiIGNsYXNzPSJuIj4yIEdpdEh1YjwvdGV4dD48dGV4dCB4PSIyMjAiIHk9IjQwIiBjbGFzcz0icyI+c2lnbiBpbjsgdGhlIHRva2VuPC90ZXh0Pjx0ZXh0IHg9IjIyMCIgeT0iNTUiIGNsYXNzPSJzIj5hcnJpdmVzIGJ5IGl0c2VsZjwvdGV4dD4KICAgIDxyZWN0IGNsYXNzPSJ5b3UiIHg9IjM4MCIgeT0iMCIgd2lkdGg9IjE2MCIgaGVpZ2h0PSI3MCIvPjx0ZXh0IHg9IjM5MCIgeT0iMjIiIGNsYXNzPSJuIj4zIEh1Z2dpbmcgRmFjZTwvdGV4dD48dGV4dCB4PSIzOTAiIHk9IjQwIiBjbGFzcz0icyI+Q3JlYXRlIHRva2VuLCBDb3B5OzwvdGV4dD48dGV4dCB4PSIzOTAiIHk9IjU1IiBjbGFzcz0icyI+dGhlIHBhbmVsIHRha2VzIGl0PC90ZXh0PgogICAgPHJlY3QgY2xhc3M9InlvdSIgeD0iNTYwIiB5PSIwIiB3aWR0aD0iMTkwIiBoZWlnaHQ9IjcwIi8+PHRleHQgeD0iNTcwIiB5PSIyMiIgY2xhc3M9Im4iPjQgQ2xhdWRlPC90ZXh0Pjx0ZXh0IHg9IjU3MCIgeT0iNDAiIGNsYXNzPSJzIj5jbGF1ZGUuYWkgaW4gdGhlIGJyb3dzZXIsPC90ZXh0Pjx0ZXh0IHg9IjU3MCIgeT0iNTUiIGNsYXNzPSJzIj5BdXRob3JpemU7IHRva2VuIGFycml2ZXMgaXRzZWxmPC90ZXh0PgogICAgPHBhdGggY2xhc3M9ImEiIGQ9Ik0xOTAgMzUgTDIxMCAzNSIvPjxwYXRoIGNsYXNzPSJhIiBkPSJNMzYwIDM1IEwzODAgMzUiLz48cGF0aCBjbGFzcz0iYSIgZD0iTTU0MCAzNSBMNTYwIDM1Ii8+CiAgPC9nPgogIDx0ZXh0IHg9IjIwIiB5PSIxODIiIGNsYXNzPSJiYW5kIj5USEUgR1JJRCAoZXZlcnl0aGluZyBhYm92ZSBnb2VzIHRoZXJlIGluIG9uZSBwYXNzKTwvdGV4dD4KICA8ZyB0cmFuc2Zvcm09InRyYW5zbGF0ZSgyMCwxOTIpIj4KICAgIDxyZWN0IGNsYXNzPSJ5b3UiIHg9IjAiIHk9IjAiIHdpZHRoPSIxOTAiIGhlaWdodD0iNzAiLz48dGV4dCB4PSIxMCIgeT0iMjIiIGNsYXNzPSJuIj41IEdyaWQgYWNjb3VudCwgQXV0aGVudGljYXRvcjwvdGV4dD48dGV4dCB4PSIxMCIgeT0iNDAiIGNsYXNzPSJzIj5jYW1wdXMgV2ktRmkgb3IgVlBOLCBPbkRlbWFuZDwvdGV4dD48dGV4dCB4PSIxMCIgeT0iNTUiIGNsYXNzPSJzIj4yRkEgU2V0dXAsIHNjYW4gb25lIFFSIGNvZGU8L3RleHQ+CiAgICA8cmVjdCBjbGFzcz0ic3QiIHg9IjIxMCIgeT0iMCIgd2lkdGg9IjExMCIgaGVpZ2h0PSI3MCIvPjx0ZXh0IHg9IjIyMCIgeT0iMjIiIGNsYXNzPSJuIj42IFNTSCBrZXk8L3RleHQ+PHRleHQgeD0iMjIwIiB5PSI0MCIgY2xhc3M9InMiPmF1dG9tYXRpYzwvdGV4dD4KICAgIDxyZWN0IGNsYXNzPSJzdCIgeD0iMzQwIiB5PSIwIiB3aWR0aD0iMTIwIiBoZWlnaHQ9IjcwIi8+PHRleHQgeD0iMzUwIiB5PSIyMiIgY2xhc3M9Im4iPjcgU1NIIGNvbmZpZzwvdGV4dD48dGV4dCB4PSIzNTAiIHk9IjQwIiBjbGFzcz0icyI+YXV0b21hdGljPC90ZXh0PgogICAgPHJlY3QgY2xhc3M9InlvdSIgeD0iNDgwIiB5PSIwIiB3aWR0aD0iMTQwIiBoZWlnaHQ9IjcwIi8+PHRleHQgeD0iNDkwIiB5PSIyMiIgY2xhc3M9Im4iPjggTG9nIGluIG9uY2U8L3RleHQ+PHRleHQgeD0iNDkwIiB5PSI0MCIgY2xhc3M9InMiPnBhc3N3b3JkICsgY29kZSw8L3RleHQ+PHRleHQgeD0iNDkwIiB5PSI1NSIgY2xhc3M9InMiPmluIHRoZSBwYW5lbDwvdGV4dD4KICAgIDxyZWN0IGNsYXNzPSJzdCIgeD0iNjQwIiB5PSIwIiB3aWR0aD0iMjAwIiBoZWlnaHQ9IjcwIi8+PHRleHQgeD0iNjUwIiB5PSIyMiIgY2xhc3M9Im4iPjkgSW5zdGFsbCBvbiB0aGUgZ3JpZDwvdGV4dD48dGV4dCB4PSI2NTAiIHk9IjQwIiBjbGFzcz0icyI+c2NyaXB0cyBhbmQgYWxsIHRva2Vucyw8L3RleHQ+PHRleHQgeD0iNjUwIiB5PSI1NSIgY2xhc3M9InMiPm9uZSBwYXNzLCBwcml2YXRlIGZpbGVzPC90ZXh0PgogICAgPHBhdGggY2xhc3M9ImEiIGQ9Ik0xOTAgMzUgTDIxMCAzNSIvPjxwYXRoIGNsYXNzPSJhIiBkPSJNMzIwIDM1IEwzNDAgMzUiLz48cGF0aCBjbGFzcz0iYSIgZD0iTTQ2MCAzNSBMNDgwIDM1Ii8+PHBhdGggY2xhc3M9ImEiIGQ9Ik02MjAgMzUgTDY0MCAzNSIvPgogIDwvZz4KICA8dGV4dCB4PSIyMCIgeT0iMjkyIiBjbGFzcz0iYmFuZCI+VEhFIExBQjwvdGV4dD4KICA8ZyB0cmFuc2Zvcm09InRyYW5zbGF0ZSgyMCwzMDIpIj4KICAgIDxyZWN0IGNsYXNzPSJsYWIiIHg9IjAiIHk9IjAiIHdpZHRoPSI4NDAiIGhlaWdodD0iNzAiLz4KICAgIDx0ZXh0IHg9IjE0IiB5PSIyNCIgY2xhc3M9Im4iPjEwIEpvaW4gdGhlIGxhYiAobGFzdCk8L3RleHQ+CiAgICA8dGV4dCB4PSIxNCIgeT0iNDQiIGNsYXNzPSJzIj5hbGxvd2VkIG9ubHkgd2hlbiAxIHRvIDkgYXJlIGdyZWVuIGFuZCB0aGUgdG9rZW5zIHdvcms7IG9uZSByZXF1ZXN0IHRvIHlvdXIgbGVhZDsgYXBwcm92YWwgbGV0cyB5b3UgcmVhZCB0aGUgbGFiIGZvbGRlcjwvdGV4dD4KICAgIDx0ZXh0IHg9IjE0IiB5PSI2MCIgY2xhc3M9InMiPihkYXRhc2V0cywgQ2xhdWRlIGNvbnRhaW5lcnMsIHNvZnR3YXJlKS4gWW91IG5ldmVyIHdyaXRlIHRoZXJlOiB5b3VyIHNjaWVuY2UgbGl2ZXMgaW4geW91ciBvd24gZ3JpZCBhY2NvdW50LjwvdGV4dD4KICA8L2c+CiAgPHBhdGggY2xhc3M9ImEiIGQ9Ik04NjAgMTE3IEMgOTM1IDExNywgOTM1IDIyNywgODYwIDIyNyIvPgogIDxwYXRoIGNsYXNzPSJhIiBkPSJNODYwIDIyNyBDIDkzNSAyMjcsIDkzNSAzMzcsIDg2MCAzMzciLz4KPC9zdmc+Cg==" alt="The wizard’s steps" />
+<img role="img" aria-label="The wizard’s steps" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA5ODAgNDcwIiBmb250LWZhbWlseT0iU2Vnb2UgVUksIEhlbHZldGljYSwgQXJpYWwsIHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTMiPgogIDxkZWZzPgogICAgPG1hcmtlciBpZD0iYyIgdmlld0JveD0iMCAwIDEwIDEwIiByZWZYPSI5IiByZWZZPSI1IiBtYXJrZXJXaWR0aD0iNyIgbWFya2VySGVpZ2h0PSI3IiBvcmllbnQ9ImF1dG8iPjxwYXRoIGQ9Ik0wLDAgTDEwLDUgTDAsMTAgeiIgZmlsbD0iIzU1NSIvPjwvbWFya2VyPgogICAgPHN0eWxlPgogICAgICAuc3R7ZmlsbDojZmZmO3N0cm9rZTojMzMzO3N0cm9rZS13aWR0aDoxLjQ7cng6OH0KICAgICAgLnlvdXtmaWxsOiNmZmY4ZTE7c3Ryb2tlOiNiODg2MGI7c3Ryb2tlLXdpZHRoOjEuNDtyeDo4fQogICAgICAubGFie2ZpbGw6I2U4ZjVlOTtzdHJva2U6IzJlN2QzMjtzdHJva2Utd2lkdGg6MS42O3J4Ojh9CiAgICAgIC5ue2ZvbnQtd2VpZ2h0OjYwMDtmaWxsOiMyMjJ9LnN7ZmlsbDojNTU1O2ZvbnQtc2l6ZToxMS41cHh9LmJ7ZmlsbDojMzMzO2ZvbnQtc2l6ZToxMi41cHg7Zm9udC13ZWlnaHQ6NjAwfQogICAgICAuYXtzdHJva2U6IzU1NTtzdHJva2Utd2lkdGg6MS4zO2ZpbGw6bm9uZTttYXJrZXItZW5kOnVybCgjYyl9CiAgICAgIC5iYW5ke2ZpbGw6bm9uZTtzdHJva2U6I2JiYjtzdHJva2UtZGFzaGFycmF5OjQgNDtyeDoxMn0KICAgIDwvc3R5bGU+CiAgPC9kZWZzPgogIDx0ZXh0IHg9IjMwIiB5PSIyNiIgZm9udC1zaXplPSIxNSIgZm9udC13ZWlnaHQ9IjYwMCIgZmlsbD0iIzIyMiI+VGhlIHNldHVwLCBpbiBvcmRlcjogYSBzdGVwIHN0YXJ0cyBvbmx5IHdoZW4gZXZlcnkgc3RlcCBhYm92ZSBpdCBpcyBncmVlbjwvdGV4dD4KICA8cmVjdCBjbGFzcz0iYmFuZCIgeD0iMjAiIHk9IjQ2IiB3aWR0aD0iOTQwIiBoZWlnaHQ9IjEwMCIvPgogIDx0ZXh0IGNsYXNzPSJiIiB4PSIzMCIgeT0iNjQiPllvdSBhbmQgeW91ciBhY2NvdW50cyAoa2VwdCBvbiB0aGlzIGxhcHRvcCk8L3RleHQ+CiAgPHJlY3QgY2xhc3M9InlvdSIgeD0iMzAiIHk9Ijc2IiB3aWR0aD0iMTY4IiBoZWlnaHQ9IjU2Ii8+CiAgPHRleHQgY2xhc3M9Im4iIHg9IjQyIiB5PSI5OSI+MSBMaWNlbnNlPC90ZXh0PgogIDx0ZXh0IGNsYXNzPSJzIiB4PSI0MiIgeT0iMTE4Ij55b3VyIGtleSwgb3IgYSB0cmlhbDwvdGV4dD4KICA8cmVjdCBjbGFzcz0ieW91IiB4PSIyMTIiIHk9Ijc2IiB3aWR0aD0iMTY4IiBoZWlnaHQ9IjU2Ii8+CiAgPHRleHQgY2xhc3M9Im4iIHg9IjIyNCIgeT0iOTkiPjIgV2F5bmUgU3RhdGU8L3RleHQ+CiAgPHRleHQgY2xhc3M9InMiIHg9IjIyNCIgeT0iMTE4Ij5NaWNyb3NvZnQgc2lnbi1pbjwvdGV4dD4KICA8bGluZSBjbGFzcz0iYSIgeDE9IjE5OSIgeTE9IjEwNC4wIiB4Mj0iMjEwIiB5Mj0iMTA0LjAiLz4KICA8cmVjdCBjbGFzcz0ieW91IiB4PSIzOTQiIHk9Ijc2IiB3aWR0aD0iMTY4IiBoZWlnaHQ9IjU2Ii8+CiAgPHRleHQgY2xhc3M9Im4iIHg9IjQwNiIgeT0iOTkiPjMgR2l0SHViPC90ZXh0PgogIDx0ZXh0IGNsYXNzPSJzIiB4PSI0MDYiIHk9IjExOCI+YnJvd3Nlciwgb25lIGNsaWNrPC90ZXh0PgogIDxsaW5lIGNsYXNzPSJhIiB4MT0iMzgxIiB5MT0iMTA0LjAiIHgyPSIzOTIiIHkyPSIxMDQuMCIvPgogIDxyZWN0IGNsYXNzPSJ5b3UiIHg9IjU3NiIgeT0iNzYiIHdpZHRoPSIxNjgiIGhlaWdodD0iNTYiLz4KICA8dGV4dCBjbGFzcz0ibiIgeD0iNTg4IiB5PSI5OSI+NCBIdWdnaW5nIEZhY2U8L3RleHQ+CiAgPHRleHQgY2xhc3M9InMiIHg9IjU4OCIgeT0iMTE4Ij5jb3B5IHRoZSB0b2tlbjwvdGV4dD4KICA8bGluZSBjbGFzcz0iYSIgeDE9IjU2MyIgeTE9IjEwNC4wIiB4Mj0iNTc0IiB5Mj0iMTA0LjAiLz4KICA8cmVjdCBjbGFzcz0ieW91IiB4PSI3NTgiIHk9Ijc2IiB3aWR0aD0iMTY4IiBoZWlnaHQ9IjU2Ii8+CiAgPHRleHQgY2xhc3M9Im4iIHg9Ijc3MCIgeT0iOTkiPjUgQ2xhdWRlIGhlcmU8L3RleHQ+CiAgPHRleHQgY2xhc3M9InMiIHg9Ijc3MCIgeT0iMTE4Ij5DbGF1ZGUgQ29kZSBzaWduZWQgaW48L3RleHQ+CiAgPGxpbmUgY2xhc3M9ImEiIHgxPSI3NDUiIHkxPSIxMDQuMCIgeDI9Ijc1NiIgeTI9IjEwNC4wIi8+CiAgPHJlY3QgY2xhc3M9ImJhbmQiIHg9IjIwIiB5PSIxNjIiIHdpZHRoPSI5NDAiIGhlaWdodD0iMTAwIi8+CiAgPHRleHQgY2xhc3M9ImIiIHg9IjMwIiB5PSIxODAiPlRoZSBncmlkIChvbmUgcGFzcyk8L3RleHQ+CiAgPHJlY3QgY2xhc3M9InN0IiB4PSIzMCIgeT0iMTkyIiB3aWR0aD0iMTY4IiBoZWlnaHQ9IjU2Ii8+CiAgPHRleHQgY2xhc3M9Im4iIHg9IjQyIiB5PSIyMTUiPjYgQWNjb3VudCArIDJGQTwvdGV4dD4KICA8dGV4dCBjbGFzcz0icyIgeD0iNDIiIHk9IjIzNCI+T25EZW1hbmQ8L3RleHQ+CiAgPHJlY3QgY2xhc3M9InN0IiB4PSIyMTIiIHk9IjE5MiIgd2lkdGg9IjE2OCIgaGVpZ2h0PSI1NiIvPgogIDx0ZXh0IGNsYXNzPSJuIiB4PSIyMjQiIHk9IjIxNSI+NyBTU0gga2V5PC90ZXh0PgogIDx0ZXh0IGNsYXNzPSJzIiB4PSIyMjQiIHk9IjIzNCI+bWFkZSBmb3IgeW91PC90ZXh0PgogIDxsaW5lIGNsYXNzPSJhIiB4MT0iMTk5IiB5MT0iMjIwLjAiIHgyPSIyMTAiIHkyPSIyMjAuMCIvPgogIDxyZWN0IGNsYXNzPSJzdCIgeD0iMzk0IiB5PSIxOTIiIHdpZHRoPSIxNjgiIGhlaWdodD0iNTYiLz4KICA8dGV4dCBjbGFzcz0ibiIgeD0iNDA2IiB5PSIyMTUiPjggU1NIIGNvbmZpZzwvdGV4dD4KICA8dGV4dCBjbGFzcz0icyIgeD0iNDA2IiB5PSIyMzQiPndyaXR0ZW4gZm9yIHlvdTwvdGV4dD4KICA8bGluZSBjbGFzcz0iYSIgeDE9IjM4MSIgeTE9IjIyMC4wIiB4Mj0iMzkyIiB5Mj0iMjIwLjAiLz4KICA8cmVjdCBjbGFzcz0ic3QiIHg9IjU3NiIgeT0iMTkyIiB3aWR0aD0iMTY4IiBoZWlnaHQ9IjU2Ii8+CiAgPHRleHQgY2xhc3M9Im4iIHg9IjU4OCIgeT0iMjE1Ij45IExvZyBpbiBvbmNlPC90ZXh0PgogIDx0ZXh0IGNsYXNzPSJzIiB4PSI1ODgiIHk9IjIzNCI+cGFzc3dvcmQgKyBjb2RlPC90ZXh0PgogIDxsaW5lIGNsYXNzPSJhIiB4MT0iNTYzIiB5MT0iMjIwLjAiIHgyPSI1NzQiIHkyPSIyMjAuMCIvPgogIDxyZWN0IGNsYXNzPSJzdCIgeD0iNzU4IiB5PSIxOTIiIHdpZHRoPSIxNjgiIGhlaWdodD0iNTYiLz4KICA8dGV4dCBjbGFzcz0ibiIgeD0iNzcwIiB5PSIyMTUiPjEwIEluc3RhbGw8L3RleHQ+CiAgPHRleHQgY2xhc3M9InMiIHg9Ijc3MCIgeT0iMjM0Ij5zY3JpcHRzLCB0b2tlbnMsIGxpY2Vuc2U8L3RleHQ+CiAgPGxpbmUgY2xhc3M9ImEiIHgxPSI3NDUiIHkxPSIyMjAuMCIgeDI9Ijc1NiIgeTI9IjIyMC4wIi8+CiAgPHBhdGggY2xhc3M9ImEiIGQ9Ik04NDIuMCAxMzIgQyA4NDIuMCAxNTQsIDExNC4wIDE2NiwgMTE0LjAgMTkwIi8+CiAgPHJlY3QgY2xhc3M9ImJhbmQiIHg9IjIwIiB5PSIyNzgiIHdpZHRoPSI5NDAiIGhlaWdodD0iMTAwIi8+CiAgPHRleHQgY2xhc3M9ImIiIHg9IjMwIiB5PSIyOTYiPlRoZSBsYWI8L3RleHQ+CiAgPHJlY3QgY2xhc3M9ImxhYiIgeD0iMzAiIHk9IjMwOCIgd2lkdGg9IjE2OCIgaGVpZ2h0PSI1NiIvPgogIDx0ZXh0IGNsYXNzPSJuIiB4PSI0MiIgeT0iMzMxIj4xMSBKb2luIHRoZSBsYWI8L3RleHQ+CiAgPHRleHQgY2xhc3M9InMiIHg9IjQyIiB5PSIzNTAiPm9uZSByZXF1ZXN0OyBhcHByb3ZhbCA9IEFDTDwvdGV4dD4KICA8cmVjdCBjbGFzcz0ibGFiIiB4PSIyMTIiIHk9IjMwOCIgd2lkdGg9IjE2OCIgaGVpZ2h0PSI1NiIvPgogIDx0ZXh0IGNsYXNzPSJuIiB4PSIyMjQiIHk9IjMzMSI+MTIgQ2xhdWRlIG9uIHRoZSBncmlkPC90ZXh0PgogIDx0ZXh0IGNsYXNzPSJzIiB4PSIyMjQiIHk9IjM1MCI+eW91IHNpZ24gaW4sIG9uY2UsIGluIGEgdGVybWluYWw8L3RleHQ+CiAgPGxpbmUgY2xhc3M9ImEiIHgxPSIxOTkiIHkxPSIzMzYuMCIgeDI9IjIxMCIgeTI9IjMzNi4wIi8+CiAgPHBhdGggY2xhc3M9ImEiIGQ9Ik04NDIuMCAyNDggQyA4NDIuMCAyNzAsIDExNC4wIDI4MiwgMTE0LjAgMzA2Ii8+CiAgPHRleHQgY2xhc3M9InMiIHg9IjMwIiB5PSI0MDIiPlJlbmV3IG5leHQgdG8gYSB0b2tlbiBzaWducyB5b3UgaW4gYWdhaW4gYW5kIHVwZGF0ZXMgdGhlIGdyaWQuIEFzaGxleSBuZXZlciBzZWVzIHlvdXIgQ2xhdWRlIHNpZ24taW46IENsYXVkZSBDb2RlIG1ha2VzIGl0IGFuZCBrZWVwcyBpdCwgb24gdGhlIGxhcHRvcCBhbmQgaW4geW91ciBncmlkIGFjY291bnQuPC90ZXh0Pgo8L3N2Zz4K" alt="The wizard’s steps" />
 <figcaption aria-hidden="true">The wizard’s steps</figcaption>
 </figure>
 <table>
@@ -284,66 +285,88 @@ the lab is last.</p>
 </thead>
 <tbody>
 <tr>
-<td>1 Sign in with Wayne State</td>
-<td>your browser opens the WSU sign-in</td>
-<td>sign in with AccessID@wayne.edu. If your AccessID is not on the
-lab’s list, ask your lead</td>
+<td>1 License</td>
+<td>a field for your key, or a free-trial button</td>
+<td>paste the key your lead sent (copying it is enough), or start a
+trial: one per person, in your name, it ends by itself</td>
 </tr>
 <tr>
-<td>2 GitHub</td>
+<td>2 Sign in with Wayne State</td>
+<td>your browser opens the WSU sign-in</td>
+<td>sign in with AccessID@wayne.edu. Your license must name you; if your
+AccessID is not on the lab’s list either, ask your lead</td>
+</tr>
+<tr>
+<td>3 GitHub</td>
 <td>your browser opens GitHub</td>
 <td>sign in and approve; the token arrives by itself</td>
 </tr>
 <tr>
-<td>3 Hugging Face</td>
+<td>4 Hugging Face</td>
 <td>a button opens the token page, pre-filled</td>
 <td>press <em>Create token</em>, then <em>Copy</em>; the panel takes
 it</td>
 </tr>
 <tr>
-<td>4 Claude</td>
-<td>your browser opens claude.ai</td>
-<td>sign in with the account you made with your WSU e-mail and press
-<em>Authorize</em>; the token arrives by itself</td>
+<td>5 Claude on this laptop</td>
+<td>a check of Claude Code’s own sign-in</td>
+<td>sign in to Claude Code with the account you made with your WSU
+e-mail (Claude Pro at the minimum). Ashley only looks at whether you are
+signed in</td>
 </tr>
 <tr>
-<td>5 Grid account and Authenticator</td>
+<td>6 Grid account and Authenticator</td>
 <td>a menu (the panel says whether you are on the campus Wi-Fi or the
 VPN)</td>
 <td>if you have no grid account, apply; on OnDemand open 2FA Setup and
 scan the QR code; then <em>continue</em></td>
 </tr>
 <tr>
-<td>6 SSH key</td>
+<td>7 SSH key</td>
 <td>a spinner</td>
 <td>nothing</td>
 </tr>
 <tr>
-<td>7 SSH configuration</td>
+<td>8 SSH configuration</td>
 <td>a spinner</td>
 <td>nothing</td>
 </tr>
 <tr>
-<td>8 Log in to the grid once</td>
+<td>9 Log in to the grid once</td>
 <td>a password field, then a code field</td>
 <td>your grid password, then the six-digit Authenticator code. Once; the
 grid never asks again</td>
 </tr>
 <tr>
-<td>9 Install on the grid</td>
+<td>10 Install on the grid</td>
 <td>a progress line</td>
-<td>nothing: scripts and all your tokens go to the grid in one pass</td>
+<td>nothing: scripts, your GitHub and Hugging Face tokens and your
+license go to the grid in one pass</td>
 </tr>
 <tr>
-<td>10 Join the lab</td>
-<td>a note field, only when everything above is green and your tokens
-work</td>
+<td>11 Join the lab</td>
+<td>a note field, only when everything above is green</td>
 <td>a sentence for your lead (project, lead). One request; your lead
 approves it in Ashley, and from then on you read the lab folder and your
 workers use the lab’s Claude container</td>
 </tr>
+<tr>
+<td>12 Sign in to Claude on the grid</td>
+<td>a terminal on the grid</td>
+<td>Claude Code signs you in inside your own grid account: click the
+link it prints, sign in with the same Claude account, press Authorize,
+paste the code back. Once a month or so; Ashley says when. Ashley never
+sees this sign-in</td>
+</tr>
 </tbody>
 </table>
+<p>The first time Ashley runs it shows the license terms and asks one
+question: whether it may send its maintainer an error report when one of
+its checks fails. A report says which check failed and why, with names,
+paths and anything secret replaced; never your prompts, files, tokens or
+AccessID. Say no there, or later in Settings, and nothing is ever sent.
+<strong>Ashley: Error reports</strong> shows exactly what a report
+contains and every report kept on your laptop.</p>
 <p>Every step has a button next to it. <strong>Renew</strong> next to a
 token signs you in again and updates the grid copy in the same click;
 Ashley checks your tokens once a day and offers Renew when one stops
@@ -602,46 +625,53 @@ shares nothing between people.</p>
 <figcaption aria-hidden="true">Rotation among a student’s own
 credentials; a limit becomes a cooldown, not a failure.</figcaption>
 </figure>
-<p>Each <code>~/.ashley/accounts/&lt;name&gt;/</code> is both a
-credential and a <code>CLAUDE_CONFIG_DIR</code>, so accounts keep
-separate settings and caches, and share only the session history
-(above):</p>
+<p>The rule, since version 2: <strong>Ashley never reads, stores, copies
+or relays a Claude credential.</strong> Anthropic’s Claude Code terms
+permit an end user to sign in to the unmodified binary with their own
+subscription, including where a platform hosts it, and forbid a
+third-party developer to collect, store or intermediate Claude.ai
+credentials or tokens (<code>docs/research/reports/</code>, the
+compliance report). Version 1 captured the output of
+<code>claude setup-token</code> and copied it to the grid; that was on
+the wrong side of the line and is gone.</p>
+<p>What happens instead:</p>
 <ul>
-<li><code>token</code>: a long-lived subscription token from
-<code>claude setup-token</code> (the normal case). Exported to Claude
-Code as <code>CLAUDE_CODE_OAUTH_TOKEN</code>.</li>
-<li><code>apikey</code>: an Anthropic API key (pay-per-use overflow).
-Exported as <code>ANTHROPIC_API_KEY</code>.</li>
-<li>A copied <code>.credentials.json</code> is no longer used. A copy
-shares a refresh-token chain with the machine it came from, and the
-first refresh on either side revokes the other (claude-swap issues #164
-and #381; our own probe saw a copy rejected after eight idle days). The
-phone’s login is the one exception, and it is made on the grid, not
-copied (below).</li>
-</ul>
-<p>Order of use: subscriptions before API keys, <code>default</code>
-first. When a run ends with an error that matches the limit patterns in
-<code>protocol.ts</code> (“hit your limit”, “rate_limit”, “429”, …), the
-account gets <code>state.json</code> with <code>cooldown_until</code>
-(the reset time Claude printed, else one hour), the request is re-queued
-for the next enabled account, and if none is left the result is written
-with <code>status: rate_limited</code> and <code>retry_after</code>. The
-worker’s heartbeat reports <code>blocked</code> with
-<code>blocked_until</code> so the laptop can say “your window resets at
-3 pm” instead of failing.</p>
-<p>One person, one token. Pooling several people’s subscriptions into
-one worker would breach the Consumer Terms (each account is for the
-person who holds it); the rotation exists for a student’s own second
-credential, typically an API key with a spending cap.
-<code>ashley accounts add-token</code> refuses a second subscription
-token under another name (replacing the one you have is allowed), and
-records when the token was made (<code>minted_at</code>), since a
-setup-token carries no expiry of its own. Before every run the daemon
-removes every variable that could override or redirect the chosen
-credential: <code>CLAUDE_CODE_OAUTH_TOKEN</code>,
+<li><code>~/.ashley/claude</code> is a <code>CLAUDE_CONFIG_DIR</code> in
+the student’s own grid account, mode 700. The student runs
+<code>ashley claude login</code> once (the extension opens the
+terminal): inside their own Slurm allocation, in the lab container, the
+unmodified <code>claude auth login</code> prints its link, the student
+authorises in the browser and pastes the code, and Claude Code writes
+its own credential there. Ashley wrote nothing but Claude Code’s
+first-run settings.</li>
+<li>Every Claude Code process Ashley starts on the grid (the worker’s
+<code>claude -p</code>, Remote Control) gets
+<code>CLAUDE_CONFIG_DIR=~/.ashley/claude</code> and an environment with
+every credential variable removed (<code>CLAUDE_CODE_OAUTH_TOKEN</code>,
 <code>ANTHROPIC_API_KEY</code>, <code>ANTHROPIC_AUTH_TOKEN</code>,
-<code>ANTHROPIC_BASE_URL</code> and the two file-descriptor variants,
-then sets only the chosen one.</p>
+<code>ANTHROPIC_BASE_URL</code> and the file-descriptor variants).
+Claude Code uses what it stored.</li>
+<li>The daemon asks <code>claude auth status</code> at start, every 30
+minutes and when the credential file changes, and puts the answer
+(signed in or not, the e-mail Claude Code reports) in its heartbeat. The
+laptop shows it; the diagnostics node <code>grid.claude-login</code>
+reads it; a prompt sent while not signed in is answered with the command
+that fixes it.</li>
+<li>One person, one Claude account. The only other credential is the
+student’s own Anthropic Console key
+(<code>~/.ashley/accounts/apikey/apikey</code>, Commercial Terms), used
+only when the subscription window is exhausted, and only in that
+process’s environment.</li>
+<li>On the laptop, the wizard checks <code>claude auth status</code> of
+the student’s own Claude Code and requires a subscription sign-in (Pro
+or Max), because the lab works on subscriptions; it stores nothing.</li>
+<li>A copied <code>.credentials.json</code> is never used: a copy shares
+a refresh-token chain with the machine it came from, and the first
+refresh on either side revokes the other.</li>
+</ul>
+<p>The sign-in lasts about a month (a user report; Anthropic’s docs give
+a three-day warning before expiry). The heartbeat notices when it ends;
+the extension asks for step 12 again.</p>
 <h3 id="secrets-where-they-are-and-where-they-are-not">Secrets: where
 they are and where they are not</h3>
 <table>
@@ -842,40 +872,64 @@ with AccessID@wayne.edu.</p>
 <h3 id="phone-access">Phone access</h3>
 <p>Claude Code’s Remote Control lets the Claude app (or claude.ai/code)
 drive a session running elsewhere, over outbound HTTPS only. On the grid
-the worker hosts it (<code>grid/phone.js</code>, inside the worker job;
-no extra process to manage). Remote Control needs a claude.ai login on
-that machine: the one-year token the worker uses for prompts is refused
-for it (“You must be logged in to use Remote Control”). So the first
-time, the worker runs <code>claude auth login</code> in a
-pseudo-terminal (<code>script</code>), the extension opens the printed
-link on the laptop, the student presses Authorize and copies the code
-the page shows, and the worker types it in. That login lives in its own
-folder (<code>~/.ashley/remote/config</code>, never mixed with the
-prompt accounts) and lasts about 30 days. Then the worker runs
-<code>claude remote-control</code> in a pretrusted folder
-(<code>workspaces/phone</code>), restarts it if it exits, and the
-session appears in the app for the same account. Measured on asx1: the
-sign-in link appears within seconds; a wrong code is answered at once
-(“Invalid code”) and the panel asks again.</p>
-<p>Only one worker hosts phone access. All workers share the one phone
-login, and two hosts, or two sign-ins, on one refresh-token chain would
-revoke each other. The host holds a lease: a directory
-<code>~/.ashley/remote/host.lock</code> made with <code>mkdir</code>
-(atomic on the shared home, where <code>flock</code> is not reliable
-across nodes), with a beat every 5 s, treated as abandoned after 60 s.
-These are the timings Claude Code uses for its own credential locks.
-<code>ashley phone on --worker B</code> turns phone access off on the
-other workers; B shows <em>elsewhere</em> for about a second and then
-takes over (measured between the two workers on asx1). Turning phone
-access off only stops processes: <code>claude auth logout</code> would
-revoke the login, so Ashley never runs it. The phone’s config is seeded
-with <code>hasCompletedOnboarding</code> and a theme so the
-pseudo-terminal shows no first-run prompts, and the same six credential
-variables are removed before Remote Control starts
-(<code>ANTHROPIC_BASE_URL</code> would also switch Remote Control off).
-The handlers act only for the current sign-in or session, so output from
-a stopped process can neither change the status nor raise inside the
-daemon.</p>
+the worker hosts it (<code>grid/phone.js</code>, inside the worker job).
+It uses the same sign-in as the worker (<code>~/.ashley/claude</code>):
+Remote Control needs a full login, which is what
+<code>ashley claude login</code> makes. Two things are the student’s own
+acts, in a terminal, because Anthropic’s flow and its consent belong to
+the account holder: the sign-in, and Claude Code’s one-time question
+“Enable Remote Control?”, which
+<code>ashley claude remote-consent</code> puts in front of them; their
+answer is recorded in a marker file and repeated to Claude Code if it
+asks again. Until both exist, phone access waits and says which one is
+missing.</p>
+<p>Only one worker hosts phone access. All workers share the one
+sign-in, and two hosts on it would fight. The host holds a lease: a
+directory <code>~/.ashley/remote/host.lock</code> made with
+<code>mkdir</code> (atomic on the shared home, where <code>flock</code>
+is not reliable across nodes), with a beat every 5 s, treated as
+abandoned after 60 s, the timings Claude Code uses for its own
+credential locks. <code>ashley phone on --worker B</code> turns phone
+access off on the other workers; B shows <em>elsewhere</em> for about a
+second and then takes over. Turning phone access off only stops
+processes: <code>claude auth logout</code> would revoke the login, so
+Ashley never runs it. The handlers act only for the current session, so
+output from a stopped process can neither change the status nor raise
+inside the daemon.</p>
+<p>Students are told, in the terminal and in the manual, that while the
+phone is connected the session transcript, tool activity included, is
+stored on Anthropic’s servers; confidential data stays out of phone
+sessions.</p>
+<h3 id="licenses">Licenses</h3>
+<p>Every copy of Ashley needs a license key for the person using it
+(<code>docs/LICENSING.md</code>). Keys are offline, Ed25519-signed
+(<code>grid/license.js</code>, one implementation for the extension, the
+CLI, the MCP server and the grid daemon), name an AccessID or e-mail,
+carry an edition, dates and a grace period, and are checked against the
+Wayne State sign-in the extension recorded. The extension refuses every
+command but the ones that get you a key; the daemon refuses work; both
+compare the key against a signed revocation list bundled with the
+release and, where the lab publishes one, fetched daily. A clock set
+back does not revive a key: the latest time seen is kept. Trials are
+keys of edition <code>trial</code>, one per AccessID, issued by the
+lab’s licence service (<code>tools/intake/</code>) after it has asked
+Microsoft who the signed-in person is, or by the lead with the issuing
+tool.</p>
+<h3 id="error-reports">Error reports</h3>
+<p>With the student’s permission, given at first run and changeable at
+any time, the extension sends the maintainer one report per distinct
+failure per day after a troubleshooter run that found a failure or made
+a repair (<code>extension/src/core/diagReport.ts</code>,
+<code>diagShare.ts</code>). The report holds versions, the checks’ ids
+and verdicts, and the failing checks’ messages with e-mails, AccessIDs,
+paths, hostnames, addresses, job numbers and token-shaped strings
+replaced. VS Code’s own telemetry setting is honoured; with no report
+address configured nothing is sent; every report is kept on the laptop
+for the student to read. On the maintainer’s side the service files it
+as a GitHub issue and the triage workflow
+(<code>.github/workflows/triage.yml</code>) has Claude Code, on the
+maintainer’s own API key, propose a reviewed draft pull request. Nothing
+in this path touches a student’s Claude account.</p>
 <h3 id="diagnostics">Diagnostics</h3>
 <p>Every assumption Ashley makes, from the laptop’s OpenSSH to the
 node’s pseudo-terminal, is a node in one dependency graph
@@ -1105,12 +1159,11 @@ from the Extensions view, <strong>Claude Code</strong>
 (<code>anthropic.claude-code</code>) and <strong>Remote - SSH</strong>
 (<code>ms-vscode-remote.remote-ssh</code>). Sign in to Claude Code with
 your Claude Pro or Max account.</li>
-<li>Get the file <code>ashley-wsu-1.0.0.vsix</code> from your lead (or
-the repository’s <code>dist/</code> folder).</li>
+<li>Get the file <code>ashley-2.0.0.vsix</code> from your lead (or the
+repository’s <code>dist/</code> folder).</li>
 <li>In VS Code: Extensions view, the <code>...</code> menu at the top
 right, <strong>Install from VSIX…</strong>, pick the file. Or from a
-terminal:
-<code>code --install-extension ashley-wsu-1.0.0.vsix</code>.</li>
+terminal: <code>code --install-extension ashley-2.0.0.vsix</code>.</li>
 <li>Command Palette (Ctrl/Cmd+Shift+P): <strong>Ashley: Set up my
 research environment (wizard)</strong>.</li>
 </ol>
@@ -1179,8 +1232,8 @@ and run the wizard. Delete the two folders afterwards.</p>
 <span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a><span class="ex">npm</span> run build          <span class="co"># bundles dist/extension.js, dist/mcp-server.js, dist/ashley-cli.js, copies ../grid into dist/grid</span></span>
 <span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a><span class="ex">npm</span> run test:unit      <span class="co"># 22 tests: ssh config, protocol, slurm parsing, and the daemon with a fake claude</span></span>
 <span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a><span class="ex">npm</span> run test:vscode    <span class="co"># downloads a VS Code build once, runs the integration suite</span></span>
-<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a><span class="ex">npm</span> run package        <span class="co"># writes ../dist/ashley-wsu-&lt;version&gt;.vsix</span></span>
-<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a><span class="ex">code</span> <span class="at">--install-extension</span> ../dist/ashley-wsu-1.0.0.vsix</span></code></pre></div>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a><span class="ex">npm</span> run package        <span class="co"># writes ../dist/ashley-&lt;version&gt;.vsix</span></span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a><span class="ex">code</span> <span class="at">--install-extension</span> ../dist/ashley-2.0.0.vsix</span></code></pre></div>
 <p>On a Windows machine without Node on <code>PATH</code>, the portable
 build works: download <code>node-v22.x-win-x64.zip</code> from
 nodejs.org, unzip, and prefix <code>PATH</code> with that folder for the
@@ -1370,28 +1423,40 @@ again</td>
 <code>ashley.worker.qos</code>)</td>
 </tr>
 <tr>
-<td>A prompt returns <code>no enabled Claude account</code></td>
-<td>the Claude token is not on the grid</td>
-<td>press <strong>Renew</strong> next to Claude (it updates the grid),
-or run <strong>Troubleshoot and repair</strong></td>
+<td>A prompt returns <em>Claude is not signed in on the grid</em></td>
+<td>you have not done step 12, or the sign-in ended (about a month)</td>
+<td>run <strong>Ashley: Sign in to Claude on the grid</strong></td>
 </tr>
 <tr>
-<td>A prompt returns <code>Failed to authenticate</code></td>
-<td>the token expired or was revoked</td>
-<td>press <strong>Renew</strong> next to Claude</td>
+<td>Step 5 says <em>signed in with an API key, not a Claude
+subscription</em></td>
+<td>Claude Code on your laptop is using a Console key</td>
+<td>in Claude Code, sign out and sign in with your Claude Pro or Max
+account</td>
+</tr>
+<tr>
+<td>Ashley refuses every command and says <em>license needed</em></td>
+<td>no key, an ended trial, or a key for someone else</td>
+<td><strong>Ashley: License</strong>: enter your key, or ask your lead.
+A trial ends by itself and cannot be repeated</td>
+</tr>
+<tr>
+<td>Ashley says the terms have not been accepted</td>
+<td>the first-run dialog was closed with <em>Not now</em></td>
+<td>run any Ashley command; the dialog returns</td>
+</tr>
+<tr>
+<td>Phone access says <em>need_consent</em></td>
+<td>Claude Code’s one-time Remote Control question has not been
+answered</td>
+<td><strong>Ashley: Phone access</strong> opens the terminal; type y
+when asked</td>
 </tr>
 <tr>
 <td>A prompt returns <code>rate_limited</code> with a time</td>
 <td>your subscription window is used up</td>
 <td>wait for the time shown; Ashley never switches to another person’s
 account</td>
-</tr>
-<tr>
-<td>The grid says <em>already holds your Claude subscription
-token</em></td>
-<td>a second subscription token was offered under another name</td>
-<td>Ashley uses one subscription per person; replace the existing one
-(<strong>Renew</strong> does this)</td>
 </tr>
 <tr>
 <td>Phone access: <em>Claude did not accept that code</em></td>
@@ -1461,8 +1526,7 @@ exit code. Each troubleshooter run is also saved as a report.</li>
 <li>Grid: <code>~/.ashley/workers/&lt;name&gt;/log/ashleyd.log</code>,
 <code>~/.ashley/workers/&lt;name&gt;/log/slurm_&lt;job&gt;.out</code>,
 every request’s <code>outbox/&lt;id&gt;.events.jsonl</code>, and for
-phone access <code>rc/login.log</code> and <code>rc/session.log</code>
-in the worker’s folder.</li>
+phone access <code>rc/session.log</code> in the worker’s folder.</li>
 <li>Remote-SSH: <em>View, Output, Remote - SSH</em>.</li>
 </ul>
 <h3 id="undo">Undo</h3>

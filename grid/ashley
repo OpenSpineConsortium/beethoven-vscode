@@ -1,4 +1,5 @@
 #!/bin/bash
+# Ashley (c) 2026 OpenSpineConsortium. Licensed software: use requires a license key. See LICENSE.txt.
 # ashley: the grid-side command. Lives at ~/.ashley/bin/ashley; the laptop calls it over
 # ssh, students can call it from a grid shell. Bash + coreutils only, so it works on the
 # login node without any environment. Nothing heavy runs here: building the container and
@@ -15,7 +16,8 @@
 #   ashley result [--worker N] <id>
 #   ashley tail [--worker N] <id>
 #   ashley sessions [--json]
-#   ashley accounts list|add-token NAME|add-key NAME|enable NAME|disable NAME|remove NAME
+#   ashley claude login|status|remote-consent|forget      your Claude sign-in on the grid (Claude Code's own flow)
+#   ashley accounts list|add-key apikey|enable|disable|remove   your optional Anthropic Console key
 #   ashley bootstrap [--resubmit] [--update]
 #   ashley version
 set -uo pipefail
@@ -23,6 +25,9 @@ ASHLEY_HOME="${ASHLEY_HOME:-$HOME/.ashley}"
 BIN="$ASHLEY_HOME/bin"
 CFG="$ASHLEY_HOME/config.env"
 VERSION=$(cat "$BIN/VERSION" 2>/dev/null || echo 0)
+# The student's own Claude sign-in, stored by Claude Code itself (never read, copied or relayed by
+# Ashley): the CLAUDE_CONFIG_DIR of every Claude Code process Ashley starts on the grid.
+CLAUDE_HOME="$ASHLEY_HOME/claude"
 die() { echo "ashley: $*" >&2; exit 1; }
 json_str() { # escape a string for JSON (control characters dropped)
   local s; s=$(printf '%s' "$1" | tr -d '\000-\010\013\014\016-\037'); s=${s//\\/\\\\}; s=${s//\"/\\\"}; s=${s//$'\n'/\\n}; s=${s//$'\r'/}; s=${s//$'\t'/\\t}; printf '"%s"' "$s"
@@ -173,19 +178,18 @@ worker_json() { # $1 name
   local q; q=$(ls "$w/inbox" 2>/dev/null | grep -c '\.json$' || true)
   printf '{"name":%s,"job":%s,"job_state":%s,"node":%s,"alive":%s,"queued":%s,"state":%s}' "$(json_str "$1")" "$(json_str "$jid")" "$(json_str "${st:-none}")" "$(json_str "$node")" "$alive" "${q:-0}" "$state"
 }
-accounts_json() {
+accounts_json() { # the sign-in (presence only) and the optional Console key
   local first=1; printf '['
-  for d in "$ASHLEY_HOME"/accounts/*/; do
-    [ -d "$d" ] || continue
-    local n kind="none" en="true" cd="null"
-    n=$(basename "$d")
-    [ -s "$d/token" ] && kind="oauth-token"; [ -s "$d/apikey" ] && kind="api-key"
-    [ "$kind" = none ] && continue
-    [ -e "$d/disabled" ] && en="false"
-    if [ -s "$d/state.json" ]; then local c; c=$(grep -o '"cooldown_until": *"[^"]*"' "$d/state.json" | head -1 | sed 's/.*"\([^"]*\)"$/\1/'); [ -n "$c" ] && cd="\"$c\""; fi
-    [ $first -eq 1 ] || printf ','; first=0
-    printf '{"name":%s,"kind":"%s","enabled":%s,"cooldown_until":%s}' "$(json_str "$n")" "$kind" "$en" "$cd"
-  done; printf ']'
+  cooldown_of() { local c=""; [ -s "$1/state.json" ] && c=$(grep -o '"cooldown_until": *"[^"]*"' "$1/state.json" | head -1 | sed 's/.*"\([^"]*\)"$/\1/'); [ -n "$c" ] && printf '"%s"' "$c" || printf null; }
+  if [ -s "$CLAUDE_HOME/.credentials.json" ]; then
+    printf '{"name":"claude","kind":"login","enabled":%s,"cooldown_until":%s}' "$([ -e "$CLAUDE_HOME/disabled" ] && echo false || echo true)" "$(cooldown_of "$CLAUDE_HOME")"; first=0
+  fi
+  local d="$ASHLEY_HOME/accounts/apikey"
+  if [ -s "$d/apikey" ]; then
+    [ $first -eq 1 ] || printf ','
+    printf '{"name":"apikey","kind":"api-key","enabled":%s,"cooldown_until":%s}' "$([ -e "$d/disabled" ] && echo false || echo true)" "$(cooldown_of "$d")"
+  fi
+  printf ']'
 }
 secrets_json() { # names (never values) of the variables in secrets.env
   local first=1; printf '['
@@ -199,6 +203,10 @@ jobs_json() {
     [ -n "$i" ] || continue; [ $first -eq 1 ] || printf ','; first=0
     printf '{"jobId":%s,"name":%s,"state":%s,"node":%s,"elapsed":%s,"timeLimit":%s,"partition":%s,"reason":%s}' "$(json_str "$i")" "$(json_str "$j")" "$(json_str "$t")" "$(json_str "$n")" "$(json_str "$m")" "$(json_str "$l")" "$(json_str "$p")" "$(json_str "$r")"
   done < <(squeue -u "$USER" -h -o '%i|%j|%T|%N|%M|%l|%P|%R' 2>/dev/null); printf ']'
+}
+license_fp() { # first 16 hex digits of the license key's SHA-256 (the laptop compares it with its own)
+  [ -s "$ASHLEY_HOME/license.key" ] || return 0
+  tr -d '\r\n' < "$ASHLEY_HOME/license.key" | sha256sum | cut -c1-16
 }
 cmd_status() {
   local as_json=0; [ "${1:-}" = "--json" ] && as_json=1
@@ -215,7 +223,7 @@ cmd_status() {
     printf '{"version":%s,"host":%s,"ready":%s,"awaiting_access":%s,"root":%s,"runtime":%s,"claude_version":%s,"container":%s,"source":%s,"library":%s,"bootstrap_job":%s,"bootstrap_state":%s,"home_used_gb":%s,"home_soft_gb":%s,"workers":[' \
       "$(json_str "$VERSION")" "$(json_str "$(hostname)")" "$ready" "$awaiting" "$(json_str "$ROOT")" "$(json_str "$RUNTIME")" "$(json_str "$cv")" "$(json_str "${CONTAINER:-own}")" "$(json_str "${SOURCE:-own}")" "$(lib_readable && echo true || echo false)" "$(json_str "$BOOTSTRAP_JOB")" "$(json_str "$bst")" "${used:-0}" "${soft:-0}"
     local first=1; for w in $(worker_dirs); do [ $first -eq 1 ] || printf ','; first=0; worker_json "$w"; done
-    printf '],"accounts":%s,"secrets":%s,"jobs":%s}\n' "$(accounts_json)" "$(secrets_json)" "$(jobs_json)"
+    printf '],"accounts":%s,"secrets":%s,"jobs":%s,"license":%s,"claude_login":%s,"claude_dir":%s}\n' "$(accounts_json)" "$(secrets_json)" "$(jobs_json)" "$(json_str "$(license_fp)")" "$(claude_login_json)" "$([ -s "$CLAUDE_HOME/.credentials.json" ] && echo true || echo false)"
   else
     echo "ashley $VERSION on $(hostname)  ready=$ready  claude=${cv:-?}  root=${ROOT:-?}"
     [ -n "$BOOTSTRAP_JOB" ] && echo "bootstrap job $BOOTSTRAP_JOB: ${bst:-finished}"
@@ -235,7 +243,7 @@ cmd_doctor() {
   [ -n "$ROOT" ] && [ -w "$ROOT" ] && ok "ROOT $ROOT writable" || bad "ROOT not writable (${ROOT:-unset})"
   if is_ready; then ok "READY: $(cat "$ASHLEY_HOME/READY")"; else bad "not ready (bootstrap job ${BOOTSTRAP_JOB:-none}: $(job_state "$BOOTSTRAP_JOB"))"; fi
   [ -n "$RUNTIME" ] && [ -x "$RUNTIME" ] && ok "runtime $RUNTIME" || bad "runtime missing on this host (fine on the login node if the compute nodes have it)"
-  local n; n=$(accounts_json | grep -o '"name"' | wc -l); [ "$n" -gt 0 ] && ok "$n Claude account(s): $(accounts_json)" || bad "no Claude account (setup wizard step 'Claude token', or ashley accounts add-token default)"
+  [ -s "$CLAUDE_HOME/.credentials.json" ] && ok "Claude signed in on the grid (Claude Code's own store in $CLAUDE_HOME)" || bad "Claude not signed in on the grid (ashley claude login)"
   [ -s "$ASHLEY_HOME/secrets.env" ] && ok "secrets.env present ($(stat -c %a "$ASHLEY_HOME/secrets.env")): $(cmd_verify_tokens 2>/dev/null | tr '\n' ';')" || bad "secrets.env missing (GitHub / Hugging Face tokens for the worker)"
   read -r used soft < <(home_quota); ok "home quota ${used:-?}/${soft:-?} GB"
   for w in $(worker_dirs); do echo "      worker $(worker_json "$w")"; done
@@ -259,6 +267,7 @@ cmd_worker() {
       if ! is_ready && lib_readable; then ( cmd_adopt "$(lib_default)" ) >/dev/null 2>&1; load_cfg; fi
       if ! is_ready && ! lib_readable && lab_mode; then die "no container yet: it comes with lab access (the last setup step; your lead approves it)"; fi
       is_ready || die "grid not ready yet (bootstrap job ${BOOTSTRAP_JOB:-none}: $(job_state "${BOOTSTRAP_JOB:-}")); try again when 'ashley status' says ready=true"
+      [ -s "$ASHLEY_HOME/license.key" ] || die "no Ashley license on the grid yet: run the setup's grid step in VS Code (it copies your license here)"
       mkdir -p "$w"/{inbox,outbox,log}
       rm -f "$w/stop"
       local jid st; jid=$(cat "$w/job.id" 2>/dev/null || echo ""); st=$(job_state "$jid")
@@ -393,22 +402,80 @@ share_transcripts() { # every account's projects/ links to one ~/.ashley/project
   ln -s "$s" "$p"
 }
 cmd_accounts() {
-  local sub="${1:-list}" name="${2:-}"; local d="$ASHLEY_HOME/accounts/$name"
+  local sub="${1:-list}" name="${2:-apikey}"; local d="$ASHLEY_HOME/accounts/apikey"
   case "$sub" in
     list) accounts_json; echo;;
-    add-token) [[ "$name" =~ ^[A-Za-z0-9_-]+$ ]] || die "accounts add-token NAME (token on stdin)"
-      # one person, one Claude subscription: a second subscription token is refused, not rotated
-      local other; for other in "$ASHLEY_HOME"/accounts/*/token; do [ -s "$other" ] || continue; other=$(basename "$(dirname "$other")")
-        [ "$other" = "$name" ] || die "account '$other' already holds your Claude subscription token; replace it with: ashley accounts add-token $other"; done
-      umask 077; mkdir -p "$d"; head -1 | tr -d '\r\n' > "$d/token.part"; [ -s "$d/token.part" ] || { rm -f "$d/token.part"; die "empty token"; }
-      mv "$d/token.part" "$d/token"; date -u +%FT%TZ > "$d/minted_at"
-      rm -f "$d/apikey" "$d/.credentials.json" "$d/disabled" "$d/state.json"; share_transcripts "$d"; echo "account $name: oauth token stored";;
-    add-key) [[ "$name" =~ ^[A-Za-z0-9_-]+$ ]] || die "accounts add-key NAME (key on stdin)"; umask 077; mkdir -p "$d"; head -1 | tr -d '\r\n' > "$d/apikey.part"; [ -s "$d/apikey.part" ] || { rm -f "$d/apikey.part"; die "empty key"; }
-      mv "$d/apikey.part" "$d/apikey"; rm -f "$d/token" "$d/minted_at" "$d/.credentials.json" "$d/disabled" "$d/state.json"; share_transcripts "$d"; echo "account $name: api key stored";;
-    enable) [ -d "$d" ] || die "no account $name"; rm -f "$d/disabled" "$d/state.json"; echo "account $name enabled";;
-    disable) [ -d "$d" ] || die "no account $name"; touch "$d/disabled"; echo "account $name disabled";;
-    remove) [ -d "$d" ] || die "no account $name"; rm -rf "$d"; echo "account $name removed";;
-    *) die "accounts: list|add-token NAME|add-key NAME|enable NAME|disable NAME|remove NAME";;
+    add-token) die "Ashley no longer stores Claude tokens. Sign in on the grid through Claude Code's own flow: ashley claude login";;
+    add-key) [ "$name" = apikey ] || die "the Console key is stored as 'apikey' (accounts add-key apikey, key on stdin)"
+      umask 077; mkdir -p "$d"; head -1 | tr -d '\r\n' > "$d/apikey.part"; [ -s "$d/apikey.part" ] || { rm -f "$d/apikey.part"; die "empty key"; }
+      mv "$d/apikey.part" "$d/apikey"; rm -f "$d/disabled" "$d/state.json"; share_transcripts "$d"; echo "your Anthropic Console key is stored (used only when your subscription window is exhausted)";;
+    enable) [ -d "$d" ] || die "no Console key stored"; rm -f "$d/disabled" "$d/state.json"; echo "Console key enabled";;
+    disable) [ -d "$d" ] || die "no Console key stored"; touch "$d/disabled"; echo "Console key disabled";;
+    remove) [ -d "$d" ] || die "no Console key stored"; rm -rf "$d"; echo "Console key removed";;
+    *) die "accounts: list|add-key apikey|enable|disable|remove";;
+  esac
+}
+
+# ---- your Claude sign-in on the grid: Claude Code's own flow, in your allocation -----------------
+claude_in_alloc() { # run Claude Code interactively inside the container, in a running worker's allocation or a short one
+  load_cfg; is_ready || die "the lab container is not adopted yet (lab access is the step before this)"
+  local jid="" wk; for wk in $(worker_dirs); do local j; j=$(cat "$ASHLEY_HOME/workers/$wk/job.id" 2>/dev/null); [ "$(job_state "$j")" = RUNNING ] && { jid=$j; break; }; done
+  local cwd="$ROOT/workspaces/phone"; mkdir -p "$cwd" "$CLAUDE_HOME"; chmod 700 "$CLAUDE_HOME"
+  # first-run settings so Claude Code asks no onboarding questions in the terminal (settings, not credentials)
+  # shellcheck disable=SC2016
+  local seed='const fs=require("fs"),p=process.env.CLAUDE_CONFIG_DIR+"/.claude.json";let j={};try{j=JSON.parse(fs.readFileSync(p,"utf8"))}catch{};j.hasCompletedOnboarding=true;j.theme=j.theme||"dark";j.projects=j.projects||{};j.projects[process.cwd()]=Object.assign({},j.projects[process.cwd()]||{},{hasTrustDialogAccepted:true});fs.writeFileSync(p,JSON.stringify(j,null,1),{mode:0o600});'
+  local inner="cd '$cwd' && node -e '$seed' && exec '$CLAUDE_BIN' $*"
+  # shellcheck disable=SC2086
+  if [ -n "$jid" ]; then
+    srun --jobid="$jid" --overlap -N1 -n1 --pty "$RUNTIME" exec $BINDS "$SANDBOX" env -u CLAUDE_CODE_OAUTH_TOKEN -u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN -u ANTHROPIC_BASE_URL -u CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC HOME="$HOME" CLAUDE_CONFIG_DIR="$CLAUDE_HOME" TERM="${TERM:-xterm-256color}" BROWSER=/bin/false bash -c "$inner"
+  else
+    echo "(no worker is running: asking Slurm for a short session on a compute node; this can take a minute)"
+    srun -p secp -q secondary -t 00:30:00 -N1 -n1 --mem=2G -J ashley_claude --pty "$RUNTIME" exec $BINDS "$SANDBOX" env -u CLAUDE_CODE_OAUTH_TOKEN -u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN -u ANTHROPIC_BASE_URL -u CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC HOME="$HOME" CLAUDE_CONFIG_DIR="$CLAUDE_HOME" TERM="${TERM:-xterm-256color}" BROWSER=/bin/false bash -c "$inner"
+  fi
+}
+claude_login_json() { # what the newest running worker's Claude Code said about the sign-in (heartbeat), or null
+  local wk best="" bt=0; for wk in $(worker_dirs); do local wd="$ASHLEY_HOME/workers/$wk"
+    [ "$(job_state "$(cat "$wd/job.id" 2>/dev/null)")" = RUNNING ] || continue
+    local m; m=$(stat -c %Y "$wd/state.json" 2>/dev/null || echo 0); [ "$m" -gt "$bt" ] && { bt=$m; best="$wd"; }; done
+  [ -n "$best" ] && tr -d '\n' < "$best/state.json" | grep -o '"claude_login": *{[^}]*}' | sed 's/^"claude_login": *//' | head -1 | grep . || echo null
+}
+cmd_claude() {
+  local sub="${1:-status}"; shift || true
+  case "$sub" in
+    login)
+      cat <<'EOT'
+Sign in to Claude on the grid.
+
+Claude Code itself does the sign-in, in your own grid account, and keeps its credential in
+~/.ashley/claude (permissions 700). Ashley never sees, copies or stores it. The same sign-in serves
+your Claude worker and phone access.
+
+Claude will print a link: Ctrl+click it (or copy it into your browser), sign in with the Claude
+account you made with your Wayne State e-mail, press Authorize, then paste the code the page shows
+back here. Use one Claude account only: the one that is yours.
+EOT
+      claude_in_alloc auth login
+      echo; echo "Done. Your workers pick the sign-in up by themselves. For phone access run: ashley claude remote-consent";;
+    remote-consent)
+      cat <<'EOT'
+Phone access: Claude Code asks once whether to enable Remote Control. Answer it yourself here.
+
+When it asks "Enable Remote Control? (y/n)" type y. When you see the session link, press Ctrl+C to
+leave; from then on your worker hosts Remote Control whenever phone access is on. While connected,
+the session transcript (your messages, Claude's answers, tool activity) is stored on Anthropic's
+servers: keep confidential data out of phone sessions.
+EOT
+      claude_in_alloc remote-control || true
+      echo; printf 'Did you answer y to "Enable Remote Control?" [y/N] '; local a; read -r a
+      if [[ "$a" =~ ^[Yy] ]]; then date -u +%FT%TZ > "$CLAUDE_HOME/.ashley-remote-consent"; echo "recorded: your workers may now host Remote Control (Ashley: Phone access)"; else echo "not recorded; run this again when you want phone access"; fi;;
+    status)
+      local present=false consent=false; [ -s "$CLAUDE_HOME/.credentials.json" ] && present=true; [ -e "$CLAUDE_HOME/.ashley-remote-consent" ] && consent=true
+      if [ "${1:-}" = "--json" ]; then printf '{"dir_present":%s,"consent":%s,"login":%s}\n' "$present" "$consent" "$(claude_login_json)"
+      else echo "sign-in file present: $present; Remote Control consent: $consent; a running worker says: $(claude_login_json)"; fi;;
+    forget)
+      [ "${1:-}" = "--yes" ] || die "this deletes Claude Code's stored sign-in in $CLAUDE_HOME (your workers stop until you sign in again): ashley claude forget --yes"
+      rm -rf "$CLAUDE_HOME"; echo "removed $CLAUDE_HOME";;
+    *) die "claude: login|status [--json]|remote-consent|forget --yes";;
   esac
 }
 
@@ -603,10 +670,6 @@ cmd_access() {
       # container is not a requirement: it is what access gives.
       local missing=() as_json=0; [ "${1:-}" = "--json" ] && as_json=1
       local vt; vt=$(cmd_verify_tokens 2>/dev/null || true)
-      if echo "$vt" | grep "^CLAUDE_TOKEN missing" >/dev/null; then missing+=("no Claude subscription token on the grid (Claude step; Claude Pro is the minimum)")
-      elif echo "$vt" | grep "^CLAUDE_TOKEN rejected" >/dev/null; then missing+=("the Claude token on the grid was rejected (expired or revoked): renew it with the Claude step")
-      elif ! echo "$vt" | grep "^CLAUDE_TOKEN ok" >/dev/null; then missing+=("the Claude token could not be confirmed right now ($(echo "$vt" | grep '^CLAUDE_TOKEN' | cut -c1-80)); try again in a minute")
-      fi
       echo "$vt" | grep "^HF_TOKEN ok" >/dev/null || missing+=("Hugging Face token missing or rejected")
       echo "$vt" | grep "^GITHUB_TOKEN ok" >/dev/null || missing+=("GitHub token missing or rejected")
       grep -q '# >>> ashley' "$HOME/.bashrc" 2>/dev/null || missing+=("bashrc block missing (run the grid step again)")
@@ -673,13 +736,11 @@ cmd_phone() { # phone access through Claude Code Remote Control, hosted by a wor
   case "$sub" in
     on) # one worker hosts phone access (they share one login); turning it on here turns it off elsewhere
       local ow moved=""; for ow in "$ASHLEY_HOME"/workers/*/rc/enable; do [ -e "$ow" ] || continue; ow=$(basename "$(dirname "$(dirname "$ow")")")
-        [ "$ow" = "$worker" ] || { rm -f "$ASHLEY_HOME/workers/$ow/rc/enable" "$ASHLEY_HOME/workers/$ow/rc/code"; moved="$moved $ow"; }; done
-      mkdir -p "$rc" && chmod 700 "$rc" && rm -f "$rc/code" && touch "$rc/enable" && echo "phone access starting on worker $worker ($(cat "$w/node" 2>/dev/null || echo 'node not assigned yet'))${moved:+; moved from$moved}";;
-    off) rm -f "$rc/enable" "$rc/code"; echo "phone access off on worker $worker";;
-    code)
-      local c; c=$(head -c 4096 | tr -cd 'A-Za-z0-9_#.~-')
-      [ -n "$c" ] || die "expected the code from the claude.ai page on stdin"
-      ( umask 077; printf '%s\n' "$c" > "$rc/code.part" && mv "$rc/code.part" "$rc/code" ) && echo "code handed to worker $worker";;
+        [ "$ow" = "$worker" ] || { rm -f "$ASHLEY_HOME/workers/$ow/rc/enable"; moved="$moved $ow"; }; done
+      [ -s "$CLAUDE_HOME/.credentials.json" ] || echo "note: Claude is not signed in on the grid yet (ashley claude login); phone access waits for it"
+      [ -e "$CLAUDE_HOME/.ashley-remote-consent" ] || echo "note: Remote Control has not been enabled yet (ashley claude remote-consent); phone access waits for it"
+      mkdir -p "$rc" && chmod 700 "$rc" && touch "$rc/enable" && echo "phone access starting on worker $worker ($(cat "$w/node" 2>/dev/null || echo 'node not assigned yet'))${moved:+; moved from$moved}";;
+    off) rm -f "$rc/enable"; echo "phone access off on worker $worker";;
     status)
       local alive=false; [ "$(job_state "$(cat "$w/job.id" 2>/dev/null)")" = RUNNING ] && alive=true
       if [ $as_json -eq 1 ]; then
@@ -687,7 +748,7 @@ cmd_phone() { # phone access through Claude Code Remote Control, hosted by a wor
         printf '{"worker":%s,"job_running":%s,"enabled":%s,"host":%s,"status":' "$(json_str "$worker")" "$alive" "$([ -e "$rc/enable" ] && echo true || echo false)" "$host"
         if [ -s "$rc/status.json" ]; then tr -d '\n' < "$rc/status.json"; else printf '{"phase":"off"}'; fi; echo '}'
       else echo "worker $worker running=$alive enabled=$([ -e "$rc/enable" ] && echo yes || echo no)"; cat "$rc/status.json" 2>/dev/null; fi;;
-    *) die "phone: on|off|status|code [--worker NAME]";;
+    *) die "phone: on|off|status [--worker NAME]";;
   esac
 }
 
@@ -719,7 +780,7 @@ cmd_diag() {
   load_cfg
   DIAG_FIRST=1; printf '{"version":%s,"host":%s,"user":%s,"nodes":[' "$(json_str "$VERSION")" "$(json_str "$(hostname)")" "$(json_str "$USER")"
   # scripts
-  local miss=""; for f in ashley ashleyd.js phone.js worker.sbatch.tpl bootstrap.sbatch bashrc.block VERSION; do [ -s "$BIN/$f" ] || miss="$miss $f"; done
+  local miss=""; for f in ashley ashleyd.js phone.js license.js license_keys.json worker.sbatch.tpl bootstrap.sbatch bashrc.block VERSION; do [ -s "$BIN/$f" ] || miss="$miss $f"; done
   if grep -q $'\r' "$BIN/ashley" "$BIN/ashleyd.js" 2>/dev/null; then miss="$miss (CR line endings)"; fi
   if [ -z "$miss" ]; then diag_emit grid.scripts true false false "Ashley v$VERSION in $BIN"; else diag_emit grid.scripts false false false "missing or damaged:$miss"; fi
   # bashrc block and the VS Code sysroot it points at
@@ -749,22 +810,27 @@ cmd_diag() {
   else diag_emit grid.home-quota true true false "quota not readable"; fi
   # tokens (verified from here, never on argv)
   local vt; vt=$(cmd_verify_tokens 2>/dev/null)
-  for pair in GITHUB_TOKEN:grid.token-github HF_TOKEN:grid.token-hf CLAUDE_TOKEN:grid.token-claude; do
+  for pair in GITHUB_TOKEN:grid.token-github HF_TOKEN:grid.token-hf; do
     local k=${pair%%:*} id=${pair#*:} line; line=$(echo "$vt" | grep "^$k" | head -1)
     case "$line" in "$k ok"*) diag_emit "$id" true false false "$line";; "$k present"*) diag_emit "$id" true true false "$line";; *) diag_emit "$id" false false false "${line:-$k missing}";; esac
   done
-  # accounts: one subscription per person, no copied logins, session history shared across accounts
-  local ntok=0 retired="" unshared="" fixed="" ad
+  # the Claude sign-in: Claude Code's own answer from a running worker; the file's presence otherwise
+  local lj; lj=$(claude_login_json)
+  if echo "$lj" | grep '"loggedIn": *true' >/dev/null; then diag_emit grid.claude-login true false false "Claude Code on the grid is signed in$(echo "$lj" | grep -o '"email": *"[^"]*"' | cut -d'"' -f4 | sed 's/^/ as /')"
+  elif [ "$lj" != null ] && echo "$lj" | grep '"loggedIn": *false' >/dev/null; then diag_emit grid.claude-login false false false "Claude Code on the grid is not signed in: run Ashley: Sign in to Claude on the grid"
+  elif [ -s "$CLAUDE_HOME/.credentials.json" ]; then diag_emit grid.claude-login true true false "a sign-in is stored; a running worker will confirm it"
+  else diag_emit grid.claude-login false false false "not signed in on the grid yet: run Ashley: Sign in to Claude on the grid"; fi
+  # accounts: no stored Claude tokens (Ashley stopped storing them), session history shared across accounts
+  local legacy="" unshared="" fixed="" ad
   for ad in "$ASHLEY_HOME"/accounts/*/; do [ -d "$ad" ] || continue
-    [ -s "$ad/token" ] && ntok=$((ntok + 1))
-    [ -s "$ad/.credentials.json" ] && retired="$retired $(basename "$ad")"
-    if { [ -s "$ad/token" ] || [ -s "$ad/apikey" ]; } && [ ! -L "$ad/projects" ]; then unshared="$unshared $(basename "$ad")"; fi
+    { [ -s "$ad/token" ] || [ -s "$ad/.credentials.json" ]; } && legacy="$legacy $(basename "$ad")"
   done
-  if [ -n "$unshared" ] && [ $repair = 1 ]; then for ad in $unshared; do share_transcripts "$ASHLEY_HOME/accounts/$ad"; done; fixed="$unshared"; unshared=""; fi
-  if [ $ntok -gt 1 ]; then diag_emit grid.accounts false false false "$ntok subscription tokens stored: Ashley uses one Claude subscription per person (ashley accounts remove NAME)"
-  elif [ -n "$retired" ]; then diag_emit grid.accounts true true false "copied Claude logins are no longer used:$retired (a copy revokes the original on refresh); remove them"
+  for ad in "$CLAUDE_HOME" "$ASHLEY_HOME/accounts/apikey"; do [ -d "$ad" ] && [ ! -L "$ad/projects" ] && unshared="$unshared $(basename "$ad")"; done
+  if [ -n "$legacy" ] && [ $repair = 1 ]; then for ad in $legacy; do rm -f "$ASHLEY_HOME/accounts/$ad/token" "$ASHLEY_HOME/accounts/$ad/minted_at" "$ASHLEY_HOME/accounts/$ad/.credentials.json"; rmdir "$ASHLEY_HOME/accounts/$ad" 2>/dev/null; done; fixed="removed stored Claude tokens of$legacy"; legacy=""; fi
+  if [ -n "$unshared" ] && [ $repair = 1 ]; then for ad in $unshared; do [ "$ad" = claude ] && share_transcripts "$CLAUDE_HOME" || share_transcripts "$ASHLEY_HOME/accounts/$ad"; done; fixed="${fixed:+$fixed; }linked the session history of$unshared"; unshared=""; fi
+  if [ -n "$legacy" ]; then diag_emit grid.accounts false false false "Claude tokens stored by an earlier Ashley are still in accounts/:$legacy (repair deletes them; Ashley no longer stores Claude credentials)"
   elif [ -n "$unshared" ]; then diag_emit grid.accounts false false false "session history is not shared for:$unshared (repair links it)"
-  else diag_emit grid.accounts true false false "$ntok subscription token(s); session history shared" "${fixed:+linked the session history of$fixed}"; fi
+  else diag_emit grid.accounts true false false "no stored Claude tokens; session history shared" "$fixed"; fi
   # lab access and the container
   if is_admin; then diag_emit grid.lab-access true false false "you are the lab admin"
   else case "$(student_state)" in
@@ -798,6 +864,21 @@ cmd_diag() {
     esac
   done
   [ $any = 1 ] || diag_emit grid.worker true false true "no worker started yet"
+  # the license: the copy the laptop put here, and each running worker's own verdict (the daemon verifies it)
+  if [ ! -s "$ASHLEY_HOME/license.key" ]; then diag_emit grid.license false false false "no Ashley license on the grid (repair copies it from this laptop)"
+  else
+    local lw="" lb="" lstate
+    for wk in $(worker_dirs); do local wd="$ASHLEY_HOME/workers/$wk"
+      [ "$(job_state "$(cat "$wd/job.id" 2>/dev/null)")" = RUNNING ] || continue
+      lstate=$(tr -d '\n' < "$wd/state.json" 2>/dev/null | grep -o '"license": *{[^}]*}' || true)
+      if [ -z "$lstate" ]; then lb="$lb $wk (started before licensing; restart it)"
+      elif echo "$lstate" | grep '"ok": *true' >/dev/null; then lw="$lw $wk"
+      else lb="$lb $wk ($(echo "$lstate" | grep -o '"detail": *"[^"]*"' | cut -d'"' -f4))"; fi
+    done
+    if [ -n "$lb" ]; then diag_emit grid.license false false false "a worker refuses to run:$lb"
+    elif [ -n "$lw" ]; then diag_emit grid.license true false false "license $(license_fp) accepted by:$lw"
+    else diag_emit grid.license true false false "license $(license_fp) on the grid (no worker running to check it)"; fi
+  fi
   # Slurm from inside the workers' containers: each worker tests it at start and puts it in its heartbeat
   local sw="" sb="" sold="" s
   for wk in $(worker_dirs); do local wd="$ASHLEY_HOME/workers/$wk"
@@ -855,18 +936,6 @@ cmd_verify_tokens() { # prove the stored tokens work, from the login node (tiny 
     local gl; gl=$(curl_auth "$GITHUB_TOKEN" https://api.github.com/user | grep -o '"login": *"[^"]*"' | head -1 | sed 's/.*"\([^"]*\)"$/\1/')
     [ -n "$gl" ] && echo "GITHUB_TOKEN ok ($gl)" || echo "GITHUB_TOKEN rejected or unreachable"
   else echo "GITHUB_TOKEN missing"; fi
-  # The subscription token (claude setup-token): one small authenticated request, no container needed.
-  # 200 = a valid subscription token (setup-token only issues them to Pro/Max/Team/Enterprise);
-  # 401 = invalid, expired or revoked; anything else = present but not confirmable right now.
-  if [ -s "$ASHLEY_HOME/accounts/default/token" ]; then
-    local ct code; ct=$(head -1 "$ASHLEY_HOME/accounts/default/token" | tr -d '\r\n')
-    code=$(curl_auth_code "$ct" https://api.anthropic.com/v1/models "anthropic-beta: oauth-2025-04-20" "anthropic-version: 2023-06-01")
-    case "$code" in
-      200) echo "CLAUDE_TOKEN ok (subscription token accepted)";;
-      401) echo "CLAUDE_TOKEN rejected (invalid, expired or revoked: run claude setup-token again)";;
-      *) echo "CLAUDE_TOKEN present (the check answered HTTP $code)";;
-    esac
-  else echo "CLAUDE_TOKEN missing"; fi
 }
 cmd_uninstall() { # what a brand-new grid account looks like to Ashley
   local purge=0; [ "${1:-}" = "--purge-root" ] && purge=1
@@ -901,6 +970,7 @@ case "${1:-help}" in
   tail) shift; cmd_tail "$@";;
   sessions) shift; cmd_sessions "$@";;
   accounts) shift; cmd_accounts "$@";;
+  claude) shift; cmd_claude "$@";;
   version) echo "$VERSION";;
   help|-h|--help) sed -n '2,22p' "$0";;
   *) die "unknown command '$1' (ashley help)";;

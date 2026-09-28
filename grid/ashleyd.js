@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 'use strict';
+/*! Ashley (c) 2026 OpenSpineConsortium. Licensed software: use requires a license key. See LICENSE.txt. */
 // ashleyd: the persistent Claude Code worker. Runs inside the container on a compute node.
 //
 //   inbox/<id>.json  ->  claim (rename to .claimed)  ->  claude -p ... --output-format stream-json
 //                    ->  outbox/<id>.events.jsonl (live)  ->  outbox/<id>.json (final)
 //
 // One credential per account directory (~/.ashley/accounts/<name>/):
-//   token              a long-lived subscription token from `claude setup-token`
 //   .credentials.json  a copied Claude Code login (CLAUDE_CONFIG_DIR style)
 //   apikey             an Anthropic API key (pay-per-use overflow)
 //   disabled           present = hold this account out of rotation
@@ -40,11 +40,59 @@ const OUTBOX = path.join(WORKER_DIR, 'outbox');
 const LOGDIR = path.join(WORKER_DIR, 'log');
 const SESSIONS = path.join(ASHLEY_HOME, 'sessions');
 const ACCOUNTS = path.join(ASHLEY_HOME, 'accounts');
+// The student's own Claude sign-in, made by Claude Code itself (`ashley claude login` runs
+// `claude auth login` in the student's allocation). Ashley never reads, copies or relays it; it
+// only points every Claude Code process it starts at this folder. One person, one login.
+const CLAUDE_HOME = process.env.ASHLEY_CLAUDE_HOME || path.join(ASHLEY_HOME, 'claude');
+const AUTH_VARS = ['CLAUDE_CODE_OAUTH_TOKEN', 'ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_BASE_URL', 'CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR', 'CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR'];
 const SECRETS = path.join(ASHLEY_HOME, 'secrets.env');
 const STATE = path.join(WORKER_DIR, 'state.json');
 const STOP = path.join(WORKER_DIR, 'stop');
 const HARD_CAP_MS = 6 * 3600e3;
 const MAX_ATTEMPTS = 3;
+
+// ---- license ------------------------------------------------------------------------------
+// The worker runs only for the person the license names: the key the laptop copied to
+// ~/.ashley/license.key must verify against the keys shipped beside this file, name this unix
+// account (the AccessID), and be in date. Checked at start and every minute; a clock set back
+// does not revive an ended key (the latest time seen is kept in license.state).
+const LIC = require(path.join(__dirname, 'license.js'));
+const LIC_KEYS = (() => {
+  try {
+    return JSON.parse(fs.readFileSync(path.join(__dirname, 'license_keys.json'), 'utf8'));
+  } catch {
+    return {};
+  }
+})();
+const LICENSE_RECHECK_MS = parseInt(process.env.ASHLEY_LICENSE_RECHECK_MS || '60000', 10);
+let license = { ok: false, status: 'missing', detail: 'not checked yet' };
+function checkLicense() {
+  const read = (f) => {
+    try {
+      return fs.readFileSync(path.join(ASHLEY_HOME, f), 'utf8');
+    } catch {
+      return '';
+    }
+  };
+  let lastSeen = 0;
+  try {
+    lastSeen = JSON.parse(read('license.state') || '{}').last_seen || 0;
+  } catch {
+    lastSeen = 0;
+  }
+  const now = LIC.effectiveNow(Date.now() / 1000, lastSeen);
+  try {
+    fs.writeFileSync(path.join(ASHLEY_HOME, 'license.state'), JSON.stringify({ last_seen: now }));
+  } catch {
+    /* read-only home: keep going */
+  }
+  const rev = LIC.verifyRevocationList(read('license.revoked'), LIC_KEYS);
+  const user = os.userInfo().username;
+  const c = LIC.verifyLicense(read('license.key').trim(), { keys: LIC_KEYS, now, identity: { accessId: user, email: `${user}@wayne.edu` }, revoked: rev.ok ? rev.revoked : [] });
+  const before = license.status;
+  license = { ok: c.ok, status: c.status, detail: c.detail, lid: c.payload ? c.payload.lid : undefined, edition: c.payload ? c.payload.edition : undefined, exp: c.payload ? c.payload.exp : undefined, days_left: c.daysLeft };
+  if (before !== license.status) log(`license: ${license.status} (${license.detail})`);
+}
 
 for (const d of [INBOX, OUTBOX, LOGDIR, SESSIONS, ACCOUNTS]) fs.mkdirSync(d, { recursive: true });
 const logStream = fs.createWriteStream(path.join(LOGDIR, 'ashleyd.log'), { flags: 'a' });
@@ -108,11 +156,49 @@ const startedAt = new Date().toISOString();
 // phone access (Remote Control) lives in its own module and only acts when <worker>/rc/enable exists
 let phone = null;
 try {
-  phone = require(path.join(__dirname, 'phone.js')).startPhone({ workerDir: WORKER_DIR, ashleyHome: ASHLEY_HOME, root: ROOT, claude: CLAUDE, node, job, log });
+  phone = require(path.join(__dirname, 'phone.js')).startPhone({ workerDir: WORKER_DIR, ashleyHome: ASHLEY_HOME, claudeHome: CLAUDE_HOME, root: ROOT, claude: CLAUDE, node, job, log });
 } catch (e) {
   log(`phone access unavailable: ${e.message}`);
 }
-const phoneTimer = setInterval(() => phone && phone.tick(), 1000);
+checkLicense();
+const licenseTimer = setInterval(checkLicense, LICENSE_RECHECK_MS);
+
+// What Claude Code says about the sign-in in CLAUDE_HOME (`claude auth status`): status only, never the credential.
+let claudeLogin = { loggedIn: false, checked: null, detail: 'not checked yet' };
+function checkClaudeLogin() {
+  const env = Object.assign({}, process.env, { CLAUDE_CONFIG_DIR: CLAUDE_HOME, DISABLE_AUTOUPDATER: '1' });
+  for (const k of AUTH_VARS) delete env[k];
+  const c = claudeCommand(['auth', 'status']);
+  const r = spawnSync(c.cmd, c.args, { env, encoding: 'utf8', timeout: 60_000 });
+  let j = null;
+  try {
+    j = JSON.parse((r.stdout || '').trim());
+  } catch {
+    j = null;
+  }
+  const before = claudeLogin.loggedIn;
+  claudeLogin = j
+    ? { loggedIn: !!j.loggedIn, authMethod: j.authMethod || null, email: j.email || j.emailAddress || null, subscriptionType: j.subscriptionType || null, checked: new Date().toISOString(), detail: j.loggedIn ? `signed in${j.email ? ` as ${j.email}` : ''}` : 'not signed in on the grid' }
+    : { loggedIn: false, checked: new Date().toISOString(), detail: `auth status did not answer (${(r.stderr || r.stdout || String(r.error || '')).trim().slice(0, 120)})` };
+  if (before !== claudeLogin.loggedIn) log(`claude sign-in: ${claudeLogin.detail}`);
+}
+checkClaudeLogin();
+const loginTimer = setInterval(checkClaudeLogin, 30 * 60_000);
+// notice a fresh sign-in at once: the credentials file appears or changes
+try {
+  fs.mkdirSync(CLAUDE_HOME, { recursive: true, mode: 0o700 });
+  fs.watch(CLAUDE_HOME, { persistent: false }, (_ev, f) => {
+    if (f === '.credentials.json') setTimeout(checkClaudeLogin, 1500);
+  });
+} catch {
+  /* watch unsupported: the timer covers it */
+}
+// phone access needs a valid license too; without one it is stopped, never started
+const phoneTimer = setInterval(() => {
+  if (!phone) return;
+  if (license.ok) phone.tick();
+  else if (phone.phase() !== 'off') phone.stop();
+}, 1000);
 
 recoverClaimed();
 log(`ashleyd start worker=${WORKER} node=${node} job=${job} pid=${process.pid} claude=${claudeVersion} concurrency=${CONCURRENCY}`);
@@ -164,6 +250,12 @@ function tick() {
 
 function startRequest(req, claimedPath) {
   const started = new Date();
+  if (!license.ok) {
+    writeResult(req, { status: 'error', result: '', error: `Ashley license: ${license.detail}. Open VS Code and run "Ashley: License", then the setup's grid step.`, started: started.toISOString() });
+    fs.rmSync(claimedPath, { force: true });
+    log(`refused ${req.id}: license ${license.status}`);
+    return;
+  }
   const excluded = new Set(req.exclude_accounts || []);
   const account = chooseAccount(req.account, excluded);
   if (!account) {
@@ -172,7 +264,7 @@ function startRequest(req, claimedPath) {
     writeResult(req, {
       status,
       result: '',
-      error: cool ? `every enabled Claude account is on cooldown until ${cool}` : 'no enabled Claude account in ~/.ashley/accounts (run the Ashley setup wizard or `ashley accounts add-token`)',
+      error: cool ? `your Claude account is on cooldown until ${cool}` : 'Claude is not signed in on the grid: run "Ashley: Sign in to Claude on the grid" (on the grid: ashley claude login)',
       retry_after: cool || undefined,
       started: started.toISOString(),
     });
@@ -205,10 +297,9 @@ function startRequest(req, claimedPath) {
   });
   // only the chosen account's credential: nothing from the job environment or secrets.env may
   // override it (ANTHROPIC_AUTH_TOKEN) or send it elsewhere (ANTHROPIC_BASE_URL)
-  for (const k of ['CLAUDE_CODE_OAUTH_TOKEN', 'ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_BASE_URL', 'CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR', 'CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR']) delete env[k];
+  for (const k of AUTH_VARS) delete env[k];
   shareTranscripts(account.dir);
-  if (account.kind === 'oauth-token') env.CLAUDE_CODE_OAUTH_TOKEN = account.secret;
-  if (account.kind === 'api-key') env.ANTHROPIC_API_KEY = account.secret;
+  if (account.kind === 'api-key') env.ANTHROPIC_API_KEY = account.secret; // the login kind: Claude Code uses what it stored itself
 
   const eventsPath = path.join(OUTBOX, `${req.id}.events.jsonl`);
   const events = fs.createWriteStream(eventsPath, { flags: 'a' });
@@ -357,39 +448,29 @@ function shareTranscripts(dir) {
   }
 }
 function listAccounts() {
-  if (!fs.existsSync(ACCOUNTS)) return [];
   const out = [];
-  for (const name of fs.readdirSync(ACCOUNTS).sort()) {
-    const dir = path.join(ACCOUNTS, name);
-    if (!fs.statSync(dir).isDirectory()) continue;
-    let kind = null;
-    let secret = null;
-    if (fs.existsSync(path.join(dir, 'token'))) {
-      kind = 'oauth-token';
-      secret = readFirstLine(path.join(dir, 'token'));
-    } else if (fs.existsSync(path.join(dir, 'apikey'))) {
-      kind = 'api-key';
-      secret = readFirstLine(path.join(dir, 'apikey'));
-    }
-    // a copied .credentials.json (the old 'login' kind) is retired: it shares a refresh-token chain
-    // with the machine it came from, and the first refresh on either side revokes the other
-    if (!kind) continue;
-    const enabled = !fs.existsSync(path.join(dir, 'disabled'));
+  const stateOf = (dir) => {
     let st = {};
     try {
       st = JSON.parse(fs.readFileSync(path.join(dir, 'state.json'), 'utf8'));
     } catch {
       /* none */
     }
-    const cooldown = st.cooldown_until && new Date(st.cooldown_until) > new Date() ? st.cooldown_until : null;
-    out.push({ name, dir, kind, secret, enabled, cooldown_until: cooldown });
+    return st.cooldown_until && new Date(st.cooldown_until) > new Date() ? st.cooldown_until : null;
+  };
+  // the sign-in: present when Claude Code has stored its credential there (Ashley checks presence, never content)
+  if (fs.existsSync(path.join(CLAUDE_HOME, '.credentials.json'))) {
+    out.push({ name: 'claude', dir: CLAUDE_HOME, kind: 'login', secret: null, enabled: !fs.existsSync(path.join(CLAUDE_HOME, 'disabled')), cooldown_until: stateOf(CLAUDE_HOME) });
   }
-  // subscriptions first (default before others), pay-per-use keys last
-  out.sort((a, b) => (a.kind === 'api-key') - (b.kind === 'api-key') || (a.name === 'default' ? -1 : b.name === 'default' ? 1 : a.name.localeCompare(b.name)));
+  // the student's own Anthropic Console key (Commercial Terms), used only when the subscription window is exhausted
+  const keyDir = path.join(ACCOUNTS, 'apikey');
+  if (fs.existsSync(path.join(keyDir, 'apikey'))) {
+    out.push({ name: 'apikey', dir: keyDir, kind: 'api-key', secret: readFirstLine(path.join(keyDir, 'apikey')), enabled: !fs.existsSync(path.join(keyDir, 'disabled')), cooldown_until: stateOf(keyDir) });
+  }
   return out;
 }
 function chooseAccount(forced, excluded) {
-  const all = listAccounts();
+  const all = listAccounts().filter((a) => a.kind !== 'login' || claudeLogin.loggedIn || claudeLogin.checked === null);
   if (forced) return all.find((a) => a.name === forced && a.enabled) || null;
   return all.find((a) => a.enabled && !a.cooldown_until && !excluded.has(a.name)) || null;
 }
@@ -446,7 +527,7 @@ function writeState(status) {
     pid: process.pid,
     started: startedAt,
     last_beat: new Date().toISOString(),
-    status: status || (stopping ? 'stopping' : allCooling ? 'blocked' : running.size ? 'busy' : 'idle'),
+    status: status || (stopping ? 'stopping' : !license.ok ? 'unlicensed' : allCooling ? 'blocked' : running.size ? 'busy' : 'idle'),
     concurrency: CONCURRENCY,
     running: [...running.keys()],
     queued,
@@ -456,6 +537,8 @@ function writeState(status) {
     blocked_until: allCooling ? soonestCooldown() : null,
     phone: phone ? phone.phase() : 'unavailable',
     slurm: SLURM,
+    license,
+    claude_login: claudeLogin,
   };
   atomicWrite(STATE, JSON.stringify(st, null, 1));
 }
@@ -476,6 +559,8 @@ function finish() {
   clearInterval(timer);
   clearInterval(beat);
   clearInterval(phoneTimer);
+  clearInterval(licenseTimer);
+  clearInterval(loginTimer);
   if (phone) phone.stop();
   writeState('stopping');
   log('exit');

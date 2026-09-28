@@ -4,14 +4,17 @@ import * as vscode from 'vscode';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { SecretId, SERVICES, localEnvironment } from '../core/services';
-import { WizardEnv, WizardSettings, WizardUI } from '../core/wizard';
+import { WizardEnv, WizardSettings, WizardUI, localClaudeStatus } from '../core/wizard';
 import { installPublicKey } from '../core/sshInstall';
 import { isMcpRegistered, registerMcp } from './mcpRegister';
+import type { LicenseGate } from './licenseGate';
 
 const SECRET_PREFIX = 'ashley.';
 export const GITHUB_SCOPES = ['repo', 'workflow', 'read:org', 'gist'];
 
 export class AshleyStore {
+  /** set by activate(): the license gate the wizard and the diagnostics use */
+  licenseGate?: LicenseGate;
   constructor(public readonly context: vscode.ExtensionContext) {}
 
   get config(): vscode.WorkspaceConfiguration {
@@ -103,6 +106,26 @@ export class AshleyStore {
     return session ? { email: session.account.label } : undefined;
   }
 
+  /**
+   * A free trial from the licence service (ashley.licenseServiceUrl): the service checks the Wayne State
+   * sign-in itself (it receives the Microsoft access token VS Code holds and asks Microsoft who it is),
+   * issues one trial per AccessID, and returns a signed key. Nothing else is sent.
+   */
+  async requestTrial(): Promise<{ key?: string; detail: string }> {
+    const url = this.config.get<string>('licenseServiceUrl', '').trim();
+    if (!url) return { detail: 'Trials are issued by your lead: send them your AccessID and they will send you a key.' };
+    const session = await vscode.authentication.getSession('microsoft', ['VSCODE_TENANT:organizations', 'User.Read'], { createIfNone: true });
+    if (!session) return { detail: 'the Wayne State sign-in was cancelled' };
+    try {
+      const res = await fetch(url.replace(/\/$/, '') + '/trial', { method: 'POST', headers: { authorization: `Bearer ${session.accessToken}`, 'content-type': 'application/json' }, body: JSON.stringify({ product: 'ashley', version: this.context.extension.packageJSON.version }), signal: AbortSignal.timeout(30_000) });
+      const j = (await res.json().catch(() => ({}))) as { key?: string; error?: string; detail?: string };
+      if (!res.ok || !j.key) return { detail: j.detail || j.error || `the licence service answered HTTP ${res.status}` };
+      return { key: j.key, detail: j.detail ?? 'trial issued' };
+    } catch (e) {
+      return { detail: `the licence service could not be reached (${(e as Error).message})` };
+    }
+  }
+
   /** The lab's pre-approved AccessIDs: the list shipped in this build, or a newer one from ashley.allowlistUrl. */
   async allowlist(): Promise<string[] | null> {
     const url = this.config.get<string>('allowlistUrl', '');
@@ -148,9 +171,12 @@ export class AshleyStore {
       signInGitHub: () => this.signInGitHub(),
       signInWsu: () => this.signInWsu(),
       allowlist: () => this.allowlist(),
+      license: this.licenseGate,
       extraRequirements: async () => {
         const m: string[] = [];
         if (!vscode.extensions.getExtension('anthropic.claude-code')) m.push('the Claude Code extension (signed in to Claude Pro or Max)');
+        const lc = await localClaudeStatus(s.claudeExecutable);
+        if (!lc.subscription) m.push(`Claude Code on this laptop signed in with a Claude Pro or Max subscription (${lc.detail})`);
         if (!vscode.extensions.getExtension('ms-vscode-remote.remote-ssh')) m.push('the Remote-SSH extension');
         if (!(await isMcpRegistered())) {
           const r = await registerMcp(this.context.extensionPath, s.sshAlias, () => {});

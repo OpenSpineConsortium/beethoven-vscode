@@ -1,4 +1,5 @@
 #!/bin/bash
+# Ashley (c) 2026 OpenSpineConsortium. Licensed software: use requires a license key. See LICENSE.txt.
 # Ashley bootstrap: build the Claude Code container for this user and record what works.
 # Runs once per user (5-15 min), as a job, never on the login node. Idempotent: rerun to
 # repair or, with UPDATE=1, to reinstall Claude Code at CLAUDE_CODE_VERSION.

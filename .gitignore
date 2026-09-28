@@ -1,12 +1,12 @@
 node_modules/
-# the built extension is committed (students install it from here); bundles and test builds are not
+# the built extension is committed (students install it from here); bundles, unpacked copies and
+# test builds are not. dist/release/<version>/ holds each release with its signed checksums.
 /dist/*
-!/dist/ashley-wsu-*.vsix
+!/dist/ashley-*.vsix
+!/dist/release/
 extension/dist/
 dist-test/
 out/
-*.vsix
-!/dist/ashley-wsu-*.vsix
 .vscode-test/
 *.log
 .DS_Store
@@ -19,3 +19,10 @@ secrets*
 .credentials.json
 # build intermediates for the manual
 docs/build/
+
+# license signing keys never enter the repository (they live in ~/.ashley-vendor); the one
+# exception is the test-only key that test builds trust
+*.pem
+!extension/test-fixtures/license/test-signing-key.pem
+.ashley-vendor/
+extension/build-meta/

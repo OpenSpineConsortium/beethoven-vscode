@@ -2,31 +2,52 @@
 // Everything the extension needs at run time ends up under dist/, so the .vsix
 // carries no node_modules ("vsce package --no-dependencies").
 import * as esbuild from 'esbuild';
-import { readdirSync, statSync, mkdirSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { readdirSync, statSync, mkdirSync, existsSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
+import { createPrivateKey, createPublicKey } from 'node:crypto';
 
 const watch = process.argv.includes('--watch');
 const tests = process.argv.includes('--tests');
 const production = process.argv.includes('--production') || process.env.NODE_ENV === 'production';
 
+if (production && tests) throw new Error('a production build never includes the tests or their signing key');
+
+// Test builds trust one extra license signing key whose private half is committed under
+// test-fixtures (so tests can issue keys). Production builds trust only grid/license_keys.json.
+function testKeys() {
+  const pem = readFileSync('test-fixtures/license/test-signing-key.pem', 'utf8');
+  const der = createPublicKey(createPrivateKey(pem)).export({ type: 'spki', format: 'der' });
+  return { test: der.subarray(der.length - 32).toString('base64') };
+}
+if (production && Object.keys(JSON.parse(readFileSync('../grid/license_keys.json', 'utf8'))).length === 0) {
+  throw new Error('grid/license_keys.json trusts no signing key: run tools/license/ashley-license.mjs init before a release build');
+}
+
+const NOTICE = '/*! Ashley (c) 2026 OpenSpineConsortium. Licensed software: use requires a license key. See LICENSE.txt and THIRD_PARTY_NOTICES.md. */';
 const common = {
   bundle: true,
   platform: 'node',
   target: 'node20',
   format: 'cjs',
+  // releases ship minified code and no source maps (a map carries the whole source)
   sourcemap: !production,
-  minify: false,
+  minify: production,
+  legalComments: 'eof',
   logLevel: 'info',
-  define: { 'process.env.ASHLEY_BUILD': JSON.stringify(new Date().toISOString()) },
+  metafile: true,
+  define: {
+    'process.env.ASHLEY_BUILD': JSON.stringify(new Date().toISOString()),
+    __ASHLEY_TEST_KEYS__: tests ? JSON.stringify(testKeys()) : 'undefined',
+  },
 };
 
 const builds = [
   // The VS Code extension host entry point. 'vscode' is provided by the host.
-  { ...common, entryPoints: ['src/extension.ts'], outfile: 'dist/extension.js', external: ['vscode', 'cpu-features', '*.node'] },
+  { ...common, entryPoints: ['src/extension.ts'], outfile: 'dist/extension.js', external: ['vscode', 'cpu-features', '*.node'], banner: { js: NOTICE } },
   // The MCP server Claude Code launches as a child process (plain Node, no vscode).
-  { ...common, entryPoints: ['src/mcp/server.ts'], outfile: 'dist/mcp-server.js', external: ['cpu-features', '*.node'], banner: { js: '#!/usr/bin/env node' } },
+  { ...common, entryPoints: ['src/mcp/server.ts'], outfile: 'dist/mcp-server.js', external: ['cpu-features', '*.node'], banner: { js: `#!/usr/bin/env node\n${NOTICE}` } },
   // The local CLI (plain Node), used by Xcode / terminal users and by the tests.
-  { ...common, entryPoints: ['src/cli/main.ts'], outfile: 'dist/ashley-cli.js', external: ['cpu-features', '*.node'], banner: { js: '#!/usr/bin/env node' } },
+  { ...common, entryPoints: ['src/cli/main.ts'], outfile: 'dist/ashley-cli.js', external: ['cpu-features', '*.node'], banner: { js: `#!/usr/bin/env node\n${NOTICE}` } },
 ];
 
 function listTests(dir) {
@@ -55,17 +76,22 @@ const gridSrc = join('..', 'grid');
 if (existsSync(gridSrc)) {
   for (const f of readdirSync(gridSrc)) {
     const src = join(gridSrc, f);
-    if (!statSync(src).isFile()) continue;
+    if (!statSync(src).isFile() || f.endsWith('.d.ts')) continue;
     writeFileSync(join('dist/grid', f), readFileSync(src, 'utf8').replace(/\r\n/g, '\n'));
   }
 }
 
+// a release must not carry maps left over from an earlier development build
+if (production) for (const f of readdirSync('dist')) if (f.endsWith('.map')) rmSync(join('dist', f));
+mkdirSync('build-meta', { recursive: true });
 for (const cfg of builds) {
   if (watch) {
     const ctx = await esbuild.context(cfg);
     await ctx.watch();
   } else {
-    await esbuild.build(cfg);
+    const res = await esbuild.build(cfg);
+    // which packages went into each bundle: tools/third_party_notices.mjs reads these
+    if (res.metafile && cfg.outfile) writeFileSync(join('build-meta', cfg.outfile.replace(/^dist\//, '') + '.json'), JSON.stringify(res.metafile));
   }
 }
 if (watch) console.log('watching...');

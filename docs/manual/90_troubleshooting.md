@@ -43,10 +43,12 @@ The steps are the ten in *Getting started*.
 | Step 10 (*Join the lab*) refuses | a step above is not finished, or a token does not verify | the panel lists what is missing; fix that step and run the wizard again |
 | Ashley view: *Waiting for lab access* | your request is pending | your lead approves it in Ashley; nothing to do |
 | Worker shows PENDING for a long time | the `requeue` pool is busy | start it with the `secp`/`secondary` settings (`ashley.worker.partition`, `ashley.worker.qos`) |
-| A prompt returns `no enabled Claude account` | the Claude token is not on the grid | press **Renew** next to Claude (it updates the grid), or run **Troubleshoot and repair** |
-| A prompt returns `Failed to authenticate` | the token expired or was revoked | press **Renew** next to Claude |
+| A prompt returns *Claude is not signed in on the grid* | you have not done step 12, or the sign-in ended (about a month) | run **Ashley: Sign in to Claude on the grid** |
+| Step 5 says *signed in with an API key, not a Claude subscription* | Claude Code on your laptop is using a Console key | in Claude Code, sign out and sign in with your Claude Pro or Max account |
+| Ashley refuses every command and says *license needed* | no key, an ended trial, or a key for someone else | **Ashley: License**: enter your key, or ask your lead. A trial ends by itself and cannot be repeated |
+| Ashley says the terms have not been accepted | the first-run dialog was closed with *Not now* | run any Ashley command; the dialog returns |
+| Phone access says *need_consent* | Claude Code's one-time Remote Control question has not been answered | **Ashley: Phone access** opens the terminal; type y when asked |
 | A prompt returns `rate_limited` with a time | your subscription window is used up | wait for the time shown; Ashley never switches to another person's account |
-| The grid says *already holds your Claude subscription token* | a second subscription token was offered under another name | Ashley uses one subscription per person; replace the existing one (**Renew** does this) |
 | Phone access: *Claude did not accept that code* | only part of the code was copied | press Copy on the claude.ai page (the code is long) and send it again |
 | Phone access: *hosted by worker ...* | phone access is on for another of your workers | run **Ashley: Phone access** and pick this worker; it moves, and the other one turns off |
 | Phone access worked yesterday, not today | the worker job ended, or the 30-day sign-in expired | start a worker; run **Ashley: Phone access** again |
@@ -62,8 +64,8 @@ The steps are the ten in *Getting started*.
 - Laptop: the status bar item's **Show log** (the same as *View, Output, Ashley*): every check and
   every command with its exit code. Each troubleshooter run is also saved as a report.
 - Grid: `~/.ashley/workers/<name>/log/ashleyd.log`, `~/.ashley/workers/<name>/log/slurm_<job>.out`,
-  every request's `outbox/<id>.events.jsonl`, and for phone access `rc/login.log` and
-  `rc/session.log` in the worker's folder.
+  every request's `outbox/<id>.events.jsonl`, and for phone access `rc/session.log` in the worker's
+  folder.
 - Remote-SSH: *View, Output, Remote - SSH*.
 
 ## Undo

@@ -5,9 +5,9 @@
 1. Install [VS Code](https://code.visualstudio.com/) and, from the Extensions view, **Claude Code**
    (`anthropic.claude-code`) and **Remote - SSH** (`ms-vscode-remote.remote-ssh`). Sign in to
    Claude Code with your Claude Pro or Max account.
-2. Get the file `ashley-wsu-1.0.0.vsix` from your lead (or the repository's `dist/` folder).
+2. Get the file `ashley-2.0.0.vsix` from your lead (or the repository's `dist/` folder).
 3. In VS Code: Extensions view, the `...` menu at the top right, **Install from VSIX...**, pick the
-   file. Or from a terminal: `code --install-extension ashley-wsu-1.0.0.vsix`.
+   file. Or from a terminal: `code --install-extension ashley-2.0.0.vsix`.
 4. Command Palette (Ctrl/Cmd+Shift+P): **Ashley: Set up my research environment (wizard)**.
 
 Before the wizard you need, once: a grid account (request it at
@@ -54,8 +54,8 @@ npm install
 npm run build          # bundles dist/extension.js, dist/mcp-server.js, dist/ashley-cli.js, copies ../grid into dist/grid
 npm run test:unit      # 22 tests: ssh config, protocol, slurm parsing, and the daemon with a fake claude
 npm run test:vscode    # downloads a VS Code build once, runs the integration suite
-npm run package        # writes ../dist/ashley-wsu-<version>.vsix
-code --install-extension ../dist/ashley-wsu-1.0.0.vsix
+npm run package        # writes ../dist/ashley-<version>.vsix
+code --install-extension ../dist/ashley-2.0.0.vsix
 ```
 
 On a Windows machine without Node on `PATH`, the portable build works:

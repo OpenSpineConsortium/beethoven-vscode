@@ -7,6 +7,9 @@ import { AshleyStore } from './vscode/store';
 import { resolveExecutable } from './vscode/ui';
 import { SetupPanel } from './vscode/panel';
 import { Troubleshooter } from './vscode/diagnosticsUi';
+import { LicenseGate, REFUSED, UNGATED } from './vscode/licenseGate';
+import { ensureTermsAccepted, termsRecord, TERMS_VERSION, TermsRecord } from './vscode/terms';
+import { DiagSharer } from './vscode/diagShare';
 import { buildGraph, makeCtx } from './vscode/diagNodes';
 import { VsCodeUI as SetupPanelFreeUI } from './vscode/ui';
 import { order, runDiagnostics, formatReport } from './core/diagnostics';
@@ -28,6 +31,9 @@ let tree: AshleyTree;
 let panel: SetupPanel | undefined;
 let relay: GridRelay | undefined;
 let troubleshooter: Troubleshooter | undefined;
+let license: LicenseGate;
+let sharer: DiagSharer;
+let context0: vscode.ExtensionContext | undefined;
 function getRelay(alias: string): GridRelay {
   if (!relay || relay.alias !== alias) {
     relay?.close();
@@ -37,8 +43,26 @@ function getRelay(alias: string): GridRelay {
 }
 
 export async function activate(context: vscode.ExtensionContext): Promise<{ _internal: typeof _internal }> {
+  context0 = context;
   output = vscode.window.createOutputChannel('Ashley');
   store = new AshleyStore(context);
+  license = new LicenseGate(context, output);
+  store.licenseGate = license;
+  context.subscriptions.push(license);
+  sharer = new DiagSharer(context, output, () => license.identity());
+  license.requestTrial = () => store.requestTrial();
+  // upgrades: an earlier Ashley kept a Claude token in the keychain; it is deleted (Ashley stores no Claude credential)
+  try {
+    if (await context.secrets.get('ashley.claudeOauth')) {
+      await context.secrets.delete('ashley.claudeOauth');
+      output.appendLine('removed the Claude token an earlier Ashley kept in the keychain (Ashley no longer stores Claude credentials)');
+    }
+  } catch {
+    /* no keychain */
+  }
+  // upgrades: the Wayne State sign-in recorded by 1.0.0 lives in settings; the license gate compares against it
+  const s0 = store.settings();
+  if (!license.identity() && s0.accessId && s0.wsuEmail) await license.recordIdentity({ accessId: s0.accessId, email: s0.wsuEmail });
   const grid = () => {
     const alias = store.settings().sshAlias;
     return new GridApi(alias, (l) => output.appendLine(l), getRelay(alias));
@@ -46,16 +70,32 @@ export async function activate(context: vscode.ExtensionContext): Promise<{ _int
   tree = new AshleyTree(store, grid);
   context.subscriptions.push(output, vscode.window.registerTreeDataProvider('ashley.status', tree));
 
-  try {
-    const names = await store.hydrateEnvironment();
-    if (names.length) output.appendLine(`environment: ${names.join(', ')}`);
-  } catch (e) {
-    output.appendLine(`environment hydration failed: ${e}`);
-  }
+  // tokens go into terminals only for a licensed person
+  const hydrate = async () => {
+    if (!license.allowed('ashley.hydrate').ok) return;
+    try {
+      const names = await store.hydrateEnvironment();
+      if (names.length) output.appendLine(`environment: ${names.join(', ')}`);
+    } catch (e) {
+      output.appendLine(`environment hydration failed: ${e}`);
+    }
+  };
+  await hydrate();
+  context.subscriptions.push(
+    license.onDidChange(() => {
+      tree.refresh();
+      void hydrate();
+    }),
+  );
 
   const reg = (id: string, fn: (...a: any[]) => Promise<unknown> | unknown) =>
     context.subscriptions.push(
       vscode.commands.registerCommand(id, async (...a: any[]) => {
+        // the terms first (a person-run command, never a background one), then the license gate;
+        // reading the manual and the log needs neither
+        if (!TERMS_EXEMPT.has(id) && !(await ensureTermsAccepted(context, output))) return REFUSED;
+        const gate = license.allowed(id);
+        if (!gate.ok) return license.refuse(id, gate.reason);
         try {
           return await fn(...a);
         } catch (e) {
@@ -66,8 +106,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<{ _int
       }),
     );
 
-  troubleshooter = new Troubleshooter(context, store, output);
+  troubleshooter = new Troubleshooter(context, store, output, (rep, gridVersion) => sharer.maybeSend(rep, gridVersion, output ? [] : []));
   context.subscriptions.push(troubleshooter);
+  reg('ashley.license', () => license.manage());
+  reg('ashley.errorReports', () => sharer.manage());
+  reg('ashley.claudeSignIn', () => commandStepOnly(context, 'claudeGrid', 'Ashley: sign in to Claude on the grid'));
   reg('ashley.troubleshoot', () => troubleshooter!.run({ repair: true, quick: false, quiet: false }));
   reg('ashley.healthMenu', () => troubleshooter!.menu());
   reg('ashley.showLog', () => output.show(true));
@@ -82,7 +125,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<{ _int
   reg('ashley.gridStatus', () => commandGridStatus(grid()));
   reg('ashley.gridBootstrap', () => commandBootstrap(context));
   reg('ashley.registerMcp', () => commandRegisterMcp(context));
-  reg('ashley.claudeToken', () => commandTokenStep(context, 'claudeOauth'));
   reg('ashley.manageTokens', () => commandManageTokens(context));
   reg('ashley.openManual', () => commandOpenManual(context));
   reg('ashley.openTerminal', () => commandOpenTerminal());
@@ -92,7 +134,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<{ _int
   reg('ashley.refresh', () => tree.refresh());
 
   const s = store.settings();
-  if (!s.accessId && !context.globalState.get('ashley.offered')) {
+  const lic0 = license.check(true);
+  if (!lic0.ok && !context.globalState.get('ashley.licenseOffered')) {
+    void context.globalState.update('ashley.licenseOffered', true);
+    void vscode.window.showInformationMessage(`Ashley needs a license key before it can set anything up (${lic0.detail}).`, 'Enter the key', 'Read the manual').then((pick) => {
+      if (pick === 'Enter the key') void vscode.commands.executeCommand('ashley.license');
+      else if (pick === 'Read the manual') void vscode.commands.executeCommand('ashley.openManual');
+    });
+  } else if (!s.accessId && !context.globalState.get('ashley.offered')) {
     void context.globalState.update('ashley.offered', true);
     void vscode.window.showInformationMessage('Ashley can set up this laptop for the Wayne State grid (SSH, tokens, a Claude worker). Start now?', 'Set up', 'Read the manual', 'Later').then((pick) => {
       if (pick === 'Set up') void vscode.commands.executeCommand('ashley.setup');
@@ -100,7 +149,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<{ _int
     });
   }
   troubleshooter.startSweeps();
-  setTimeout(() => void checkTokensQuietly(context).catch((e) => output.appendLine(`token check: ${e}`)), 20_000);
+  license.startRevocationChecks();
+  setTimeout(() => {
+    if (license.allowed('ashley.tokenCheck').ok) void checkTokensQuietly(context).catch((e) => output.appendLine(`token check: ${e}`));
+  }, 20_000);
+  output.appendLine(`license: ${license.check().status} (${license.check().detail})`);
   output.appendLine(`Ashley ${context.extension.packageJSON.version} active (build ${process.env.ASHLEY_BUILD ?? 'dev'})`);
   return { _internal };
 }
@@ -175,6 +228,17 @@ function mergeReports(base: StepReport[], updates: StepReport[]): StepReport[] {
   return STEPS.map((s) => m.get(s.id)).filter((x): x is StepReport => !!x);
 }
 
+async function commandStepOnly(context: vscode.ExtensionContext, id: string, title: string): Promise<void> {
+  const p = openPanel(context, title);
+  const env = store.wizardEnv(p);
+  const reports = await runWizard(env, { force: true, only: [id], onStep: (rs, cur) => p.setSteps(rs, cur) });
+  output.appendLine(format(reports));
+  const r = reports[reports.length - 1];
+  p.setSteps(await checkAll(env), null);
+  p.finish(r ? `${r.title}: ${r.detail}` : 'cancelled', r?.status === 'done');
+  tree.refresh();
+}
+
 async function commandTokenStep(context: vscode.ExtensionContext, id: SecretId): Promise<void> {
   const p = openPanel(context, 'Ashley: renew a token');
   const env = store.wizardEnv(p);
@@ -192,7 +256,7 @@ async function checkTokensQuietly(context: vscode.ExtensionContext): Promise<voi
   const last = context.globalState.get<number>('ashley.tokenCheck', 0);
   if (Date.now() - last < 24 * 3600e3 || !store.settings().accessId) return;
   await context.globalState.update('ashley.tokenCheck', Date.now());
-  for (const svc of SERVICES.filter((s) => ['github', 'huggingface', 'claudeOauth'].includes(s.id))) {
+  for (const svc of SERVICES.filter((s) => ['github', 'huggingface'].includes(s.id))) {
     const v = await store.getSecret(svc.id);
     if (!v) continue;
     const c = await validateToken(svc, v);
@@ -520,7 +584,7 @@ async function commandPhone(context: vscode.ExtensionContext, grid: GridApi, wor
   }
   const p = openPanel(context, 'Ashley: phone access');
   p.setSteps([], null);
-  const id = store.settings().accessId;
+  const alias = store.settings().sshAlias;
   const wait = async (phases: string[], seconds: number) => {
     const end = Date.now() + seconds * 1000;
     for (;;) {
@@ -533,26 +597,27 @@ async function commandPhone(context: vscode.ExtensionContext, grid: GridApi, wor
     }
   };
   p.progress(await grid.phone('on', w.name));
-  let st = await wait(['need_code', 'running', 'error'], 120);
-  for (let round = 0; st && st.phase === 'need_code' && round < 3; round++) {
-    const go = await p.confirm(
-      `Phone access: your browser opens claude.ai. Sign in with the account you made with ${id ? `${id}@wayne.edu` : 'your WSU e-mail'}, press Authorize, then press Copy next to the code the page shows. Ashley hands the code to your worker on the grid.${round ? `\n\n${st.message ?? ''}` : ''}`,
-      'Open the sign-in',
-      'Not now',
-    );
-    if (!go) return p.finish('Phone access is waiting for the sign-in; run this again any time.', false);
-    if (st.url) await vscode.env.openExternal(vscode.Uri.parse(st.url));
-    const code = await p.askToken!('The code from the claude.ai page', { pattern: /^[A-Za-z0-9_\-#.~]{20,}$/, instructions: 'Press Copy on the page; Ashley notices the copied code.' });
-    if (!code) return p.finish('Cancelled.', false);
-    p.progress(await grid.phoneCode(code, w.name));
-    st = await wait(['need_code', 'running', 'error'], 180);
+  let st = await wait(['need_login', 'need_consent', 'running', 'error', 'elsewhere'], 120);
+  for (let round = 0; st && (st.phase === 'need_login' || st.phase === 'need_consent') && round < 2; round++) {
+    if (st.phase === 'need_login') {
+      const go = await p.confirm('Phone access uses your own Claude sign-in on the grid, and there is none yet. A terminal opens; Claude Code signs you in there (click the link, Authorize, paste the code). Ashley never sees the sign-in.', 'Open the terminal', 'Not now');
+      if (!go) return p.finish('Phone access is waiting for the sign-in; run this again any time.', false);
+      await p.runInteractive('Sign in to Claude on the grid', 'ssh', ['-t', alias, '~/.ashley/bin/ashley', 'claude', 'login']);
+    } else {
+      const go = await p.confirm('Claude Code asks once whether to enable Remote Control, and you answer it yourself. A terminal opens: type y when asked, and press Ctrl+C once you see the session link. While your phone is connected, the session transcript is stored on Anthropic\'s servers, so keep confidential data out of phone sessions.', 'Open the terminal', 'Not now');
+      if (!go) return p.finish('Phone access is waiting for your answer; run this again any time.', false);
+      await p.runInteractive('Enable Remote Control', 'ssh', ['-t', alias, '~/.ashley/bin/ashley', 'claude', 'remote-consent']);
+    }
+    st = await wait(['need_login', 'need_consent', 'running', 'error', 'elsewhere'], 180);
   }
   if (st?.phase === 'running' || st?.phase === 'starting') {
-    p.finish(`Phone access is on. Open the Claude app on your phone (or claude.ai/code), go to Code, and pick the session on ${w.name}. It runs as long as the worker job does; the sign-in lasts about 30 days.${st.session_url ? ` Link: ${st.session_url}` : ''}`, true);
+    p.finish(`Phone access is on. Open the Claude app on your phone (or claude.ai/code), go to Code, and pick the session on ${w.name}. It runs as long as the worker job does; the sign-in lasts about a month and Ashley tells you when to repeat it.${st.session_url ? ` Link: ${st.session_url}` : ''}`, true);
     if (st.session_url) {
       const open = await vscode.window.showInformationMessage('Phone access is on. Open the session on this laptop too?', 'Open');
       if (open) await vscode.env.openExternal(vscode.Uri.parse(st.session_url));
     }
+  } else if (st?.phase === 'elsewhere') {
+    p.finish(st.message ?? 'another worker hosts phone access', true);
   } else {
     p.finish(`Phone access did not start: ${st?.message ?? 'no answer from the worker'}. Show log for details.`, false);
   }
@@ -576,6 +641,9 @@ async function commandOpenTerminal(): Promise<void> {
   t.show();
 }
 
+/** Commands that work before the terms are accepted: reading about Ashley and seeing its log. */
+const TERMS_EXEMPT = new Set(['ashley.openManual', 'ashley.showLog', 'ashley.refresh', 'ashley.healthMenu']);
+
 const _internal = {
   STEPS,
   testConnection,
@@ -585,5 +653,10 @@ const _internal = {
   formatReport,
   storeFor: () => store,
   makeCtx: (s: AshleyStore, withNodeProbe: boolean, log: (l: string) => void) => makeCtx(s, s.wizardEnv(new SetupPanelFreeUI(output)), s.context.extensionPath, withNodeProbe, log),
+  licenseGate: () => license,
+  sharer: () => sharer,
+  terms: { record: () => termsRecord(context0!), accept: async (diagnostics: 'on' | 'off' = 'off') => context0!.globalState.update('ashley.terms', { version: TERMS_VERSION, acceptedAt: new Date().toISOString(), diagnostics } as TermsRecord) },
+  REFUSED,
+  UNGATED,
 };
 export { _internal };

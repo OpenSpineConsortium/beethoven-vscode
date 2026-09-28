@@ -1,6 +1,98 @@
-# CHECKPOINT 2026-09-28 (updated 07:05 UTC, twelfth pass: version 1 ready for testing) — Ashley, the WSU grid + Claude Code extension
+# CHECKPOINT 2026-09-28 (updated 13:45 UTC, version 2.0.0: licensed, compliant credential path) — Ashley, the grid + Claude Code extension
 
 ## CURRENT STATE: read this first
+
+Version 2.0.0 of the extension (`openspineconsortium.ashley`, installed in Greg's VS Code; 1.0.0
+uninstalled), grid scripts version 4 deployed to go2432; workers `default` (job 40487595) and `peer`
+(40487596) on asx1, both reporting a valid license and "not signed in" for Claude (expected until
+Greg signs in). Release in `dist/release/2.0.0/` (VSIX, changelog, licence, privacy, notices,
+SHA256SUMS signed by k1). Committed and pushed as this checkpoint says below.
+
+### What version 2 changed (passes 13 to 16)
+
+- **13: licensing.** Ed25519 keys (`grid/license.js`, one implementation for extension, CLI, MCP
+  server, daemon); issuer `tools/license/ashley-license.mjs` (init, issue, list, revoke, verify,
+  export-key, sign-release, verify-release); vendor folder `~/.ashley-vendor` (release key `k1`,
+  trial key `trial`, ledger); Greg's license `L-02dodeGmoygG` (lab, to 2027-09-28) in
+  `~/.ashley-local` and on the grid. Gate: `licenseGate.ts` (every command; identity = the Wayne
+  State sign-in; status-bar item), daemon `checkLicense` (refuses work, heartbeat `license`),
+  `ashley worker start` refuses without a key. Revocation list bundled (`extension/media/revoked.txt`)
+  and fetched daily from `ashley.licenseRevocationUrl`. First-run terms dialog (`terms.ts`) with the
+  opt-out error-report choice. Trial request through `ashley.licenseServiceUrl` (Worker).
+- **14: the compliant credential path** (`docs/research/reports/Ashley terms of service
+  constraints.md`, 5 researchers + verification). Anthropic's Claude Code terms forbid third-party
+  tools from collecting or storing Claude credentials; v1 captured `setup-token`. Now: the student
+  signs in to Claude Code on the laptop (checked with `claude auth status`, step 5) and once on the
+  grid (`ashley claude login` = `claude auth login` inside their allocation in the container, step
+  12); Claude Code stores its credential in `~/.ashley/claude`; the daemon points every process
+  there, strips all six credential variables, reads only `claude auth status` (heartbeat
+  `claude_login`, fs.watch on the credentials file), refuses prompts when not signed in. Phone
+  access uses the same login; the student answers "Enable Remote Control?" in
+  `ashley claude remote-consent` (marker file); no code relay; never logout. Legacy tokens deleted
+  on upgrade (keychain, `accounts/*/token`, `grid.accounts` repair). Lab access no longer requires
+  a grid Claude token; the laptop requires a subscription sign-in in Claude Code.
+- **15: error reports and the maintenance pipeline.** `core/diagReport.ts` (scrubber, tests),
+  `vscode/diagShare.ts` (send only if `ashley.diagnostics.share` on AND VS Code telemetry on AND an
+  endpoint configured; one per signature per day; every report kept locally; `Ashley: Error
+  reports`). Vendor side `tools/intake/` (Cloudflare Worker: /trial via Microsoft Graph identity,
+  /report to GitHub issues, /revoked) and `.github/workflows/triage.yml` (claude-code-action on
+  Greg's own API key, write-access trigger, draft PR on `claude/`, label `ai-generated`,
+  `Assisted-by` trailer). Repo baseline: `ci.yml`, CODEOWNERS, PR template, dependabot,
+  CONTRIBUTING, `docs/ENGINEERING.md`, SECURITY, PRIVACY.
+- **16: release.** `esbuild --production` (minified, no maps, notice banner, test key excluded),
+  `tools/third_party_notices.mjs` (13 packages, all permissive), `tools/release_check.mjs` (zip
+  reader; refuses maps, fixtures, test key, copyleft, wrong licence field, unminified, any
+  setup-token string), `tools/release.mjs`. Extension renamed (APPM 10.12). Docs: LICENSE.txt v2.0
+  (21 sections per the report's clause spec), PRIVACY.md, LICENSING.md, ANTHROPIC_REQUEST.md,
+  manual (34 pp, 12-step table, new wizard figure via `tools/wizard_figure.py`), ARCHITECTURE,
+  DIAGNOSTICS (45 nodes), README, CHANGELOG.
+
+### Tests (all run today)
+
+| Suite | Result |
+|---|---|
+| Laptop unit tests | 46 pass, 7 skip on Windows (container-only) |
+| VS Code integration (`--label unit`) | 13 pass (terms, gate, license, graph rule) |
+| Packaged extension (`--label package`, unpacked release) | 3 pass, 1 pending (release-key trial, needs ASHLEY_RELEASE_TEST_LICENSE) |
+| Live troubleshooter (`--label live`) | pass; license nodes green on laptop and both workers |
+| Inside the lab container on asx1 (`tools/grid_tests.sh`) | 17 of 17 |
+| Release check + signed checksums | pass; signature by k1 verified |
+
+### Open
+
+1. **Greg:** `Ashley: Sign in to Claude on the grid` (or `ssh -t wsu-grid ~/.ashley/bin/ashley claude
+   login`), then `Ashley: Phone access` (asks him to answer Remote Control's consent in a terminal).
+   Then a first prompt through a worker. The Wayne State sign-in in the university tenant.
+2. **Deploy the intake Worker** (`tools/intake/README.md`) and set `ashley.licenseServiceUrl`,
+   `ashley.diagnostics.endpoint`, `ashley.licenseRevocationUrl` defaults before the student release.
+3. **Written answers before paid keys:** Anthropic (`docs/ANTHROPIC_REQUEST.md`), WSU OTC, counsel
+   (licensor entity, Tenet clause). Commercial build/test off the Grid.
+4. GitHub plan: branch protection and CODEOWNERS enforcement on a private repo need Pro;
+   `tools/repo_settings.sh` not written; apply by hand in Settings when the plan allows.
+5. Status calls still open one ssh each (relay routing planned); the claude-swap next-release plan
+   (usage meter) unchanged.
+
+### How to continue
+
+```powershell
+$env:Path = "C:\Users\grego\tools\node22;" + $env:Path
+cd C:\Users\grego\OneDrive\Desktop\ashley\extension
+npm run typecheck; node esbuild.mjs --tests; node --test "dist-test/unit/**/*.test.js"
+npx vscode-test --label unit; npx vscode-test --label live
+$env:ASHLEY_PACKAGED_EXT="..\dist\unpacked\extension"; npx vscode-test --label package
+bash ../tools/grid_tests.sh                       # Git Bash: 17 tests in the container
+$env:ASHLEY_VENDOR_DIR="C:\Users\grego\.ashley-vendor"; node ../tools/release.mjs
+node ../tools/license/ashley-license.mjs issue --access-id ab1234 --name "A. Student" --email ab1234@wayne.edu --edition student --days 365
+```
+
+Deploy grid scripts: copy `grid/*` (CR stripped) to `~/.ashley/bin/`, then `ashley worker restart --name <w>`.
+Push: `bash tools/push_via_grid.sh`.
+
+---
+
+History follows (version 1: passes 1 to 12).
+
+## Version 1 state (superseded by version 2 above)
 
 Version 1.0.0 of the extension, grid scripts version 3, installed in Greg's VS Code
 (`dist/ashley-wsu-1.0.0.vsix`, 27 files, 1.64 MB) and deployed to his grid account. Workers
@@ -68,9 +160,8 @@ ssh wsu-grid "~/.ashley/bin/ashley diag --json"                       # grid tru
 Deploy grid scripts by hand: copy `grid/*` with CR stripped to `~/.ashley/bin/`, then
 `ashley worker restart --name <w>` (it re-renders from the new template). Push: `bash tools/push_via_grid.sh`.
 
----
 
-History follows (passes 7 and earlier; counts and commands there are from that time).
+---
 
 ## Seventh pass (Greg, 00:00 to 00:15 local): access is last, one folder, no private builds
 

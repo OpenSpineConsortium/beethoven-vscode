@@ -14,6 +14,7 @@ import { TerminalUI } from './terminalUi';
 import { renderBlock } from '../core/sshConfig';
 import { installPublicKey, probeWithKey } from '../core/sshInstall';
 import { expandHome } from '../core/shell';
+import { checkLicense, readIdentity, unlicensedMessage, readLicenseKey, writeLicenseKey, removeLicenseKey, writeIdentity, findKey, describeLicense, LicenseCheck, Identity, cachedRevocationText } from '../core/license';
 
 const LOCAL = path.join(os.homedir(), '.ashley-local');
 const SETTINGS = path.join(LOCAL, 'settings.json');
@@ -47,10 +48,36 @@ function settings(): WizardSettings {
   });
 }
 
+function bundledRevoked(): string {
+  try {
+    return fs.readFileSync(path.join(__dirname, '..', 'media', 'revoked.txt'), 'utf8');
+  } catch {
+    return '';
+  }
+}
+function licenseNow(key?: string): LicenseCheck {
+  return checkLicense({ key, identity: readIdentity(), bundledRevoked: bundledRevoked() });
+}
+const cliLicense = {
+  check: () => licenseNow(),
+  async set(text: string): Promise<LicenseCheck> {
+    const key = findKey(text);
+    if (!key) return { ok: false, status: 'invalid', detail: 'that is not an Ashley license key (it starts with ASHLEY1.)', identity: null } as LicenseCheck;
+    const c = licenseNow(key);
+    if (c.ok) writeLicenseKey(key);
+    return c;
+  },
+  identity: (): Identity | undefined => readIdentity(),
+  recordIdentity: async (id: Identity) => writeIdentity(id),
+  key: () => readLicenseKey(),
+  revocationTexts: () => [bundledRevoked(), cachedRevocationText()].filter((x) => x.trim()).join('\n'),
+};
+
 function env(ui: TerminalUI): WizardEnv {
   const s = settings();
   return {
     settings: s,
+    license: cliLicense,
     async saveSetting(k, v) {
       const cur = loadJson<Record<string, unknown>>(SETTINGS, {});
       cur[k] = v;
@@ -97,10 +124,39 @@ function print(reports: StepReport[]) {
 async function main(argv: string[]): Promise<number> {
   const cmd = argv[0] ?? 'help';
   const ui = new TerminalUI();
+  // the license gate: without a valid license only help, license, setup (it starts with the license) and ssh-config work
+  if (!['help', '-h', '--help', 'license', 'setup', 'ssh-config'].includes(cmd)) {
+    const c = licenseNow();
+    if (!c.ok) {
+      console.error(unlicensedMessage(c));
+      return 3;
+    }
+    if (c.identity === null) {
+      console.error('Ashley is licensed here, but the setup is not finished: run ashley-cli setup (or the setup in VS Code).');
+      return 3;
+    }
+  }
   const s = settings();
   const relay = new GridRelay(s.sshAlias);
   const grid = new GridApi(s.sshAlias, () => {}, ['ask', 'latency', 'send', 'result'].includes(cmd) ? relay : undefined);
   switch (cmd) {
+    case 'license': {
+      const sub = argv[1] ?? 'status';
+      if (sub === 'set') {
+        const text = argv[2] ?? (process.stdin.isTTY ? '' : fs.readFileSync(0, 'utf8'));
+        const c = await cliLicense.set(text);
+        console.log(c.ok ? describeLicense(c) : `not accepted: ${c.detail}`);
+        return c.ok ? 0 : 2;
+      }
+      if (sub === 'remove') {
+        removeLicenseKey();
+        console.log('license key removed from this computer');
+        return 0;
+      }
+      const c = licenseNow();
+      console.log(c.ok ? describeLicense(c) : c.detail);
+      return c.ok ? 0 : 2;
+    }
     case 'setup': {
       const only = flag(argv, '--only')?.split(',').filter(Boolean);
       const reports = await runWizard(env(ui), { force: argv.includes('--force'), only });
@@ -170,7 +226,8 @@ async function main(argv: string[]): Promise<number> {
     case '-h':
     case '--help':
       console.log(`ashley-cli <command>
-  setup [--force] [--only step,step]   the wizard in the terminal (accessId, sshKey, sshConfig, installKey, github, huggingface, claudeOauth, anthropicApiKey, gridInstall)
+  license [status|set <key>|remove]   the Ashley license on this computer (a key can also come on stdin)
+  setup [--force] [--only step,step]   the wizard in the terminal (license, wsuSignIn, github, huggingface, claudeLocal, gridTwoFactor, sshKey, sshConfig, installKey, gridInstall, labAccess, claudeGrid)
   doctor               every check, laptop and grid
   ssh-config           print the ~/.ssh/config block
   ssh2-probe           prove the in-panel SSH client reaches the grid with your key
