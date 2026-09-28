@@ -107,28 +107,72 @@ export class AshleyStore {
   }
 
   /**
-   * A free trial from the licence service (ashley.licenseServiceUrl): the service checks the Wayne State
-   * sign-in itself (it receives the Microsoft access token VS Code holds and asks Microsoft who it is),
-   * issues one trial per AccessID, and returns a signed key. Nothing else is sent.
+   * Where the lab's services live: the file at ashley.servicesUrl (published with the support site, so
+   * the addresses can change without a new release), cached for an hour; a non-empty setting for a
+   * particular address always wins. Keys: license_service, allowlist, revocation, report,
+   * request_page, support_page. Empty means "not configured".
    */
-  async requestTrial(): Promise<{ key?: string; detail: string }> {
-    const url = this.config.get<string>('licenseServiceUrl', '').trim();
-    if (!url) return { detail: 'Trials are issued by your lead: send them your AccessID and they will send you a key.' };
+  async services(): Promise<Record<string, string>> {
+    const cached = this.context.globalState.get<{ at: number; map: Record<string, string> }>('ashley.services');
+    let map: Record<string, string> = cached && Date.now() - cached.at < 3_600_000 ? cached.map : {};
+    const src = this.config.get<string>('servicesUrl', '').trim();
+    if (src && !Object.keys(map).length) {
+      try {
+        const res = await fetch(src, { signal: AbortSignal.timeout(8_000), headers: { accept: 'application/json' } });
+        if (res.ok) {
+          const j = (await res.json()) as Record<string, unknown>;
+          map = Object.fromEntries(Object.entries(j).filter(([, v]) => typeof v === 'string' && /^https:\/\//.test(v as string)).map(([k, v]) => [k, (v as string).trim()]));
+          await this.context.globalState.update('ashley.services', { at: Date.now(), map });
+        }
+      } catch {
+        map = cached?.map ?? {};
+      }
+    }
+    const setting = (k: string) => this.config.get<string>(k, '').trim();
+    return {
+      ...map,
+      license_service: setting('licenseServiceUrl') || map.license_service || '',
+      allowlist: setting('allowlistUrl') || map.allowlist || '',
+      revocation: setting('licenseRevocationUrl') || map.revocation || '',
+      report: setting('diagnostics.endpoint') || map.report || '',
+      request_page: map.request_page || String(this.context.extension.packageJSON.homepage ?? '').replace(/\/$/, '') + '/request.html',
+      support_page: map.support_page || String(this.context.extension.packageJSON.homepage ?? '').replace(/\/$/, '') + '/support.html',
+    };
+  }
+  async serviceUrl(name: 'license_service' | 'allowlist' | 'revocation' | 'report' | 'request_page' | 'support_page'): Promise<string> {
+    return (await this.services())[name] || '';
+  }
+
+  /**
+   * An access key from the lab's access service: the service checks the Wayne State sign-in itself
+   * (it receives the Microsoft access token VS Code holds and asks Microsoft who it is), checks that
+   * the AccessID is approved, and returns a signed key in that person's name. Nothing else is sent.
+   */
+  async requestTrial(): Promise<{ key?: string; detail: string; notApproved?: boolean; requestPage?: string }> {
+    const svc = await this.services();
+    const url = svc.license_service;
+    if (!url) return { detail: 'No access service is configured for this build: your lead issues keys by hand (send them your AccessID).' };
     const session = await vscode.authentication.getSession('microsoft', ['VSCODE_TENANT:organizations', 'User.Read'], { createIfNone: true });
     if (!session) return { detail: 'the Wayne State sign-in was cancelled' };
     try {
-      const res = await fetch(url.replace(/\/$/, '') + '/trial', { method: 'POST', headers: { authorization: `Bearer ${session.accessToken}`, 'content-type': 'application/json' }, body: JSON.stringify({ product: 'ashley', version: this.context.extension.packageJSON.version }), signal: AbortSignal.timeout(30_000) });
-      const j = (await res.json().catch(() => ({}))) as { key?: string; error?: string; detail?: string };
-      if (!res.ok || !j.key) return { detail: j.detail || j.error || `the licence service answered HTTP ${res.status}` };
-      return { key: j.key, detail: j.detail ?? 'trial issued' };
+      const res = await fetch(url, { method: 'POST', headers: { authorization: `Bearer ${session.accessToken}`, 'content-type': 'application/json' }, body: JSON.stringify({ product: 'ashley', version: this.context.extension.packageJSON.version }), signal: AbortSignal.timeout(30_000) });
+      const j = (await res.json().catch(() => ({}))) as { key?: string; error?: string; detail?: string; request_page?: string };
+      if (res.status === 403) return { detail: j.detail || 'your AccessID is not approved for Ashley yet', notApproved: true, requestPage: j.request_page || svc.request_page };
+      if (!res.ok || !j.key) return { detail: j.detail || j.error || `the access service answered HTTP ${res.status}` };
+      return { key: j.key, detail: j.detail ?? 'access key issued' };
     } catch (e) {
-      return { detail: `the licence service could not be reached (${(e as Error).message})` };
+      return { detail: `the access service could not be reached (${(e as Error).message})` };
     }
   }
 
-  /** The lab's pre-approved AccessIDs: the list shipped in this build, or a newer one from ashley.allowlistUrl. */
+  /**
+   * The approved AccessIDs: the published list when there is one; otherwise, when an access service
+   * exists, no local list (the service decides); otherwise the list shipped in this build.
+   */
   async allowlist(): Promise<string[] | null> {
-    const url = this.config.get<string>('allowlistUrl', '');
+    const svc = await this.services();
+    const url = svc.allowlist;
+    if (!url && svc.license_service) return null;
     if (url) {
       try {
         const ctl = new AbortController();
@@ -171,6 +215,7 @@ export class AshleyStore {
       signInGitHub: () => this.signInGitHub(),
       signInWsu: () => this.signInWsu(),
       allowlist: () => this.allowlist(),
+      services: () => this.services(),
       license: this.licenseGate,
       extraRequirements: async () => {
         const m: string[] = [];

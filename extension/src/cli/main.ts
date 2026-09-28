@@ -15,7 +15,7 @@ import { renderBlock } from '../core/sshConfig';
 import { installPublicKey, probeWithKey } from '../core/sshInstall';
 import { expandHome } from '../core/shell';
 import { checkLicense, readIdentity, unlicensedMessage, readLicenseKey, writeLicenseKey, removeLicenseKey, writeIdentity, findKey, describeLicense, LicenseCheck, Identity, cachedRevocationText } from '../core/license';
-import { AFFIRMATIONS, AGREE_BUTTON, TERMS_VERSION, TERMS_REFUSAL, acceptanceComplete, readTermsRecord, sha256, writeTermsRecord } from '../core/terms';
+import { AFFIRMATIONS, AGREE_BUTTON, FULL_TERMS_REFUSAL, TERMS_VERSION, TERMS_REFUSAL, acceptanceComplete, editionForKey, readTermsRecord, sha256, writeTermsRecord } from '../core/terms';
 import * as crypto from 'node:crypto';
 
 const LOCAL = path.join(os.homedir(), '.ashley-local');
@@ -155,7 +155,9 @@ async function main(argv: string[]): Promise<number> {
       const privacy = fs.readFileSync(path.join(root, 'PRIVACY.md'), 'utf8');
       const have = readTermsRecord();
       if (argv[1] === 'status' || (have && argv[1] !== 'accept')) {
-        console.log(have ? `terms version ${have.terms_version} accepted ${have.accepted_at} by "${have.signed_name}" (${have.surface})` : 'the terms have not been accepted on this computer (ashley-cli terms accept)');
+        const full = readTermsRecord('full');
+        console.log(have ? `Trial Edition agreement version ${have.terms_version} accepted ${have.accepted_at} by "${have.signed_name}" (${have.surface})` : 'the terms have not been accepted on this computer (ashley-cli terms accept)');
+        if (full) console.log(`Full Edition agreement version ${full.terms_version} accepted ${full.accepted_at} by "${full.signed_name}" (${full.surface})`);
         return have ? 0 : 2;
       }
       if (!process.stdin.isTTY) {
@@ -163,7 +165,7 @@ async function main(argv: string[]): Promise<number> {
         return 3;
       }
       console.log(license + '\n\n==================== PRIVACY STATEMENT ====================\n\n' + privacy);
-      console.log('\nThat was the full text (also in LICENSE.txt and PRIVACY.md beside this program). Answer each statement with y if it is true; any other answer stops here.');
+      console.log('\nThat was the full text of the Trial Edition agreement (also in LICENSE.txt and PRIVACY.md beside this program; a Full Edition key is registered in VS Code, where its own agreement is shown). Answer each statement with y if it is true; any other answer stops here.');
       const affirmations = [];
       for (const a of AFFIRMATIONS) {
         const ans = await ui.ask(`${a.label}\n[y/N]`);
@@ -192,6 +194,18 @@ async function main(argv: string[]): Promise<number> {
       const sub = argv[1] ?? 'status';
       if (sub === 'set') {
         const text = argv[2] ?? (process.stdin.isTTY ? '' : fs.readFileSync(0, 'utf8'));
+        // the Full Edition agreement is accepted in VS Code's signing dialog; the terminal cannot show it
+        const ed = (text.match(/ASHLEY1\.([A-Za-z0-9_-]+)\./) || [])[1];
+        let claimedEdition: string | undefined;
+        try {
+          claimedEdition = ed ? (JSON.parse(Buffer.from(ed.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8')) as { edition?: string }).edition : undefined;
+        } catch {
+          claimedEdition = undefined;
+        }
+        if (editionForKey(claimedEdition) === 'full' && !readTermsRecord('full')) {
+          console.log(FULL_TERMS_REFUSAL);
+          return 2;
+        }
         const c = await cliLicense.set(text);
         console.log(c.ok ? describeLicense(c) : `not accepted: ${c.detail}`);
         return c.ok ? 0 : 2;

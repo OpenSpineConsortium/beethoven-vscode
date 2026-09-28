@@ -40,7 +40,7 @@ suite('Ashley extension', () => {
   test('the wizard exports its steps in order', () => {
     const ext = vscode.extensions.getExtension(EXT_ID)!;
     const steps = (ext.exports as any)._internal.STEPS.map((s: any) => s.id);
-    assert.deepEqual(steps, ['license', 'wsuSignIn', 'github', 'huggingface', 'claudeLocal', 'gridTwoFactor', 'sshKey', 'sshConfig', 'installKey', 'gridInstall', 'labAccess', 'claudeGrid']);
+    assert.deepEqual(steps, ['wsuSignIn', 'license', 'github', 'huggingface', 'claudeLocal', 'gridTwoFactor', 'sshKey', 'sshConfig', 'installKey', 'gridInstall', 'labAccess', 'claudeGrid']);
   });
 
   test('the diagnostics graph is a valid DAG and every node documents its fix', async () => {
@@ -153,9 +153,10 @@ suite('Ashley extension', () => {
     assert.equal(gate().allowed('ashley.workerStop').ok, true);
   });
 
-  test('the wizard starts with the license step and it reports the stored key', async () => {
+  test('the wizard signs in first, then the access step reports the stored key', async () => {
     const ext = vscode.extensions.getExtension(EXT_ID)!;
-    const step = (ext.exports as any)._internal.STEPS[0];
+    assert.equal((ext.exports as any)._internal.STEPS[0].id, 'wsuSignIn');
+    const step = (ext.exports as any)._internal.STEPS[1];
     assert.equal(step.id, 'license');
     const env = { license: gate(), settings: {}, ui: {} };
     const r = await step.check(env);

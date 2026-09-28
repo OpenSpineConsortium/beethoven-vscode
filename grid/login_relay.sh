@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+# Runs Claude Code's own sign-in (claude auth login) inside the student's running worker allocation,
+# in a tmux session on the compute node, so that a person who cannot see a terminal (phone, remote
+# session) can still complete it: the link is read from the tmux screen, the one-time code the page
+# shows is pasted back from a file. Exactly the same command as `ashley claude login` runs; Ashley
+# still never reads, copies or stores the credential Claude Code writes to ~/.ashley/claude.
+#
+#   login_relay.sh start            start the sign-in (prints the link once it appears)
+#   login_relay.sh screen           show the current screen of the sign-in
+#   login_relay.sh send <file>      paste the code in <file> into the sign-in, then delete the file
+#   login_relay.sh stop             end the session
+set -euo pipefail
+ASHLEY="$HOME/.ashley/bin/ashley"
+eval "$(grep -m1 '^ASHLEY_HOME=' "$ASHLEY")"; eval "$(grep -m1 '^CFG=' "$ASHLEY")"; CLAUDE_HOME="$ASHLEY_HOME/claude"
+# shellcheck disable=SC1090
+source "$CFG"
+SOCK="/dev/shm/ashley-login-$(id -u).sock"
+SESSION=login
+KEEP="$ASHLEY_HOME/tmp"; mkdir -p "$KEEP"; chmod 700 "$KEEP"
+jid() { squeue -u "$USER" -h -n ashley_default -t R -o %i | head -1; }
+in_alloc() { local j; j=$(jid); [ -n "$j" ] || { echo "no running worker (start one with: ashley worker start)" >&2; exit 2; }; srun --jobid="$j" --overlap -N1 -n1 --quiet "$@"; }
+tm() { in_alloc tmux -S "$SOCK" "$@"; }
+
+case "${1:-}" in
+  start)
+    if tm has-session -t "$SESSION" 2>/dev/null; then echo "already running"; exec "$0" screen; fi
+    mkdir -p "$ROOT/workspaces/phone" "$CLAUDE_HOME"; chmod 700 "$CLAUDE_HOME"
+    # same first-run settings seed as `ashley claude login` (settings, never credentials), kept in a
+    # file so that no quoting layer touches it
+    cat > "$KEEP/seed.js" <<'JS'
+const fs=require("fs"),p=process.env.CLAUDE_CONFIG_DIR+"/.claude.json";let j={};try{j=JSON.parse(fs.readFileSync(p,"utf8"))}catch{};j.hasCompletedOnboarding=true;j.theme=j.theme||"dark";j.projects=j.projects||{};j.projects[process.cwd()]=Object.assign({},j.projects[process.cwd()]||{},{hasTrustDialogAccepted:true});fs.writeFileSync(p,JSON.stringify(j,null,1),{mode:0o600});
+JS
+    chmod 600 "$KEEP/seed.js"
+    inner="cd '$ROOT/workspaces/phone' && node '$KEEP/seed.js' && exec '$CLAUDE_BIN' auth login"
+    # shellcheck disable=SC2086
+    cmd="$RUNTIME exec $BINDS '$SANDBOX' env -u CLAUDE_CODE_OAUTH_TOKEN -u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN -u ANTHROPIC_BASE_URL -u CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC HOME='$HOME' CLAUDE_CONFIG_DIR='$CLAUDE_HOME' TERM=xterm-256color BROWSER=/bin/false bash -c \"$inner\""
+    printf '%s\n' "$cmd" > "$KEEP/login_cmd.sh"; chmod 600 "$KEEP/login_cmd.sh"
+    j=$(jid); [ -n "$j" ] || { echo "no running worker" >&2; exit 2; }
+    # the tmux server lives inside a step of the worker's allocation; the step stays up while the session exists
+    nohup srun --jobid="$j" --overlap -N1 -n1 --quiet -J ashley_login bash -c "tmux -S '$SOCK' new-session -d -s '$SESSION' -x 160 -y 45 \"bash '$KEEP/login_cmd.sh'; echo; echo '[sign-in process ended]'; sleep 600\"; while tmux -S '$SOCK' has-session -t '$SESSION' 2>/dev/null; do sleep 3; done" > "$KEEP/login_step.log" 2>&1 &
+    disown
+    for _ in $(seq 1 60); do sleep 2; tm has-session -t "$SESSION" 2>/dev/null && break; done
+    for _ in $(seq 1 45); do
+      sleep 2
+      s=$(tm capture-pane -p -J -t "$SESSION" -S -200 2>/dev/null || true)
+      if grep -q 'https://' <<<"$s"; then break; fi
+    done
+    exec "$0" screen;;
+  screen)
+    tm capture-pane -p -J -t "$SESSION" -S -200 | sed -e 's/[[:space:]]*$//' | awk 'NF{blank=0} !NF{blank++} blank<2';;
+  send)
+    f="${2:?file with the code}"; [ -s "$f" ] || { echo "no code in $f" >&2; exit 2; }
+    tr -d '\r\n' < "$f" > "$KEEP/code.buf"; chmod 600 "$KEEP/code.buf"; rm -f "$f"
+    tm load-buffer -b code "$KEEP/code.buf"; rm -f "$KEEP/code.buf"
+    tm paste-buffer -b code -d -t "$SESSION"; sleep 1; tm send-keys -t "$SESSION" Enter
+    sleep 6; exec "$0" screen;;
+  stop)
+    tm kill-session -t "$SESSION" 2>/dev/null || true; rm -f "$KEEP/login_cmd.sh" "$KEEP/code.buf" "$KEEP/seed.js"; echo stopped;;
+  *) echo "usage: login_relay.sh start|screen|send <file>|stop" >&2; exit 1;;
+esac

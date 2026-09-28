@@ -23,7 +23,7 @@ if (production && Object.keys(JSON.parse(readFileSync('../grid/license_keys.json
   throw new Error('grid/license_keys.json trusts no signing key: run tools/license/ashley-license.mjs init before a release build');
 }
 
-const NOTICE = '/*! Ashley (c) 2026 OpenSpineConsortium. Licensed software: use requires a license key. See LICENSE.txt and THIRD_PARTY_NOTICES.md. */';
+const NOTICE = '/*! Ashley (c) 2026 OpenSpineConsortium. Licensed software: use requires an access key. See LICENSE.txt (Trial Edition), LICENSE-FULL.txt (Full Edition) and THIRD_PARTY_NOTICES.md. */';
 const common = {
   bundle: true,
   platform: 'node',

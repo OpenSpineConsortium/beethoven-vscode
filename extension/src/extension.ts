@@ -8,8 +8,8 @@ import { resolveExecutable } from './vscode/ui';
 import { SetupPanel } from './vscode/panel';
 import { Troubleshooter } from './vscode/diagnosticsUi';
 import { LicenseGate, REFUSED, UNGATED } from './vscode/licenseGate';
-import { ensureTermsAccepted, termsRecord, TERMS_VERSION, TermsRecord, openTerms, supportUrl } from './vscode/terms';
-import { AFFIRMATIONS, AGREE_BUTTON, writeTermsRecord, sha256 } from './core/terms';
+import { ensureTermsAccepted, termsRecord, TERMS_VERSION, TermsRecord, TermsEdition, openTerms, supportUrl } from './vscode/terms';
+import { AGREE_BUTTON, writeTermsRecord, sha256, TERMS_FILE, affirmationsFor } from './core/terms';
 import { DiagSharer } from './vscode/diagShare';
 import { buildGraph, makeCtx } from './vscode/diagNodes';
 import { VsCodeUI as SetupPanelFreeUI } from './vscode/ui';
@@ -52,6 +52,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<{ _int
   context.subscriptions.push(license);
   sharer = new DiagSharer(context, output, () => license.identity());
   license.requestTrial = () => store.requestTrial();
+  // a Full Edition key is kept only after its own agreement is accepted in the signing dialog
+  license.requireFullTerms = async () => !!(await ensureTermsAccepted(context, output, () => sharer.installId(), 'full'));
+  // the lab's service addresses come from services.json (published with the support site) unless a setting names one
+  license.revocationUrl = () => store.serviceUrl('revocation');
+  void store.services().then((s) => { sharer.fallbackEndpoint = s.report || ''; }, () => undefined);
   // upgrades: an earlier Ashley kept a Claude token in the keychain; it is deleted (Ashley stores no Claude credential)
   try {
     if (await context.secrets.get('ashley.claudeOauth')) {
@@ -110,7 +115,18 @@ export async function activate(context: vscode.ExtensionContext): Promise<{ _int
   troubleshooter = new Troubleshooter(context, store, output, (rep, gridVersion) => sharer.maybeSend(rep, gridVersion, output ? [] : []));
   context.subscriptions.push(troubleshooter);
   reg('ashley.license', () => license.manage());
-  reg('ashley.terms', () => openTerms(context, 'license'));
+  reg('ashley.terms', async () => {
+    const fullOnRecord = !!termsRecord(context, 'full');
+    const pick = await vscode.window.showQuickPick(
+      [
+        { id: 'license', label: '$(law) Trial Edition License Agreement', description: termsRecord(context) ? `accepted ${termsRecord(context)!.accepted_at.slice(0, 10)}` : 'not accepted yet' },
+        { id: 'full', label: '$(law) Full Edition License Agreement', description: fullOnRecord ? `accepted ${termsRecord(context, 'full')!.accepted_at.slice(0, 10)}` : 'applies only if you register a Full Edition key' },
+        { id: 'privacy', label: '$(shield) Privacy statement', description: '' },
+      ],
+      { title: 'Ashley: the license terms', placeHolder: 'Which text do you want to read?' },
+    );
+    if (pick) await openTerms(context, pick.id as 'license' | 'full' | 'privacy');
+  });
   reg('ashley.support', () => vscode.env.openExternal(vscode.Uri.parse(supportUrl(context))));
   reg('ashley.errorReports', () => sharer.manage());
   reg('ashley.claudeSignIn', () => commandStepOnly(context, 'claudeGrid', 'Ashley: sign in to Claude on the grid'));
@@ -659,15 +675,15 @@ const _internal = {
   licenseGate: () => license,
   sharer: () => sharer,
   terms: {
-    record: () => termsRecord(context0!),
+    record: (edition: TermsEdition = 'trial') => termsRecord(context0!, edition),
     version: TERMS_VERSION,
     /** what the dialog writes, for tests that cannot click it */
-    accept: async (diagnostics: 'on' | 'off' = 'off', signedName = 'Test Person') => {
-      const license = fs.readFileSync(path.join(context0!.extensionPath, 'LICENSE.txt'), 'utf8');
+    accept: async (diagnostics: 'on' | 'off' = 'off', signedName = 'Test Person', edition: TermsEdition = 'trial') => {
+      const license = fs.readFileSync(path.join(context0!.extensionPath, TERMS_FILE[edition]), 'utf8');
       const privacy = fs.readFileSync(path.join(context0!.extensionPath, 'PRIVACY.md'), 'utf8');
-      const rec: TermsRecord = { v: 1, terms_version: TERMS_VERSION, license_sha256: sha256(license), privacy_sha256: sha256(privacy), accepted_at: new Date().toISOString(), surface: 'dialog', button_label: AGREE_BUTTON, affirmations: AFFIRMATIONS.map((a) => ({ ...a, checked: true })), signed_name: signedName, scrolled_to_end: true, diagnostics, product_version: context0!.extension.packageJSON.version, host: vscode.env.appName, host_version: vscode.version, platform: process.platform, locale: vscode.env.language, install_id: sharer.installId() };
+      const rec: TermsRecord = { v: 1, terms_version: TERMS_VERSION, edition, license_sha256: sha256(license), privacy_sha256: sha256(privacy), accepted_at: new Date().toISOString(), surface: 'dialog', button_label: AGREE_BUTTON, affirmations: affirmationsFor(edition).map((a) => ({ ...a, checked: true })), signed_name: signedName, scrolled_to_end: true, diagnostics, product_version: context0!.extension.packageJSON.version, host: vscode.env.appName, host_version: vscode.version, platform: process.platform, locale: vscode.env.language, install_id: sharer.installId() };
       writeTermsRecord(rec, { license, privacy });
-      await context0!.globalState.update('ashley.terms', rec);
+      await context0!.globalState.update(edition === 'full' ? 'ashley.terms.full' : 'ashley.terms', rec);
       return rec;
     },
   },

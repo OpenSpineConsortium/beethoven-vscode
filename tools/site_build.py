@@ -33,6 +33,7 @@ def render(md_path, out_path, title):
 def main():
     os.makedirs(SITE, exist_ok=True)
     shutil.copyfile(os.path.join(EXT, "LICENSE.txt"), os.path.join(SITE, "license.txt"))
+    shutil.copyfile(os.path.join(EXT, "LICENSE-FULL.txt"), os.path.join(SITE, "license-full.txt"))
     render(os.path.join(EXT, "PRIVACY.md"), os.path.join(SITE, "privacy.html"), "Ashley privacy statement")
     render(os.path.join(EXT, "THIRD_PARTY_NOTICES.md"), os.path.join(SITE, "third_party_notices.html"), "Ashley third-party notices")
     print("site built:", sorted(os.listdir(SITE)))

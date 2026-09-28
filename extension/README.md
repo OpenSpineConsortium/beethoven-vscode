@@ -1,10 +1,14 @@
 # Ashley: grid research environment
 
-**Licensed software. A free 30-day trial, one per person, then a license key from your lab. Ashley
-is licensed, not sold: you receive a license to use it under the [Ashley Software License
+**Licensed software, free in the Trial Edition.** Ashley is licensed, not sold: you receive a
+license to use it under the [Trial Edition License
 Agreement](https://openspineconsortium.github.io/ashley/license.txt) and the [Privacy Statement](https://openspineconsortium.github.io/ashley/privacy.html), accepted in a signing dialog before
-first use.** Support: [the Ashley support page](https://openspineconsortium.github.io/ashley/support.html). Nothing renews by itself
-and no payment details are taken for a trial.
+first use. The Trial Edition is for Wayne State AccessIDs the lab has approved: after your Wayne
+State sign-in, Ashley obtains an access key in your name; if you are not approved yet, [ask for
+access](https://openspineconsortium.github.io/ashley/request.html). Nothing is paid, nothing converts to a paid
+license, and no payment details are taken. A paid Full Edition, if offered later, has [its own
+agreement](https://openspineconsortium.github.io/ashley/license-full.txt), shown when a Full Edition key is registered. Support: [the Ashley support
+page](https://openspineconsortium.github.io/ashley/support.html).
 
 Ashley sets up a medical student's laptop for a university HPC grid and keeps a Claude Code worker
 running there, on the student's own Claude subscription, reachable from the Claude Code extension
@@ -33,10 +37,12 @@ Read this before installing. It is the complete list.
   node it connects you to.
 - **MCP.** Ashley registers an MCP server with the Claude Code extension (`claude mcp add-json`,
   user scope) so the Claude on your laptop can hand work to the worker.
-- **License check.** Ashley verifies your license key offline against signing keys shipped with
-  it, and, if your lab configures `ashley.licenseRevocationUrl`, fetches a signed list of withdrawn
-  keys from that address once a day. A trial request sends the licence service (`ashley.licenseServiceUrl`)
-  the Microsoft sign-in token VS Code holds, so the service can ask Microsoft who you are.
+- **Access check.** Ashley verifies your access key offline against signing keys shipped with it,
+  and fetches a signed list of withdrawn keys once a day from the address published with the
+  support site (`services.json`, or the setting `ashley.licenseRevocationUrl`). Obtaining a key sends
+  the lab's access service (`services.json`, or `ashley.licenseServiceUrl`) the Microsoft sign-in
+  token VS Code holds, so the service can ask Microsoft who you are and check that your AccessID is
+  approved. `services.json` is read from `ashley.servicesUrl` once an hour and holds addresses only.
 - **Error reports, opt-out.** When one of Ashley's checks fails or is repaired, and only if
   `ashley.diagnostics.share` is on, VS Code's own telemetry is enabled and your lab has configured
   `ashley.diagnostics.endpoint`, Ashley sends one report per distinct failure per day: versions,
@@ -49,7 +55,8 @@ Read this before installing. It is the complete list.
 
 ## Quick start
 
-1. Install, accept the terms in the signing dialog, enter your key or start a trial.
+1. Install, accept the Trial Edition agreement in the signing dialog, sign in with Wayne State; if your
+   AccessID is approved, your access key arrives by itself (otherwise ask for access on the lab's page).
 2. `Ashley: Set up my research environment (wizard)`: twelve steps in a fixed order.
 3. `Ashley: Start a Claude worker on the grid`, then ask the Claude Code panel to "check the grid
    status", or open `Ashley: Phone access` for your phone.

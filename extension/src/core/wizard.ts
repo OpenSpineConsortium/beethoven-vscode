@@ -117,6 +117,8 @@ export interface WizardEnv {
   signInWsu?(): Promise<{ email: string } | undefined>;
   /** The lab's pre-approved AccessIDs; null when no list is available (no restriction). */
   allowlist?(): Promise<string[] | null>;
+  /** The lab's service addresses (services.json): request_page, support_page, license_service, ... */
+  services?(): Promise<Record<string, string>>;
   /** Sign in to GitHub through the host (VS Code's GitHub authentication). Returns the OAuth token. */
   signInGitHub?(): Promise<{ token: string; login?: string } | undefined>;
   /** Host-specific requirements for joining the lab (VS Code: the Claude Code and Remote-SSH extensions, the bridge). */
@@ -137,7 +139,7 @@ export interface WizardLicense {
   /** the signed revocation lists to copy to the grid */
   revocationTexts(): string;
   /** ask the licence service for a free trial in this person's name (VS Code: after the Wayne State sign-in) */
-  requestTrial?(): Promise<{ key?: string; detail: string }>;
+  requestTrial?(): Promise<{ key?: string; detail: string; notApproved?: boolean; requestPage?: string }>;
 }
 
 /** First 16 hex digits of the key's SHA-256: enough to tell whether the grid has the same key. */
@@ -195,8 +197,8 @@ const WSU_EMAIL = /@([a-z0-9-]+\.)*wayne\.edu$/i;
  */
 export const stepLicense: WizardStep = {
   id: 'license',
-  title: 'License',
-  blurb: 'Your Ashley license key: it names you, and every copy of Ashley needs one.',
+  title: 'Access',
+  blurb: 'Your access key: after your Wayne State sign-in, Ashley asks the lab for a key in your name.',
   async check(env) {
     if (!env.license) return report(this.id, this.title, 'done', 'not checked by this host');
     const c = env.license.check(true);
@@ -208,24 +210,30 @@ export const stepLicense: WizardStep = {
     const cur = env.license.check(true);
     if (cur.ok) return report(this.id, this.title, 'done', describeLicense(cur));
     let why = cur.detail;
-    if (cur.status === 'missing' && env.license.requestTrial) {
-      const hasKey = await env.ui.confirm('Do you have an Ashley license key? Students can also start a free trial: one per person, tied to your Wayne State sign-in, and it ends by itself.', 'I have a key', 'Start a free trial');
-      if (!hasKey) {
-        env.ui.progress('Asking for a trial license...');
-        const tr = await env.license.requestTrial();
-        if (tr.key) {
-          const c = await env.license.set(tr.key);
-          if (c.ok) return report(this.id, this.title, 'done', describeLicense(c));
-          why = c.detail;
-        } else {
-          await env.ui.warn(tr.detail);
+    // the normal path: the lab's access service issues a key to an approved, signed-in person
+    if (cur.status === 'missing' && env.license.requestTrial && env.license.identity()) {
+      env.ui.progress('Asking the lab for your access key...');
+      const tr = await env.license.requestTrial();
+      if (tr.key) {
+        const c = await env.license.set(tr.key);
+        if (c.ok) return report(this.id, this.title, 'done', describeLicense(c));
+        why = c.detail;
+      } else if (tr.notApproved) {
+        const id = env.license.identity()?.accessId ?? 'your AccessID';
+        const page = tr.requestPage || (env.services ? (await env.services()).request_page : '');
+        const pick = await env.ui.confirm(`${id} is not approved for Ashley yet. Ask for access on the lab's page (it takes a minute); when your lead approves you, run this step again and the key arrives by itself. If your lead gave you a key instead, choose "I have a key".`, page ? 'Ask for access' : 'I have a key', 'I have a key');
+        if (pick && page) {
+          await env.ui.openUrl(page);
+          return report(this.id, this.title, 'todo', `${id} is not approved yet: asked for access; run this step again once approved`);
         }
+      } else {
+        await env.ui.warn(tr.detail);
       }
     }
     for (let attempt = 0; attempt < 3; attempt++) {
-      const text = await askToken(env.ui, attempt ? `That key was not accepted (${why}). Paste your Ashley license key again` : 'Your Ashley license key', {
+      const text = await askToken(env.ui, attempt ? `That key was not accepted (${why}). Paste your Ashley key again` : 'Your Ashley key (if your lead sent you one)', {
         pattern: KEY_PATTERN,
-        instructions: 'Your lead sends it to you. It starts with ASHLEY1. and is one long line; copying it is enough, Ashley notices.',
+        instructions: 'Your lead sends it to you. It starts with ASHLEY1. and is one long line; copying it is enough, Ashley notices. A Full Edition key opens its own agreement to accept.',
       });
       if (!text) return report(this.id, this.title, 'skipped', 'no key entered');
       const c = await env.license.set(text);
@@ -239,7 +247,7 @@ export const stepLicense: WizardStep = {
 export const stepWsuSignIn: WizardStep = {
   id: 'wsuSignIn',
   title: 'Sign in with Wayne State',
-  blurb: 'Your WSU account in the browser; only AccessIDs your lab pre-approved continue.',
+  blurb: 'Your WSU account in the browser; only AccessIDs the lab has approved continue.',
   async check(env) {
     const id = normaliseAccessId(env.settings.accessId ?? '');
     if (!id || !env.settings.wsuEmail) return report(this.id, this.title, 'todo', 'not signed in');
@@ -248,7 +256,7 @@ export const stepWsuSignIn: WizardStep = {
     const lic = env.license?.check(true);
     if (lic && lic.status === 'wrong-person') return report(this.id, this.title, 'failed', lic.detail);
     const list = env.allowlist ? await env.allowlist() : null;
-    if (list && !list.includes(id) && !(lic?.ok && lic.payload?.sub === id)) return report(this.id, this.title, 'failed', `${id} is not on the lab's pre-approved list; ask your lead to add you`);
+    if (list && !list.includes(id) && !(lic?.ok && lic.payload?.sub === id)) return report(this.id, this.title, 'failed', `${id} is not approved for Ashley yet; ask for access on the lab's page`);
     return report(this.id, this.title, 'done', `${env.settings.wsuEmail} (AccessID ${id}; grid home ${gridHome(id)})`);
   },
   async run(env) {
@@ -282,7 +290,7 @@ export const stepWsuSignIn: WizardStep = {
     }
     const lic2 = env.license?.check();
     const list = env.allowlist ? await env.allowlist() : null;
-    if (list && !list.includes(id) && !(lic2?.ok && lic2.payload?.sub === id)) return report(this.id, this.title, 'failed', `${id} is not on the lab's pre-approved list; ask your lead to add you, then sign in again`);
+    if (list && !list.includes(id) && !(lic2?.ok && lic2.payload?.sub === id)) return report(this.id, this.title, 'failed', `${id} is not approved for Ashley yet; ask for access on the lab's page, then sign in again`);
     await env.saveSetting('accessId', id);
     await env.saveSetting('wsuEmail', email ?? `${id}@wayne.edu`);
     env.settings.accessId = id;
@@ -753,7 +761,7 @@ export const stepLabAccess: WizardStep = {
 
 // Strict order: who you are, then your accounts (tokens live on this laptop first), then the grid
 // (tokens pushed in one pass), then the lab. A step never runs before every earlier step is done.
-export const STEPS: WizardStep[] = [stepLicense, stepWsuSignIn, stepGithub, stepHuggingFace, stepClaudeLocal, stepTwoFactor, stepSshKey, stepSshConfig, stepInstallKey, stepGridInstall, stepLabAccess, stepClaudeGrid];
+export const STEPS: WizardStep[] = [stepWsuSignIn, stepLicense, stepGithub, stepHuggingFace, stepClaudeLocal, stepTwoFactor, stepSshKey, stepSshConfig, stepInstallKey, stepGridInstall, stepLabAccess, stepClaudeGrid];
 
 export interface RunOptions {
   force?: boolean;

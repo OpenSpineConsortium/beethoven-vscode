@@ -21,6 +21,7 @@ import {
   cachedRevocationText,
   TRUSTED_KEYS,
 } from '../core/license';
+import { editionForKey } from '../core/terms';
 
 /** Commands that work without a license: getting one, reading about it, and finding out what is wrong. */
 export const UNGATED = new Set([
@@ -123,6 +124,10 @@ export class LicenseGate implements vscode.Disposable {
     if (!key) return { ok: false, status: 'invalid', detail: 'that is not an Ashley license key (it starts with ASHLEY1.)', identity: null };
     const c = checkLicense({ key, identity: this.identity(), bundledRevoked: this.bundledRevoked() });
     if (!c.ok) return c;
+    // a Full Edition key is kept only once the Full Edition agreement is on record (the dialog opens here)
+    if (editionForKey(c.payload?.edition) === 'full' && this.requireFullTerms && !(await this.requireFullTerms())) {
+      return { ok: false, status: 'invalid', detail: 'the Full Edition agreement was not accepted, so the key was not kept', identity: null };
+    }
     writeLicenseKey(key);
     this.output.appendLine(`license: stored ${c.payload?.lid} (${c.status})`);
     this.refresh();
@@ -135,8 +140,12 @@ export class LicenseGate implements vscode.Disposable {
   key(): string | undefined {
     return readLicenseKey();
   }
-  /** set by the extension: the trial request through the store (needs the Microsoft session) */
-  requestTrial?: () => Promise<{ key?: string; detail: string }>;
+  /** set by the extension: the access-key request through the store (needs the Microsoft session) */
+  requestTrial?: () => Promise<{ key?: string; detail: string; notApproved?: boolean; requestPage?: string }>;
+  /** set by the extension: shows the Full Edition agreement and resolves true once it is accepted */
+  requireFullTerms?: () => Promise<boolean>;
+  /** set by the extension: where the signed revocation list is published (services.json or the setting) */
+  revocationUrl?: () => Promise<string>;
 
   /** The revocation lists the grid should know about (bundled and fetched). */
   revocationTexts(): string {
@@ -163,7 +172,7 @@ export class LicenseGate implements vscode.Disposable {
   /** Daily: fetch the revocation list if one is published (ashley.licenseRevocationUrl); network failures keep the last list. */
   startRevocationChecks(): void {
     const run = async () => {
-      const url = vscode.workspace.getConfiguration('ashley').get<string>('licenseRevocationUrl', '').trim();
+      const url = (this.revocationUrl ? await this.revocationUrl() : vscode.workspace.getConfiguration('ashley').get<string>('licenseRevocationUrl', '')).trim();
       if (!url) return;
       try {
         const res = await fetch(url, { signal: AbortSignal.timeout(20_000) });

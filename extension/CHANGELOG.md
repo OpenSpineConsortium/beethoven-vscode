@@ -2,6 +2,31 @@
 
 The format follows Keep a Changelog; versions follow Semantic Versioning.
 
+## 3.0.0 (2026-09-28)
+
+### Changed
+- Two agreements, one signing dialog. The free Trial Edition (LICENSE.txt, version 4) is accepted
+  before first use; the paid Full Edition agreement (LICENSE-FULL.txt) is shown, and must be
+  accepted, when a Full Edition key is registered, and from then on governs. Each has its own
+  acceptance record and kept texts. The Trial Edition takes no payment, converts to nothing, and
+  can be withdrawn or ended with 30 days' notice.
+- Access by approval. The Trial Edition is for Wayne State AccessIDs the lab has approved: the
+  wizard signs in with Wayne State first and then obtains an access key from the lab's access
+  service by itself; a person who is not approved is sent to the request page. The list is managed
+  on the lab's admin page; removal revokes the key.
+- Service addresses come from `services.json`, published with the support site, so the access
+  service, the approved list, the revocation list and the error-report address can change without
+  a release; a setting still wins where set.
+- The Marketplace listing is Free. Version 3 because the first-run agreement changed.
+
+### Added
+- A status row that says a token or sign-in is missing or expired can be clicked: the same sign-in
+  the wizard uses runs for that item alone. The diagnostics panel offers the same fix beside each
+  failing cause.
+- A virgin-Windows test kit (Windows Sandbox with nothing but VS Code) under `tools/sandbox/`.
+- `grid/login_relay.sh` (maintainer tool): runs Claude Code's own grid sign-in in a tmux session
+  inside the worker allocation so it can be completed from a phone.
+
 ## 2.0.0 (2026-09-28)
 
 ### Changed

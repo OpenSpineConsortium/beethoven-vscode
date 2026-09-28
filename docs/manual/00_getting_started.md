@@ -36,8 +36,8 @@ sign-in on the grid is last, because it happens inside the lab's container.
 
 | Step | What you see | What you do |
 |---|---|---|
-| 1 License | a field for your key, or a free-trial button | paste the key your lead sent (copying it is enough), or start a trial: one per person, in your name, it ends by itself |
-| 2 Sign in with Wayne State | your browser opens the WSU sign-in | sign in with AccessID@wayne.edu. Your license must name you; if your AccessID is not on the lab's list either, ask your lead |
+| 1 Sign in with Wayne State | your browser opens the WSU sign-in | sign in with AccessID@wayne.edu. Only AccessIDs the lab has approved continue; if yours is not, the next step sends you to the request page |
+| 2 Access | a spinner, then your key's end date; or a button *Ask for access* | nothing, normally: Ashley asks the lab's access service for a key in your name and keeps it. Not approved yet? *Ask for access* opens the lab's page; when your lead approves you, run this step again. A key your lead sent can be pasted here too (a Full Edition key opens its own agreement) |
 | 3 GitHub | your browser opens GitHub | sign in and approve; the token arrives by itself |
 | 4 Hugging Face | a button opens the token page, pre-filled | press *Create token*, then *Copy*; the panel takes it |
 | 5 Claude on this laptop | a check of Claude Code's own sign-in | sign in to Claude Code with the account you made with your WSU e-mail (Claude Pro at the minimum). Ashley only looks at whether you are signed in |
@@ -49,14 +49,16 @@ sign-in on the grid is last, because it happens inside the lab's container.
 | 11 Join the lab | a note field, only when everything above is green | a sentence for your lead (project, lead). One request; your lead approves it in Ashley, and from then on you read the lab folder and your workers use the lab's Claude container |
 | 12 Sign in to Claude on the grid | a terminal on the grid | Claude Code signs you in inside your own grid account: click the link it prints, sign in with the same Claude account, press Authorize, paste the code back. Once a month or so; Ashley says when. Ashley never sees this sign-in |
 
-The first time Ashley runs it shows the license agreement and the privacy statement in a signing
-dialog. You read the full text (scroll to its end), tick four statements that must be true, choose
+The first time Ashley runs it shows the Trial Edition license agreement and the privacy statement
+in a signing dialog. You read the full text (scroll to its end), tick four statements that must be true, choose
 whether Ashley may send its maintainer error reports, type your name, and choose **Accept and
 Continue**. That click forms the agreement; nothing happens before it. Ashley keeps a record of what you accepted
 (the version, the text, what you ticked, your name, the time) in `~/.ashley-local`, where you can
-read, copy and print it, and **Ashley: License** opens the text again at any time. The agreement sends
-disputes to Michigan courts after 60 days of written notice, with a class-action waiver and a jury
-waiver, and gives a 14-day refund on request for a paid key. An error report says which check failed and why, with names, paths and anything secret
+read, copy and print it, and **Ashley: License** opens the text again at any time. The Trial Edition is free:
+nothing is paid, nothing converts to a paid license, and it can be withdrawn or ended with notice.
+The agreement sends disputes to Michigan courts after 60 days of written notice, with a class-action
+waiver and a jury waiver. If a paid Full Edition is offered later, registering its key shows its own
+agreement in the same dialog; nothing obliges you to buy it. An error report says which check failed and why, with names, paths and anything secret
 replaced; never your prompts, files, tokens or AccessID. Say no in the dialog, or later in Settings,
 and nothing is ever sent. **Ashley: Error reports** shows exactly what a report contains.
 

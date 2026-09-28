@@ -1,11 +1,12 @@
 # Ashley privacy statement
 
-Version 3, 2026-09-28. Part of the Ashley Software License Agreement (LICENSE.txt). You can save
-and print this text; it is also on the Ashley support page.
+Version 4, 2026-09-28. Part of the Ashley Trial Edition License Agreement (LICENSE.txt) and of the
+Ashley Full Edition License Agreement (LICENSE-FULL.txt). You can save and print this text; it is
+also on the Ashley support page.
 
 Who collects: Gregory Schwing, trading as OpenSpineConsortium ("Licensor"), the maintainer of
 Ashley. Questions and requests: the notice address on the Ashley support page (in VS Code:
-Ashley: Support page). Ashley is sold to individuals; it is not provided by or on behalf of any
+Ashley: Support page). Ashley is licensed to individuals; it is not provided by or on behalf of any
 school, and Licensor is not acting for one.
 
 ## What stays on your laptop
@@ -57,14 +58,18 @@ first use whether to send reports, and can change the choice any time in Setting
 Diagnostics: Share) or with `Ashley: Error reports`, which also shows what a report contains and
 opens the copies kept on your laptop.
 
-**A trial request, only if you ask for a trial.** The request carries the Microsoft sign-in token VS
-Code holds for your institutional account, so the licence service can ask Microsoft who you are and
-issue one trial per person. The service records your AccessID, your e-mail, the license id and dates,
-and the time of the request.
+**Access requests and access keys.** If you ask for access on the Ashley support site, the request
+form records what you enter: AccessID, name, Wayne State e-mail, what you will use Ashley for, and
+the time. Obtaining a key carries the Microsoft sign-in token VS Code holds for your institutional
+account, so the access service can ask Microsoft who you are and issue a key in your name only if
+your AccessID is approved. The service records your AccessID, your e-mail, your name as Microsoft
+gives it, the license id and dates, the time, and the approval, denial and withdrawal decisions
+about you. The published list of approved AccessIDs contains AccessIDs only.
 
 **License records.** When Licensor issues you a key, the record holds your name as given, AccessID,
 e-mail, edition, dates and the key itself. When you accept the agreement, the acceptance record
-described above is kept with your license record.
+described above is kept with your license record; a Full Edition acceptance is a second record of
+the same kind.
 
 **A notice under the agreement**, if you send one (a dispute notice, a refund request, an outage
 claim): what you write in it, kept with your license record.

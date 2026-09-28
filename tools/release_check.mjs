@@ -53,7 +53,7 @@ export function checkVsix(file, opts = {}) {
     if (n.startsWith('extension/src/')) problems.push(`source shipped: ${n}`);
     if (/\.pem$/.test(n)) problems.push(`private key material shipped: ${n}`);
   }
-  for (const n of ['extension/package.json', 'extension/LICENSE.txt', 'extension/PRIVACY.md', 'extension/THIRD_PARTY_NOTICES.md', 'extension/dist/extension.js', 'extension/dist/mcp-server.js', 'extension/dist/ashley-cli.js', 'extension/dist/grid/license.js', 'extension/dist/grid/license_keys.json', 'extension/dist/grid/ashley', 'extension/dist/grid/ashleyd.js']) {
+  for (const n of ['extension/package.json', 'extension/LICENSE.txt', 'extension/LICENSE-FULL.txt', 'extension/PRIVACY.md', 'extension/THIRD_PARTY_NOTICES.md', 'extension/dist/extension.js', 'extension/dist/mcp-server.js', 'extension/dist/ashley-cli.js', 'extension/dist/grid/license.js', 'extension/dist/grid/license_keys.json', 'extension/dist/grid/ashley', 'extension/dist/grid/ashleyd.js']) {
     if (!has(n)) problems.push(`missing: ${n}`);
   }
   if (has('extension/package.json')) {

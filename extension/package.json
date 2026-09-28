@@ -2,7 +2,7 @@
   "name": "ashley",
   "displayName": "Ashley: grid research environment",
   "description": "Sets up a medical student's laptop for research on the the university HPC grid: SSH through the login node to a compute node, tokens for GitHub, Hugging Face and Claude, a persistent Claude Code worker in a Singularity container on the grid, and a bridge so the Claude Code extension can send it work.",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "publisher": "openspineconsortium",
   "license": "SEE LICENSE IN LICENSE.txt",
   "repository": {
@@ -412,15 +412,21 @@
           "default": "",
           "description": "The Wayne State account you signed in with (set by the wizard's first step)."
         },
+        "ashley.servicesUrl": {
+          "type": "string",
+          "default": "https://openspineconsortium.github.io/ashley/services.json",
+          "markdownDescription": "Where Ashley reads the lab's service addresses (access service, approved list, revocation list, error-report address, request page). Published with the support site so they can change without a new release; a non-empty address setting below always wins. Empty disables the lookup.",
+          "scope": "application"
+        },
         "ashley.allowlistUrl": {
           "type": "string",
           "default": "",
-          "description": "Optional: where a newer list of the lab's pre-approved AccessIDs is published (JSON {\"accessIds\": [...]}). Empty = the list shipped with this build."
+          "description": "Optional: where the list of approved AccessIDs is published (JSON {\"accessIds\": [...]}). Empty = the address from services.json, or, with no access service, the list shipped with this build."
         },
         "ashley.licenseRevocationUrl": {
           "type": "string",
           "default": "",
-          "markdownDescription": "Where Ashley fetches the signed list of withdrawn license keys (checked daily; the list bundled with each release is always used). Leave empty unless your lead gives you an address.",
+          "markdownDescription": "Where Ashley fetches the signed list of withdrawn keys (checked daily; the list bundled with each release is always used). Empty = the address from services.json.",
           "scope": "application"
         },
         "ashley.diagnostics.share": {
@@ -436,13 +442,13 @@
         "ashley.diagnostics.endpoint": {
           "type": "string",
           "default": "",
-          "markdownDescription": "Where error reports go (set by the lab; empty means reports stay on this laptop).",
+          "markdownDescription": "Where error reports go. Empty = the address from services.json; with neither, reports stay on this laptop.",
           "scope": "application"
         },
         "ashley.licenseServiceUrl": {
           "type": "string",
           "default": "",
-          "markdownDescription": "The lab's licence service, for free trials (empty means your lead issues keys by hand).",
+          "markdownDescription": "The lab's access service (issues your key after the Wayne State sign-in). Empty = the address from services.json; with neither, your lead issues keys by hand.",
           "scope": "application"
         }
       }
@@ -487,7 +493,7 @@
       "description": "Grid features need a local terminal and the OS keychain; they do not run in a virtual workspace."
     }
   },
-  "pricing": "Trial",
+  "pricing": "Free",
   "homepage": "https://openspineconsortium.github.io/ashley/",
   "bugs": {
     "url": "https://openspineconsortium.github.io/ashley/support.html"

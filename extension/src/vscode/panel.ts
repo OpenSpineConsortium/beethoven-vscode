@@ -79,11 +79,11 @@ export class SetupPanel implements WizardUI, vscode.Disposable {
     await vscode.env.openExternal(vscode.Uri.parse(url));
   }
   async runInteractive(title: string, command: string, args: string[]): Promise<number | null> {
-    // Only the Claude token step still needs a terminal (the CLI draws its own UI there).
+    // Only the grid Claude sign-in still needs a terminal (Claude Code draws its own prompts there).
     const shellPath = resolveExecutable(command);
     const term = vscode.window.createTerminal({ name: title, shellPath, shellArgs: args, isTransient: true });
     term.show(false);
-    this.post({ type: 'toast', message: `A terminal "${title}" opened below. Follow it; come back here when it has printed your token.`, level: 'info' });
+    this.post({ type: 'toast', message: `A terminal "${title}" opened below. Follow it: open the link it prints in any browser, paste the code back, come back here when it says Done.`, level: 'info' });
     const deadline = Date.now() + 15 * 60_000;
     return new Promise<number | null>((resolve) => {
       const poll = setInterval(() => {

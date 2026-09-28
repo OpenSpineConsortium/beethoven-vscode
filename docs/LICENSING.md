@@ -46,7 +46,7 @@ paste it into `Ashley: License` or the first wizard step. Editions are labels fo
 Back the vendor folder up offline. A lost release key means no new keys for the builds that trust
 it; a new key (`init --kid k2`) needs a new release before students can use keys signed with it.
 
-## Trials without the lead
+## Trials without the lead (superseded by the access service)
 
 `tools/intake/` is a small service (a Cloudflare Worker) that issues one trial per AccessID after
 asking Microsoft who the signed-in student is, files error reports as issues, and serves the
@@ -88,6 +88,13 @@ dispute section applies only to disputes that arise after the person accepts it;
 changelog. The affirmation wording in `AFFIRMATIONS` is part of the record: change it only with the
 texts, and never pre-tick a box. Arbitration is deliberately absent from version 3;
 `docs/legal/ARBITRATION_OPTION.md` holds the clause and the threshold for adopting it.
+
+Two agreements ship: `extension/LICENSE.txt` (Trial Edition, accepted at first use) and
+`extension/LICENSE-FULL.txt` (Full Edition, accepted when a non-trial key is registered). They share
+section numbers so the dialog's affirmations reference both correctly; change them together, bump
+`TERMS_VERSION` once, and name the new version and date in `affirmationsFor()`. Before the first paid
+key the Full Edition agreement's licensor becomes the LLC (a version bump; Trial Edition users are
+not re-asked unless their text changed).
 
 ## Before a public listing or a paid key
 

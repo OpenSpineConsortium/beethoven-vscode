@@ -35,7 +35,7 @@ if (r.problems.length) {
 const out = path.join(REPO, 'dist', 'release', version);
 fs.mkdirSync(out, { recursive: true });
 fs.copyFileSync(vsix, path.join(out, path.basename(vsix)));
-for (const f of ['CHANGELOG.md', 'LICENSE.txt', 'PRIVACY.md', 'THIRD_PARTY_NOTICES.md']) fs.copyFileSync(path.join(EXT, f), path.join(out, f));
+for (const f of ['CHANGELOG.md', 'LICENSE.txt', 'LICENSE-FULL.txt', 'PRIVACY.md', 'THIRD_PARTY_NOTICES.md']) fs.copyFileSync(path.join(EXT, f), path.join(out, f));
 if (!process.argv.includes('--no-sign')) {
   try {
     run('node', [path.join(REPO, 'tools', 'license', 'ashley-license.mjs'), 'sign-release', out], REPO);

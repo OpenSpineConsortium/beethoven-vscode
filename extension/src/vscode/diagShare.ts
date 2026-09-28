@@ -29,8 +29,10 @@ export class DiagSharer {
   enabled(): boolean {
     return this.cfg().get<string>('diagnostics.share', 'on') === 'on' && vscode.env.isTelemetryEnabled;
   }
+  /** the report address from services.json, set by the extension once the lab's addresses are known */
+  fallbackEndpoint = '';
   endpoint(): string {
-    return this.cfg().get<string>('diagnostics.endpoint', '').trim();
+    return this.cfg().get<string>('diagnostics.endpoint', '').trim() || this.fallbackEndpoint;
   }
   installId(): string {
     let id = this.context.globalState.get<string>(INSTALL_KEY);
