@@ -1,4 +1,4 @@
-# CHECKPOINT 2026-09-28 (updated 20:30 UTC, version 3.0.0: Trial and Full Edition agreements, access by approval, click-to-fix, sandbox kit) — Ashley, the grid + Claude Code extension
+# CHECKPOINT 2026-09-28 (updated 20:40 UTC, version 3.0.0 PUBLISHED on the Marketplace; access service live; Trial and Full Edition agreements) — Ashley, the grid + Claude Code extension
 
 ## CURRENT STATE: read this first
 
@@ -14,8 +14,10 @@ SHA256SUMS signed by k1). Committed and pushed as this checkpoint says below.
   personal Microsoft account gregoryamdg@gmail.com (verified-domain badge impossible before
   2026-12-21: the domain is 3 months old and the rule is 6 months for both the domain and the
   listing). A new Azure DevOps organization now requires an Azure subscription, so no PAT yet:
-  `ashley-3.0.0.vsix` was uploaded through the web management page; validation pending at the time
-  of writing (the listing answered 404 and the gallery API had no entry minutes after upload).
+  `ashley-3.0.0.vsix` was uploaded through the web management page; **PUBLISHED**: validated and public at
+  2026-09-28 20:24 UTC (https://marketplace.visualstudio.com/items?itemName=OpenSpineConsortium.ashley;
+  `code --install-extension openspineconsortium.ashley`). Updates: the next integer version's VSIX
+  through the management page (**...** -> Update) until an Azure DevOps PAT exists.
   Publisher logo: the folder `OpenSpineConsortium-logo` on the Desktop (VS Code blue tile, white
   Ashley mark; scratch source in the session scratchpad `logo/`).
 - The grid worker that hosted the phone sign-in relay ended with its wall time; the Claude sign-in on
