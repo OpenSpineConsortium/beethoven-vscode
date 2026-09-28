@@ -22,6 +22,7 @@ export class AshleyStore {
     const c = this.config;
     return {
       accessId: c.get<string>('accessId', ''),
+      wsuEmail: c.get<string>('wsuEmail', ''),
       twoFactorDone: c.get<boolean>('twoFactorDone', false),
       loginHost: c.get<string>('loginHost', 'warrior.grid.wayne.edu'),
       sshAlias: c.get<string>('sshAlias', 'wsu-grid'),
@@ -84,6 +85,40 @@ export class AshleyStore {
     return names;
   }
 
+  /**
+   * Wayne State sign-in: the university's Microsoft account through VS Code's own Microsoft
+   * sign-in (browser, work or school accounts only). Only the account's e-mail is used.
+   */
+  async signInWsu(): Promise<{ email: string } | undefined> {
+    const session = await vscode.authentication.getSession('microsoft', ['VSCODE_TENANT:organizations', 'User.Read'], { createIfNone: true, clearSessionPreference: true });
+    return session ? { email: session.account.label } : undefined;
+  }
+
+  /** The lab's pre-approved AccessIDs: the list shipped in this build, or a newer one from ashley.allowlistUrl. */
+  async allowlist(): Promise<string[] | null> {
+    const url = this.config.get<string>('allowlistUrl', '');
+    if (url) {
+      try {
+        const ctl = new AbortController();
+        const timer = setTimeout(() => ctl.abort(), 10_000);
+        const res = await fetch(url, { signal: ctl.signal });
+        clearTimeout(timer);
+        if (res.ok) {
+          const j = (await res.json()) as { accessIds?: string[] };
+          if (Array.isArray(j.accessIds)) return j.accessIds.map((x) => x.toLowerCase());
+        }
+      } catch {
+        /* fall back to the bundled list */
+      }
+    }
+    try {
+      const j = JSON.parse(fs.readFileSync(path.join(this.context.extensionPath, 'media', 'allowlist.json'), 'utf8')) as { accessIds?: string[] };
+      return Array.isArray(j.accessIds) ? j.accessIds.map((x) => x.toLowerCase()) : null;
+    } catch {
+      return null;
+    }
+  }
+
   /** GitHub through VS Code's own sign-in: the browser opens, the token comes back by itself. */
   async signInGitHub(): Promise<{ token: string; login?: string } | undefined> {
     const session = await vscode.authentication.getSession('github', GITHUB_SCOPES, { createIfNone: true });
@@ -102,6 +137,8 @@ export class AshleyStore {
         await this.hydrateEnvironment();
       },
       signInGitHub: () => this.signInGitHub(),
+      signInWsu: () => this.signInWsu(),
+      allowlist: () => this.allowlist(),
       extraRequirements: async () => {
         const m: string[] = [];
         if (!vscode.extensions.getExtension('anthropic.claude-code')) m.push('the Claude Code extension (signed in to Claude Pro or Max)');

@@ -97,6 +97,14 @@ const secretsEnv = readEnvFile(SECRETS);
 const node = readFirstLine(path.join(WORKER_DIR, 'node')) || os.hostname();
 const job = readFirstLine(path.join(WORKER_DIR, 'job.id')) || process.env.SLURM_JOB_ID || 'x';
 const startedAt = new Date().toISOString();
+// phone access (Remote Control) lives in its own module and only acts when <worker>/rc/enable exists
+let phone = null;
+try {
+  phone = require(path.join(__dirname, 'phone.js')).startPhone({ workerDir: WORKER_DIR, ashleyHome: ASHLEY_HOME, root: ROOT, claude: CLAUDE, node, job, log });
+} catch (e) {
+  log(`phone access unavailable: ${e.message}`);
+}
+const phoneTimer = setInterval(() => phone && phone.tick(), 1000);
 
 recoverClaimed();
 log(`ashleyd start worker=${WORKER} node=${node} job=${job} pid=${process.pid} claude=${claudeVersion} concurrency=${CONCURRENCY}`);
@@ -406,6 +414,7 @@ function writeState(status) {
     claude_version: claudeVersion,
     accounts,
     blocked_until: allCooling ? soonestCooldown() : null,
+    phone: phone ? phone.phase() : 'unavailable',
   };
   atomicWrite(STATE, JSON.stringify(st, null, 1));
 }
@@ -413,6 +422,7 @@ function beginStop(why) {
   if (stopping) return;
   stopping = true;
   log(`stopping (${why}); ${running.size} running`);
+  if (phone) phone.stop();
   writeState('stopping');
   setTimeout(() => {
     for (const [id, e] of running) {
@@ -424,6 +434,8 @@ function beginStop(why) {
 function finish() {
   clearInterval(timer);
   clearInterval(beat);
+  clearInterval(phoneTimer);
+  if (phone) phone.stop();
   writeState('stopping');
   log('exit');
   safe(() => fs.rmSync(STOP, { force: true }));

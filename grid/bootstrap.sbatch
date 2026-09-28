@@ -115,8 +115,9 @@ json.dump(lib, open(p + ".part", "w"), indent=1)
 os.replace(p + ".part", p)
 print("library entry written:", name)
 PYEOF
-  chmod -R g+rX "$ROOT" 2>/dev/null; find "$ROOT" -type d -exec chmod g+s {} + 2>/dev/null
-  say "published $LIB_NAME to $ROOT (group-readable)"
+  chmod -R g+rX,g-w,o-rwx "$ROOT" 2>/dev/null; find "$ROOT" -type d -exec chmod g+s {} + 2>/dev/null
+  "$ASHLEY_HOME/bin/ashley" access admin resync 2>/dev/null   # approved students read the new entry too
+  say "published $LIB_NAME to $ROOT (group read-only; approved students by ACL)"
   exit 0
 fi
 {

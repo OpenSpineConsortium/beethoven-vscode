@@ -24,8 +24,8 @@ BIN="$ASHLEY_HOME/bin"
 CFG="$ASHLEY_HOME/config.env"
 VERSION=$(cat "$BIN/VERSION" 2>/dev/null || echo 0)
 die() { echo "ashley: $*" >&2; exit 1; }
-json_str() { # escape a string for JSON
-  local s=${1//\\/\\\\}; s=${s//\"/\\\"}; s=${s//$'\n'/\\n}; s=${s//$'\r'/}; s=${s//$'\t'/\\t}; printf '"%s"' "$s"
+json_str() { # escape a string for JSON (control characters dropped)
+  local s; s=$(printf '%s' "$1" | tr -d '\000-\010\013\014\016-\037'); s=${s//\\/\\\\}; s=${s//\"/\\\"}; s=${s//$'\n'/\\n}; s=${s//$'\r'/}; s=${s//$'\t'/\\t}; printf '"%s"' "$s"
 }
 load_cfg() { [ -s "$CFG" ] && source "$CFG"; ROOT="${ROOT:-}"; RUNTIME="${RUNTIME:-}"; SANDBOX="${SANDBOX:-}"; CLAUDE_BIN="${CLAUDE_BIN:-}"; BOOTSTRAP_JOB="${BOOTSTRAP_JOB:-}"; BINDS="${BINDS:-}"; CONTAINER="${CONTAINER:-}"; SOURCE="${SOURCE:-}"; }
 is_ready() { load_cfg; [ -s "$ASHLEY_HOME/READY" ] && [ -n "$CLAUDE_BIN" ] && [ -x "$CLAUDE_BIN" ] && [ -x "$SANDBOX/usr/local/bin/node" ]; }
@@ -49,6 +49,8 @@ default_root() {
 # minutes and 1.8 GB. Containers are read-only at run time: every account's state lives in its
 # own home, so sharing costs nothing in isolation.
 LIBRARY_ROOT="${ASHLEY_LIBRARY:-/rs/rs_grp_oschome/shared/ashley}"
+SHARED="$(dirname "$LIBRARY_ROOT")"      # the lab folder: students read it, never write it
+ACCESS_ROOT="$SHARED/access"
 lib_file() { echo "$LIBRARY_ROOT/library.json"; }
 lib_readable() { [ -r "$(lib_file)" ]; }
 lib_field() { # NAME FIELD -> value (string fields only; python-free)
@@ -68,12 +70,13 @@ cmd_library() {
       if [ "${1:-}" = "--json" ]; then printf '{"available":true,"root":%s,"library":' "$(json_str "$LIBRARY_ROOT")"; tr -d '\n' < "$(lib_file)"; echo '}'
       else echo "shared library at $LIBRARY_ROOT (default: $(lib_default))"; for n in $(lib_names); do printf '  %-22s %s  [%s]%s\n' "$n" "$(lib_field "$n" purpose)" "$(lib_field "$n" claude_version)" "$([ "$(lib_field "$n" gpu)" = true ] && echo ' gpu' || true)"; done; fi;;
     publish)
+      is_admin || die "only the lab admin publishes containers"
       # leads only: builds an entry as a job, then group-readable. ashley library publish --name NAME --image docker://... [--gpu] [--purpose "..."] [--partition P --qos Q]
       local name="" image="docker://node:22-bookworm" gpu=0 purpose="" part="secp" qos="secondary"
       while [ $# -gt 0 ]; do case "$1" in --name) name="$2"; shift 2;; --image) image="$2"; shift 2;; --gpu) gpu=1; shift;; --purpose) purpose="$2"; shift 2;; --partition) part="$2"; shift 2;; --qos) qos="$2"; shift 2;; *) shift;; esac; done
       [[ "$name" =~ ^[A-Za-z0-9_.-]+$ ]] || die "library publish needs --name"
       mkdir -p "$LIBRARY_ROOT" "$ASHLEY_HOME/log" || die "cannot create $LIBRARY_ROOT"
-      chmod 2775 "$LIBRARY_ROOT" 2>/dev/null
+      chmod 2750 "$LIBRARY_ROOT" 2>/dev/null   # group reads, only the admin writes; approved students read by ACL
       local id; id=$(cd "$ASHLEY_HOME/log" && sbatch --parsable --partition="$part" --qos="$qos" --export="ALL,LIBRARY=1,ROOT_OVERRIDE=$LIBRARY_ROOT,LIB_NAME=$name,IMAGE=$image,GPU=$gpu,PURPOSE=$purpose" "$BIN/bootstrap.sbatch" 2>&1) || die "sbatch failed: $id"
       echo "publish job ${id%%;*} submitted: $name from $image into $LIBRARY_ROOT (log $ASHLEY_HOME/log/bootstrap_${id%%;*}.out)";;
     *) die "library: list|publish";;
@@ -90,9 +93,10 @@ cmd_adopt() { # use a shared container instead of building: writes config.env + 
   [ -r "$claude" ] || die "cannot read $claude"
   load_cfg; [ -n "$ROOT" ] || set_cfg ROOT "$(default_root)"; load_cfg
   mkdir -p "$ROOT/workspaces" 2>/dev/null
+  [ -O "/rs/rs_grp_oschome/$USER" ] && chmod o-rwx "/rs/rs_grp_oschome/$USER"
   local binds="-B $HOME"; [ -d "/rs/rs_grp_oschome/$USER" ] && binds="$binds -B /rs/rs_grp_oschome/$USER"
   case "$ROOT" in "/rs/rs_grp_oschome/$USER"/*|"$HOME"/*) ;; *) binds="$binds -B $ROOT";; esac
-  binds="$binds -B $LIBRARY_ROOT"
+  binds="$binds -B $SHARED"   # the lab folder (containers, datasets, software), read-only by permission
   set_cfg RUNTIME "$runtime"; set_cfg SANDBOX "$sandbox"; set_cfg CLAUDE_BIN "$claude"; set_cfg BINDS "$binds"; set_cfg CONTAINER "$name"; set_cfg SOURCE "shared"; set_cfg BOOTSTRAP_STATE "adopted"
   printf '{"claude_version":"%s","runtime":"%s","sandbox":"%s","container":"%s","source":"shared","adopted":"%s","host":"%s"}\n' "$ver" "$runtime" "$sandbox" "$name" "$(date -u +%FT%TZ)" "$(hostname)" > "$ASHLEY_HOME/READY.part" && mv "$ASHLEY_HOME/READY.part" "$ASHLEY_HOME/READY"
   echo "adopted shared container '$name' ($ver); nothing to build"
@@ -124,7 +128,7 @@ cmd_install() {
   if [ $build_own -eq 0 ] && lib_readable && cmd_adopt "$(lib_default)" 2>/dev/null; then return 0; fi
   # Not readable yet. When the lab runs access requests, the container arrives with access (the
   # wizard's last step): do not spend 1.8 GB and seven minutes of the student's space on a copy.
-  if [ $build_own -eq 0 ] && [ -d "$ACCESS_ROOT/inbox" ]; then
+  if [ $build_own -eq 0 ] && lab_mode; then
     set_cfg AWAITING_ACCESS 1
     echo "the lab's shared container comes with lab access: request it as the wizard's last step (Ashley: Lab access)"
     return 0
@@ -198,6 +202,7 @@ jobs_json() {
 cmd_status() {
   local as_json=0; [ "${1:-}" = "--json" ] && as_json=1
   load_cfg
+  if ! is_ready && lib_readable; then ( cmd_adopt "$(lib_default)" ) >/dev/null 2>&1; load_cfg; fi
   local ready=false cv="" bst=""
   is_ready && ready=true
   [ -s "$ASHLEY_HOME/READY" ] && cv=$(grep -o '"claude_version":"[^"]*"' "$ASHLEY_HOME/READY" | cut -d'"' -f4)
@@ -205,7 +210,7 @@ cmd_status() {
   read -r used soft < <(home_quota)
   if [ $as_json -eq 1 ]; then
     local awaiting=false
-    if [ "$ready" = false ] && ! lib_readable && [ -z "$BOOTSTRAP_JOB" ] && [ -d "$ACCESS_ROOT/inbox" ]; then awaiting=true; fi
+    case "$bst" in PENDING|RUNNING|CONFIGURING) ;; *) if [ "$ready" = false ] && ! lib_readable && lab_mode; then awaiting=true; fi;; esac
     printf '{"version":%s,"host":%s,"ready":%s,"awaiting_access":%s,"root":%s,"runtime":%s,"claude_version":%s,"container":%s,"source":%s,"library":%s,"bootstrap_job":%s,"bootstrap_state":%s,"home_used_gb":%s,"home_soft_gb":%s,"workers":[' \
       "$(json_str "$VERSION")" "$(json_str "$(hostname)")" "$ready" "$awaiting" "$(json_str "$ROOT")" "$(json_str "$RUNTIME")" "$(json_str "$cv")" "$(json_str "${CONTAINER:-own}")" "$(json_str "${SOURCE:-own}")" "$(lib_readable && echo true || echo false)" "$(json_str "$BOOTSTRAP_JOB")" "$(json_str "$bst")" "${used:-0}" "${soft:-0}"
     local first=1; for w in $(worker_dirs); do [ $first -eq 1 ] || printf ','; first=0; worker_json "$w"; done
@@ -250,8 +255,8 @@ cmd_worker() {
   case "$sub" in
     start)
       # access granted since the last install: adopt the lab's container on the spot
-      if ! is_ready && lib_readable; then cmd_adopt "$(lib_default)" >/dev/null 2>&1; load_cfg; fi
-      if ! is_ready && [ -z "${BOOTSTRAP_JOB:-}" ] && [ -d "$ACCESS_ROOT/inbox" ]; then die "no container yet: it comes with lab access (the last setup step; your lead approves it)"; fi
+      if ! is_ready && lib_readable; then ( cmd_adopt "$(lib_default)" ) >/dev/null 2>&1; load_cfg; fi
+      if ! is_ready && ! lib_readable && lab_mode; then die "no container yet: it comes with lab access (the last setup step; your lead approves it)"; fi
       is_ready || die "grid not ready yet (bootstrap job ${BOOTSTRAP_JOB:-none}: $(job_state "${BOOTSTRAP_JOB:-}")); try again when 'ashley status' says ready=true"
       mkdir -p "$w"/{inbox,outbox,log}
       rm -f "$w/stop"
@@ -271,7 +276,7 @@ cmd_worker() {
       fi
       sed -e "s|@NAME@|$name|g" -e "s|@PARTITION@|$part|g" -e "s|@QOS@|$qos|g" -e "s|@CPUS@|$cpus|g" -e "s|@MEM@|$mem|g" \
           -e "s|@TIME@|$time|g" -e "s|@GRES@|$gres|g" -e "s|@REQUEUE@|$requeue|g" -e "s|@GPUS@|$gpus|g" -e "s|@CONC@|$conc|g" \
-          -e "s|@SANDBOX@|$w_sandbox|g" -e "s|@CLAUDE_BIN@|$w_claude|g" -e "s|@LIBRARY@|$LIBRARY_ROOT|g" \
+          -e "s|@SANDBOX@|$w_sandbox|g" -e "s|@CLAUDE_BIN@|$w_claude|g" -e "s|@LIBRARY@|$SHARED|g" \
           "$BIN/worker.sbatch.tpl" > "$w/job.sbatch"
       local out; out=$(cd "$w" && sbatch --parsable job.sbatch 2>&1) || die "sbatch failed: $out"
       jid=${out%%;*}; echo "$jid" > "$w/job.id"; rm -f "$w/node"
@@ -422,48 +427,75 @@ cmd_relay() {
   done
 }
 
-# ---- lab access: one folder -----------------------------------------------------------------
-# The lab folder is SHARED=/rs/rs_grp_oschome/shared (containers now, anything else the lab adds
-# later). Only one sub-folder is open to everyone: shared/access, a drop-box. Approval gives the
-# student read access to the rest of shared/ with POSIX ACLs (CephFS honours them and the lab admin
-# owns the volume), so no unix-group change and no HPC ticket is needed. Layout after `access init`:
-#   /rs/rs_grp_oschome        2771 +acl   traverse only
-#   shared/                   2771        traverse only; approved users get r-x + a default ACL
-#   shared/ashley (etc.)      2770        group + approved users
-#   shared/access             711         traverse
-#   shared/access/inbox       1733        sticky drop-box: create your own file, cannot list others'
-#   shared/access/status      711         each student reads status/<own id>.json, cannot list
-#   shared/access/requests    700         the admin's archive
-SHARED="$(dirname "$LIBRARY_ROOT")"
-ACCESS_ROOT="$SHARED/access"
-access_admin() { stat -c %U "$(dirname "$LIBRARY_ROOT")" 2>/dev/null || echo "${ASHLEY_ADMIN:-}"; }
+# ---- lab access: one folder, read-only, requests carried by Slurm ---------------------------
+# Philosophy: the lab admin curates the lab folder SHARED=/rs/rs_grp_oschome/shared (datasets,
+# containers, software). Students only ever READ it; they do all their science in their own grid
+# accounts. So nothing under the volume is writable by students, not even a request drop-box.
+#
+# A request is a held, zero-work Slurm job named ashley_access whose comment carries the note.
+# Slurm authenticates the submitter, so a request cannot be forged or squatted, and it uses no
+# storage. The admin's ingest reads them (squeue shows every user's jobs on this grid), writes a
+# status file only the admin can write and only that student can read, and gives the applicant a
+# traverse-only ACL on the path to it. Approval = POSIX ACLs (CephFS honours them; the admin owns
+# the volume): read-only on SHARED and everything under it except access/. The volume root is not
+# open to other users at all.
+#   /rs/rs_grp_oschome      2770 + per-user --x ACLs    (default ACL o::--- for new entries)
+#   shared/                 2750 + per-user r-x/--x     (group reads, only the admin writes)
+#   shared/<anything>       2750 + per-user r-X         (containers, datasets, software)
+#   shared/access           2710 + per-user --x
+#   shared/access/status    2710 + per-user --x; status/<id>.json 600 + ACL u:<id>:r--
+#   shared/access/requests  2700  the admin's decision log
+VOL="$(dirname "$SHARED")"
+STATUS_DIR="$ACCESS_ROOT/status"
+LOG_DIR="$ACCESS_ROOT/requests"
+access_admin() { stat -c %U "$SHARED" 2>/dev/null || echo "${ASHLEY_ADMIN:-}"; }
 is_admin() { [ "$(access_admin)" = "$USER" ]; }
-status_file() { echo "$ACCESS_ROOT/status/$1.json"; }
-status_state() { [ -s "$(status_file "$1")" ] && grep -o '"state": *"[^"]*"' "$(status_file "$1")" | head -1 | sed 's/.*"\([^"]*\)"$/\1/' || echo none; }
-write_status() { # ID STATE NOTE MESSAGE REQUESTED
-  umask 022
-  printf '{"user":%s,"state":%s,"note":%s,"message":%s,"requested":%s,"decided":%s,"by":%s}\n' \
-    "$(json_str "$1")" "$(json_str "$2")" "$(json_str "$3")" "$(json_str "$4")" "$(json_str "$5")" "$(json_str "$(date -u +%FT%TZ)")" "$(json_str "$USER")" > "$(status_file "$1").part" && mv "$(status_file "$1").part" "$(status_file "$1")"
+lab_mode() { [ "${ASHLEY_LAB:-1}" = 1 ]; }    # Ashley is the lab's tool: the container comes with lab access
+status_file() { echo "$STATUS_DIR/$1.json"; }
+status_field() { # ID FIELD
+  [ -r "$(status_file "$1")" ] || { echo ""; return; }
+  grep -o "\"$2\": *\"[^\"]*\"" "$(status_file "$1")" | head -1 | sed 's/.*"\([^"]*\)"$/\1/'
 }
-acl_grant() { # ID: read everything in the lab folder except the access area; future folders inherit
-  setfacl -m "u:$1:r-x" "$SHARED" && setfacl -d -m "u:$1:r-X" "$SHARED" || return 1
-  local c
+own_request_job() { squeue -h -u "$USER" -n ashley_access -t PD -o %i 2>/dev/null | head -1; }
+sanitize_note() { printf '%s' "$1" | tr -cd 'A-Za-z0-9 ,.:;()/_@+-' | cut -c1-200; }
+decision_log() { printf '%s %s %s %s\n' "$(date -u +%FT%TZ)" "$1" "$2" "$3" >> "$LOG_DIR/decisions.log" 2>/dev/null; }
+write_status() { # ID STATE NOTE MESSAGE REQUESTED JOB
+  local f; f=$(status_file "$1")
+  ( umask 077
+    printf '{"user":%s,"name":%s,"state":%s,"note":%s,"message":%s,"requested":%s,"job":%s,"decided":%s,"by":%s}\n' \
+      "$(json_str "$1")" "$(json_str "$(getent passwd "$1" | cut -d: -f5)")" "$(json_str "$2")" "$(json_str "$3")" "$(json_str "$4")" "$(json_str "$5")" "$(json_str "$6")" "$(json_str "$(date -u +%FT%TZ)")" "$(json_str "$USER")" > "$f.part" && mv "$f.part" "$f" )
+  setfacl -m "u:$1:r--" "$f" 2>/dev/null || chmod 644 "$f"
+}
+path_traverse() { # ID add|remove: pass-through to the applicant's own status file
+  local d
+  for d in "$VOL" "$SHARED" "$ACCESS_ROOT" "$STATUS_DIR"; do
+    if [ "$2" = add ]; then setfacl -m "u:$1:--x" "$d" 2>/dev/null; else setfacl -x "u:$1" "$d" 2>/dev/null; fi
+  done
+}
+acl_grant() { # ID: read-only on everything in the lab folder except access/; returns the failure count
+  local fails=0 c
+  setfacl -m "u:$1:--x" "$VOL" || fails=$((fails + 1))
+  setfacl -m "u:$1:r-x" "$SHARED" && setfacl -d -m "u:$1:r-X" "$SHARED" || fails=$((fails + 1))
   for c in "$SHARED"/*; do
     [ "$c" = "$ACCESS_ROOT" ] && continue
+    [ -L "$c" ] && continue                        # never follow a link out of the lab folder
     [ -e "$c" ] || continue
-    setfacl -R -m "u:$1:r-X" "$c" || return 1
+    setfacl -R -P -m "u:$1:r-X" "$c" 2>/dev/null || fails=$((fails + 1))
     find "$c" -type d -exec setfacl -d -m "u:$1:r-X" {} + 2>/dev/null
   done
+  return $fails
 }
-acl_revoke() {
-  setfacl -x "u:$1" "$SHARED" 2>/dev/null; setfacl -d -x "u:$1" "$SHARED" 2>/dev/null
+acl_revoke() { # ID: removes read access to the lab folder (keeps the pass-through to the status file)
   local c
   for c in "$SHARED"/*; do
     [ "$c" = "$ACCESS_ROOT" ] && continue
-    setfacl -R -x "u:$1" "$c" 2>/dev/null; find "$c" -type d -exec setfacl -d -x "u:$1" {} + 2>/dev/null
+    [ -L "$c" ] && continue
+    setfacl -R -P -x "u:$1" "$c" 2>/dev/null; find "$c" -type d -exec setfacl -d -x "u:$1" {} + 2>/dev/null
   done
+  setfacl -d -x "u:$1" "$SHARED" 2>/dev/null; setfacl -m "u:$1:--x" "$SHARED" 2>/dev/null
   return 0
 }
+approved_users() { local f; for f in "$STATUS_DIR"/*.json; do [ -s "$f" ] || continue; grep -q '"state": *"approved"' "$f" && basename "$f" .json; done; }
 # curl with a secret header, without the secret ever appearing in the process list
 curl_auth() { # TOKEN URL [extra header lines...]
   local tok="$1" url="$2"; shift 2
@@ -473,102 +505,153 @@ curl_auth_code() { # TOKEN URL [extra header lines...] -> HTTP status code
   local tok="$1" url="$2"; shift 2
   { printf 'header = "Authorization: Bearer %s"\n' "$tok"; for h in "$@"; do printf 'header = "%s"\n' "$h"; done; } | curl -s -m 15 -o /dev/null -w '%{http_code}' -K - "$url"
 }
+student_state() { # none | filed | pending | approved | approved_unreadable | denied | removed
+  if lib_readable; then echo approved; return; fi
+  local s; s=$(status_field "$USER" state)
+  case "$s" in
+    approved) echo approved_unreadable;;
+    pending|denied|removed) echo "$s";;
+    *) [ -n "$(own_request_job)" ] && echo filed || echo none;;
+  esac
+}
+tidy_request_job() { # once decided, the held request job has done its job
+  local s; s=$(student_state)
+  case "$s" in approved|approved_unreadable|denied|removed) local j; j=$(own_request_job); [ -n "$j" ] && scancel "$j" 2>/dev/null;; esac
+}
+admin_ingest() { # read pending request jobs; open a status file for each new applicant
+  local line id u note req
+  while IFS='|' read -r id u note req; do
+    [ -n "$u" ] || continue
+    getent passwd "$u" >/dev/null || continue
+    [ -s "$(status_file "$u")" ] && continue       # already known (pending or decided)
+    note=$(sanitize_note "${note#ashley-access v1 note=}")
+    path_traverse "$u" add
+    write_status "$u" pending "$note" "" "$req" "$id"
+    decision_log "$u" filed "job $id"
+  done < <(squeue -h -n ashley_access -t PD -o '%i|%u|%k|%V' 2>/dev/null)
+}
 cmd_access() {
   local sub="${1:-status}"; shift || true
   case "$sub" in
-    init)  # admin: the permission layout, printed as it is applied
-      is_admin || die "only the owner of $(dirname "$LIBRARY_ROOT") can run access init"
-      local vol; vol=$(dirname "$(dirname "$LIBRARY_ROOT")")
-      chmod o+x "$vol" && echo "chmod o+x $vol (traverse only)"
-      [ -d "$vol/$USER" ] && chmod o-rwx "$vol/$USER" && echo "chmod o-rwx $vol/$USER (your own tree stays private)"
-      chmod 2771 "$(dirname "$LIBRARY_ROOT")" && echo "chmod 2771 $(dirname "$LIBRARY_ROOT")"
-      chmod 2770 "$LIBRARY_ROOT" && echo "chmod 2770 $LIBRARY_ROOT (group + approved users only)"
-      mkdir -p "$ACCESS_ROOT/inbox" "$ACCESS_ROOT/status" "$ACCESS_ROOT/requests"
-      chmod 711 "$ACCESS_ROOT"; chmod 1733 "$ACCESS_ROOT/inbox"; chmod 711 "$ACCESS_ROOT/status"; chmod 700 "$ACCESS_ROOT/requests"
-      echo "access area ready: $ACCESS_ROOT (inbox 1733, status 711, requests 700)";;
+    init)  # admin: the permission layout, printed as it is applied; safe to rerun
+      is_admin || die "only the owner of $SHARED can run access init"
+      local e others=""
+      chmod o-rwx "$VOL" && echo "chmod o-rwx $VOL (no longer open to other grid users)"
+      setfacl -d -m u::rwx,g::rwx,o::--- "$VOL" 2>/dev/null && echo "default ACL on $VOL: new entries start closed to others"
+      for e in "$VOL"/*; do
+        [ "$e" = "$SHARED" ] && continue
+        if [ "$(stat -c %U "$e")" = "$USER" ]; then chmod o-rwx "$e"; elif [ -n "$(find "$e" -maxdepth 0 -perm /o=rwx 2>/dev/null)" ]; then others="$others $e"; fi
+      done
+      [ -n "$others" ] && echo "note: these entries belong to other members and are open to others; their owners can close them with chmod o-rwx:$others"
+      chmod 2750 "$SHARED" && setfacl -d -m u::rwx,g::r-x,o::--- "$SHARED" && echo "chmod 2750 $SHARED (group reads, only you write; new entries closed to others)"
+      for e in "$SHARED"/*; do
+        [ "$e" = "$ACCESS_ROOT" ] && continue; [ -L "$e" ] && continue
+        chmod -R g-w,o-rwx "$e" 2>/dev/null; find "$e" -type d -exec chmod g+s {} + 2>/dev/null
+      done
+      echo "lab folder contents: group read-only, closed to others"
+      mkdir -p "$STATUS_DIR" "$LOG_DIR"
+      rm -rf "$ACCESS_ROOT/inbox" && echo "removed the old world-writable drop-box"
+      chmod 2710 "$ACCESS_ROOT" "$STATUS_DIR"; chmod 2700 "$LOG_DIR"
+      local f; for f in "$STATUS_DIR"/*.json; do [ -s "$f" ] || continue; chmod 600 "$f"; setfacl -m "u:$(basename "$f" .json):r--" "$f" 2>/dev/null; path_traverse "$(basename "$f" .json)" add; done
+      mkdir -p "$ASHLEY_HOME/bin"; printf '#!/bin/bash\ntrue\n' > "$BIN/access_request.sbatch"; chmod 755 "$BIN/access_request.sbatch"
+      cmd_access admin resync >/dev/null && echo "re-applied access for approved users"
+      echo "access ready: requests arrive as held Slurm jobs named ashley_access";;
     whoami)
-      local adm; adm=$(access_admin)
-      if [ "${1:-}" = "--json" ]; then printf '{"user":%s,"admin":%s,"lab_admin":%s,"granted":%s,"state":%s}\n' "$(json_str "$USER")" "$(is_admin && echo true || echo false)" "$(json_str "$adm")" "$(lib_readable && echo true || echo false)" "$(json_str "$(status_state "$USER")")"
-      else echo "user $USER; lab admin $adm; admin=$(is_admin && echo yes || echo no); library readable=$(lib_readable && echo yes || echo no); request state=$(status_state "$USER")"; fi;;
+      local adm st; adm=$(access_admin); st=$(is_admin && echo admin || student_state)
+      is_admin || tidy_request_job
+      if [ "${1:-}" = "--json" ]; then printf '{"user":%s,"admin":%s,"lab_admin":%s,"granted":%s,"state":%s}\n' "$(json_str "$USER")" "$(is_admin && echo true || echo false)" "$(json_str "$adm")" "$(lib_readable && echo true || echo false)" "$(json_str "$st")"
+      else echo "user $USER; lab admin $adm; state $st"; fi;;
     status)
-      local st; st=$(status_state "$USER")
+      local st; st=$(student_state); tidy_request_job
       if [ "${1:-}" = "--json" ]; then
-        if [ -s "$(status_file "$USER")" ]; then printf '{"granted":%s,"status":' "$(lib_readable && echo true || echo false)"; tr -d '\n' < "$(status_file "$USER")"; echo '}'
-        else printf '{"granted":%s,"status":{"user":%s,"state":"none"}}\n' "$(lib_readable && echo true || echo false)" "$(json_str "$USER")"; fi
-      else echo "shared library readable: $(lib_readable && echo yes || echo no); request: $st"; [ -s "$(status_file "$USER")" ] && cat "$(status_file "$USER")"; fi;;
+        printf '{"granted":%s,"state":%s,"message":%s,"decided":%s}\n' "$(lib_readable && echo true || echo false)" "$(json_str "$st")" "$(json_str "$(status_field "$USER" message)")" "$(json_str "$(status_field "$USER" decided)")"
+      else echo "lab access: $st$([ -n "$(status_field "$USER" message)" ] && echo " ($(status_field "$USER" message))")"; fi;;
     requirements)
-      # A request is the LAST step: everything the lab works with must already be in place and
-      # verified. The shared container is NOT a requirement: it is what access gives you.
+      # A request is the LAST step: everything the lab works with must already work. The shared
+      # container is not a requirement: it is what access gives.
       local missing=() as_json=0; [ "${1:-}" = "--json" ] && as_json=1
       local vt; vt=$(cmd_verify_tokens 2>/dev/null || true)
-      if echo "$vt" | grep -q "^CLAUDE_TOKEN missing"; then missing+=("no Claude subscription token on the grid (wizard step: Claude token; Claude Pro is the minimum)")
-      elif echo "$vt" | grep -q "^CLAUDE_TOKEN rejected"; then missing+=("the Claude token on the grid was rejected (expired or revoked): run the Claude token step again")
+      if echo "$vt" | grep -q "^CLAUDE_TOKEN missing"; then missing+=("no Claude subscription token on the grid (Claude step; Claude Pro is the minimum)")
+      elif echo "$vt" | grep -q "^CLAUDE_TOKEN rejected"; then missing+=("the Claude token on the grid was rejected (expired or revoked): renew it with the Claude step")
+      elif ! echo "$vt" | grep -q "^CLAUDE_TOKEN ok"; then missing+=("the Claude token could not be confirmed right now ($(echo "$vt" | grep '^CLAUDE_TOKEN' | cut -c1-80)); try again in a minute")
       fi
       echo "$vt" | grep -q "^HF_TOKEN ok" || missing+=("Hugging Face token missing or rejected")
       echo "$vt" | grep -q "^GITHUB_TOKEN ok" || missing+=("GitHub token missing or rejected")
-      grep -q '# >>> ashley' "$HOME/.bashrc" 2>/dev/null || missing+=("bashrc block missing (run ashley install)")
+      grep -q '# >>> ashley' "$HOME/.bashrc" 2>/dev/null || missing+=("bashrc block missing (run the grid step again)")
       if [ $as_json -eq 1 ]; then
         printf '{"ok":%s,"missing":[' "$([ ${#missing[@]} -eq 0 ] && echo true || echo false)"; local first=1; for m in "${missing[@]}"; do [ $first -eq 1 ] || printf ','; first=0; json_str "$m"; done; echo ']}'
       else
-        if [ ${#missing[@]} -eq 0 ]; then echo "eligible: the grid side of your environment is complete"; else echo "not eligible yet:"; printf '  - %s\n' "${missing[@]}"; fi
+        if [ ${#missing[@]} -eq 0 ]; then echo "eligible"; else echo "not eligible yet:"; printf '  - %s\n' "${missing[@]}"; fi
       fi
       [ ${#missing[@]} -eq 0 ];;
     request)
       local note=""; while [ $# -gt 0 ]; do case "$1" in --note) note="$2"; shift 2;; *) shift;; esac; done
-      [ -d "$ACCESS_ROOT/inbox" ] || die "the lab has not opened access requests yet (admin: ashley access init)"
-      lib_readable && { echo "you can already read the shared library"; return 0; }
-      local st; st=$(status_state "$USER")
-      [ "$st" = none ] || die "you already have a request on file (state: $st); ask your lead to reset it if you need to ask again"
+      is_admin && { echo "you are the lab admin"; return 0; }
+      local st; st=$(student_state)
+      case "$st" in
+        approved) echo "you already have lab access"; return 0;;
+        filed|pending) echo "your request is already with your lead ($st)"; return 0;;
+        denied|removed|approved_unreadable) die "your request was already decided ($st); ask your lead to reset it if you need to ask again";;
+      esac
       cmd_access requirements >/dev/null || { cmd_access requirements; die "finish the setup first; requests are for working environments"; }
-      local gecos; gecos=$(getent passwd "$USER" | cut -d: -f5)
-      umask 022
-      printf '{"user":%s,"name":%s,"note":%s,"created":%s,"host":%s}\n' "$(json_str "$USER")" "$(json_str "$gecos")" "$(json_str "$note")" "$(json_str "$(date -u +%FT%TZ)")" "$(json_str "$(hostname)")" > "$ACCESS_ROOT/inbox/$USER.json" || die "cannot write the request"
-      echo "request filed for $USER; your lead sees it in Ashley and approves or denies it";;
+      [ -x "$BIN/access_request.sbatch" ] || { printf '#!/bin/bash\ntrue\n' > "$BIN/access_request.sbatch"; chmod 755 "$BIN/access_request.sbatch"; }
+      note=$(sanitize_note "$note")
+      local out; out=$(cd "$ASHLEY_HOME/log" 2>/dev/null || cd "$HOME"; sbatch --parsable --hold -J ashley_access -p reqp -q requeue -t 1 -n 1 --mem=16M -o /dev/null --comment "ashley-access v1 note=$note" "$BIN/access_request.sbatch" 2>&1) || die "could not file the request: $out"
+      echo "request filed (held Slurm job ${out%%;*}; it never runs); your lead approves it in Ashley";;
     admin)
       is_admin || die "only the lab admin ($(access_admin)) can manage requests"
       local act="${1:-list}"; shift || true
-      # ingest new requests first. The inbox is world-writable, so trust nothing in it: a request
-      # counts only if it is a regular file (no symlink), small, and OWNED by the user it names.
-      for f in "$ACCESS_ROOT"/inbox/*.json; do
-        [ -e "$f" ] || [ -L "$f" ] || continue
-        local u owner; u=$(basename "$f" .json)
-        if [ -L "$f" ] || [ ! -f "$f" ]; then rm -f "$f"; continue; fi
-        owner=$(stat -c %U "$f" 2>/dev/null)
-        if [ "$owner" != "$u" ] || ! getent passwd "$u" >/dev/null || [ "$(stat -c %s "$f")" -gt 4096 ]; then
-          mv -f "$f" "$ACCESS_ROOT/requests/rejected.${owner:-unknown}.$(date +%s).json" 2>/dev/null || rm -f "$f"; continue
-        fi
-        [ "$(status_state "$u")" = none ] || { rm -f "$f"; continue; }
-        local n c; n=$(grep -o '"note": *"[^"]*"' "$f" | head -1 | sed 's/.*"\([^"]*\)"$/\1/'); c=$(grep -o '"created": *"[^"]*"' "$f" | head -1 | sed 's/.*"\([^"]*\)"$/\1/')
-        mv -f "$f" "$ACCESS_ROOT/requests/$u.$(date +%s).json" 2>/dev/null
-        write_status "$u" pending "$n" "" "$c"
-      done
+      admin_ingest
       case "$act" in
         list)
-          # group membership lives in the university directory: C&IT adds people on the admin's
-          # email. Report who is already in the unix group so the admin knows whom to send.
-          local members; members=",$(getent group "$(stat -c %G "$SHARED")" | cut -d: -f4),"
           if [ "${1:-}" = "--json" ]; then
-            printf '{"admin":%s,"group":%s,"requests":[' "$(json_str "$USER")" "$(json_str "$(stat -c %G "$SHARED")")"; local first=1
-            for f in "$ACCESS_ROOT"/status/*.json; do
-              [ -s "$f" ] || continue; [ $first -eq 1 ] || printf ','; first=0
-              local u; u=$(basename "$f" .json)
-              tr -d '\n' < "$f" | sed 's/}$//'; printf ',"in_group":%s}' "$(case "$members" in *",$u,"*) echo true;; *) echo false;; esac)"
-            done; echo ']}'
-          else for f in "$ACCESS_ROOT"/status/*.json; do [ -s "$f" ] && cat "$f"; done; echo "unix group members: ${members//,/ }"; fi;;
+            printf '{"admin":%s,"requests":[' "$(json_str "$USER")"; local first=1 f
+            for f in "$STATUS_DIR"/*.json; do [ -s "$f" ] || continue; [ $first -eq 1 ] || printf ','; first=0; tr -d '\n' < "$f"; done; echo ']}'
+          else local f; for f in "$STATUS_DIR"/*.json; do [ -s "$f" ] && cat "$f"; done; fi;;
         approve|grant)
           local id="${1:?approve ID}"; getent passwd "$id" >/dev/null || die "no grid user $id"
-          local n r; n=$(grep -o '"note": *"[^"]*"' "$(status_file "$id")" 2>/dev/null | head -1 | sed 's/.*"\([^"]*\)"$/\1/'); r=$(grep -o '"requested": *"[^"]*"' "$(status_file "$id")" 2>/dev/null | head -1 | sed 's/.*"\([^"]*\)"$/\1/')
-          acl_grant "$id" || die "setfacl failed for $id"
-          write_status "$id" approved "$n" "${2:-}" "$r"; echo "$id approved: can read the lab folder $SHARED (containers: $LIBRARY_ROOT)";;
+          path_traverse "$id" add
+          local fails=0; acl_grant "$id" || fails=$?
+          write_status "$id" approved "$(status_field "$id" note)" "" "$(status_field "$id" requested)" "$(status_field "$id" job)"
+          decision_log "$id" approved "failures=$fails"
+          if [ "$fails" -gt 0 ]; then echo "$id approved, but $fails part(s) of the lab folder could not be opened (not owned by you?)"; else echo "$id approved: reads the lab folder $SHARED"; fi;;
         deny|remove)
           local id="${1:?$act ID}" msg=""; shift; while [ $# -gt 0 ]; do case "$1" in --message) msg="$2"; shift 2;; *) shift;; esac; done
-          local n r; n=$(grep -o '"note": *"[^"]*"' "$(status_file "$id")" 2>/dev/null | head -1 | sed 's/.*"\([^"]*\)"$/\1/'); r=$(grep -o '"requested": *"[^"]*"' "$(status_file "$id")" 2>/dev/null | head -1 | sed 's/.*"\([^"]*\)"$/\1/')
-          acl_revoke "$id"; write_status "$id" "$([ "$act" = deny ] && echo denied || echo removed)" "$n" "$msg" "$r"; echo "$id $act: ${msg:-no message}";;
+          msg=$(sanitize_note "$msg")
+          acl_revoke "$id"; path_traverse "$id" add
+          write_status "$id" "$([ "$act" = deny ] && echo denied || echo removed)" "$(status_field "$id" note)" "$msg" "$(status_field "$id" requested)" "$(status_field "$id" job)"
+          decision_log "$id" "$act" "$msg"; echo "$id ${act}${msg:+: $msg}";;
         reset)
-          local id="${1:?reset ID}"; acl_revoke "$id"; rm -f "$(status_file "$id")"; echo "$id reset: may request again";;
-        *) die "access admin: list|approve ID|deny ID [--message ..]|remove ID [--message ..]|reset ID";;
+          local id="${1:?reset ID}"; acl_revoke "$id"; path_traverse "$id" remove; rm -f "$(status_file "$id")"; decision_log "$id" reset ""; echo "$id reset: may request again";;
+        resync)
+          local u n=0; for u in $(approved_users); do acl_grant "$u" >/dev/null 2>&1; n=$((n + 1)); done; echo "re-applied lab access for $n approved user(s)";;
+        *) die "access admin: list|approve ID|deny ID [--message ..]|remove ID [--message ..]|reset ID|resync";;
       esac;;
     *) die "access: init|whoami|status|requirements|request [--note ..]|admin ...";;
+  esac
+}
+
+cmd_phone() { # phone access through Claude Code Remote Control, hosted by a worker (see phone.js)
+  local sub="${1:-status}"; shift || true
+  local worker="default" as_json=0
+  while [ $# -gt 0 ]; do case "$1" in --worker) worker="$2"; shift 2;; --json) as_json=1; shift;; *) shift;; esac; done
+  [[ "$worker" =~ ^[A-Za-z0-9_-]+$ ]] || die "bad worker name"
+  local w="$ASHLEY_HOME/workers/$worker" rc="$ASHLEY_HOME/workers/$worker/rc"
+  [ -d "$w" ] || die "no worker '$worker' (start one first)"
+  case "$sub" in
+    on) mkdir -p "$rc" && chmod 700 "$rc" && rm -f "$rc/code" && touch "$rc/enable" && echo "phone access starting on worker $worker ($(cat "$w/node" 2>/dev/null || echo 'node not assigned yet'))";;
+    off) rm -f "$rc/enable" "$rc/code"; echo "phone access off on worker $worker";;
+    code)
+      local c; c=$(head -c 4096 | tr -cd 'A-Za-z0-9_#.~-')
+      [ -n "$c" ] || die "expected the code from the claude.ai page on stdin"
+      ( umask 077; printf '%s\n' "$c" > "$rc/code.part" && mv "$rc/code.part" "$rc/code" ) && echo "code handed to worker $worker";;
+    status)
+      local alive=false; [ "$(job_state "$(cat "$w/job.id" 2>/dev/null)")" = RUNNING ] && alive=true
+      if [ $as_json -eq 1 ]; then
+        printf '{"worker":%s,"job_running":%s,"enabled":%s,"status":' "$(json_str "$worker")" "$alive" "$([ -e "$rc/enable" ] && echo true || echo false)"
+        if [ -s "$rc/status.json" ]; then tr -d '\n' < "$rc/status.json"; else printf '{"phase":"off"}'; fi; echo '}'
+      else echo "worker $worker running=$alive enabled=$([ -e "$rc/enable" ] && echo yes || echo no)"; cat "$rc/status.json" 2>/dev/null; fi;;
+    *) die "phone: on|off|status|code [--worker NAME]";;
   esac
 }
 
@@ -616,6 +699,7 @@ case "${1:-help}" in
   library) shift; cmd_library "$@";;
   adopt) shift; cmd_adopt "$@";;
   access) shift; cmd_access "$@";;
+  phone) shift; cmd_phone "$@";;
   uninstall) shift; cmd_uninstall "$@";;
   bootstrap) shift; cmd_bootstrap "$@";;
   status) shift; cmd_status "$@";;

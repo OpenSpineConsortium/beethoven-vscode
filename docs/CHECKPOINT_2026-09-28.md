@@ -1,4 +1,39 @@
-# CHECKPOINT 2026-09-28 (updated 04:05 UTC, sixth pass: access requests, token capture, campus Wi-Fi) — Ashley, the WSU grid + Claude Code extension
+# CHECKPOINT 2026-09-28 (updated 04:20 UTC, seventh pass: lab access as the last step) — Ashley, the WSU grid + Claude Code extension
+
+## Seventh pass (Greg, 00:00 to 00:15 local): access is last, one folder, no private builds
+
+- **The shared container is what access gives, not a precondition.** `ashley access requirements`
+  no longer requires a built container; it requires a Claude subscription token the API accepts
+  (`GET /v1/models` with the OAuth token and `anthropic-beta: oauth-2025-04-20`: 200 valid, 401
+  "OAuth access token is invalid"), GitHub and HF tokens that verify, and the bashrc block.
+- **The request is wizard step 11 `labAccess`** (last). Its run refuses unless every earlier step
+  checks done (API key excepted), the Claude Code and Remote-SSH extensions exist and the bridge is
+  registered (registered on the spot if missing), and the grid requirements pass; then a note and
+  one request. Its check: admin → done; granted → runs `ashley install` (adopts) → done; pending →
+  done "waiting"; denied/removed → failed with the admin's message; none → todo.
+  `Ashley: Lab access` for a student runs that step in the panel; for the admin it is the queue.
+- **No private builds for students.** `ashley install` with the access system in place marks
+  `AWAITING_ACCESS` and builds nothing; `worker start` adopts the lab container once readable and
+  otherwise says "it comes with lab access". `--build-own` stays for the admin only; every
+  student-facing text, picker and doc mention is gone. Tree: "Waiting for lab access".
+- **One folder.** Approval = ACL on `shared/` (r-x + default) and recursively on everything under it
+  except `access/`, so later folders are covered. Drop-box ingest accepts only regular, non-symlink,
+  small files owned by the user they name; `status/` is 711. Token checks feed curl on stdin
+  (sampled the login node's process list during three verify runs: no token visible).
+- **The `oschome` unix group**: lives in the university directory (sss; not in /etc/group; no ipa or
+  group tool on the grid; `rs_grp_owners` only lists folders), so "administrator of the group" means
+  C&IT adds people on Greg's email. The admin page shows who is in the group and drafts that email
+  (`mailto:hpc@wayne.edu`, the approved AccessIDs not yet in the group). The ACL gives access at once.
+- `setup-token` capture: the panel runs it via shell integration and reads the token from the
+  terminal output (untested with a real Authorize click).
+- Review workflow `wf_6fed7237-7bf` (security, correctness, operations lenses + verifiers) was running
+  at 04:20 UTC; its confirmed findings are to be fixed before the push.
+- Commits `e348145`, `8a2b06f` (local; last push `3969234`).
+
+The sixth pass follows.
+
+---
+
 
 ## Sixth pass (Greg's message at 23:45 local)
 

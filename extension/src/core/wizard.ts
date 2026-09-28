@@ -29,6 +29,8 @@ export interface StepReport {
 
 export interface WizardSettings {
   accessId: string;
+  /** The Wayne State account the student signed in with (AccessID@wayne.edu). */
+  wsuEmail: string;
   /** The student confirmed a grid account with Google Authenticator set up (or the key already works). */
   twoFactorDone: boolean;
   loginHost: string;
@@ -109,6 +111,10 @@ export interface WizardEnv {
   setSecret(id: SecretId, value: string | undefined): Promise<void>;
   ui: WizardUI;
   onTokensChanged?(): Promise<void>;
+  /** Sign in with the Wayne State (Microsoft) account in the browser. Returns the account's e-mail. */
+  signInWsu?(): Promise<{ email: string } | undefined>;
+  /** The lab's pre-approved AccessIDs; null when no list is available (no restriction). */
+  allowlist?(): Promise<string[] | null>;
   /** Sign in to GitHub through the host (VS Code's GitHub authentication). Returns the OAuth token. */
   signInGitHub?(): Promise<{ token: string; login?: string } | undefined>;
   /** Host-specific requirements for joining the lab (VS Code: the Claude Code and Remote-SSH extensions, the bridge). */
@@ -158,25 +164,53 @@ async function askToken(ui: WizardUI, prompt: string, opts: TokenAskOptions): Pr
 // Steps
 // ---------------------------------------------------------------------------------------
 
-export const stepAccessId: WizardStep = {
-  id: 'accessId',
-  title: 'Wayne State AccessID',
-  blurb: 'Your grid username, e.g. ab1234.',
+const WSU_EMAIL = /@([a-z0-9-]+\.)*wayne\.edu$/i;
+
+/**
+ * Step 1: sign in with the Wayne State account (the university's Microsoft sign-in, in the browser)
+ * and continue only if the AccessID is on the lab's pre-approved list. The AccessID also names the
+ * student's other accounts: the lab assumes the Claude subscription was made with AccessID@wayne.edu.
+ */
+export const stepWsuSignIn: WizardStep = {
+  id: 'wsuSignIn',
+  title: 'Sign in with Wayne State',
+  blurb: 'Your WSU account in the browser; only AccessIDs your lab pre-approved continue.',
   async check(env) {
     const id = normaliseAccessId(env.settings.accessId ?? '');
-    return id ? report(this.id, this.title, 'done', `${id}; grid home ${gridHome(id)}`) : report(this.id, this.title, 'todo', 'not set');
+    if (!id || !env.settings.wsuEmail) return report(this.id, this.title, 'todo', 'not signed in');
+    const list = env.allowlist ? await env.allowlist() : null;
+    if (list && !list.includes(id)) return report(this.id, this.title, 'failed', `${id} is not on the lab's pre-approved list; ask your lead to add you`);
+    return report(this.id, this.title, 'done', `${env.settings.wsuEmail} (AccessID ${id}; grid home ${gridHome(id)})`);
   },
   async run(env) {
-    const v = await env.ui.ask('Your Wayne State AccessID (two letters and four digits). It is your grid username.', {
-      value: env.settings.accessId,
-      placeholder: 'ab1234',
-      validate: (x) => (normaliseAccessId(x) ? null : 'An AccessID looks like ab1234 (two letters, four digits).'),
-    });
-    if (!v) return report(this.id, this.title, 'skipped', 'cancelled');
-    const id = normaliseAccessId(v)!;
+    let email: string | undefined;
+    if (env.signInWsu) {
+      env.ui.progress('Opening the Wayne State sign-in in your browser...');
+      try {
+        email = (await env.signInWsu())?.email;
+      } catch (e) {
+        return report(this.id, this.title, 'failed', `the Wayne State sign-in did not complete (${(e as Error).message})`);
+      }
+      if (!email) return report(this.id, this.title, 'skipped', 'cancelled');
+      if (!WSU_EMAIL.test(email)) return report(this.id, this.title, 'failed', `${email} is not a Wayne State account; sign in with AccessID@wayne.edu`);
+    }
+    let id = email ? normaliseAccessId(email.split('@')[0]) : null;
+    if (!id) {
+      const v = await env.ui.ask(email ? `Signed in as ${email}. Your AccessID (two letters and four digits)?` : 'Your Wayne State AccessID (two letters and four digits). It is your grid username.', {
+        value: env.settings.accessId,
+        placeholder: 'ab1234',
+        validate: (x) => (normaliseAccessId(x) ? null : 'An AccessID looks like ab1234 (two letters, four digits).'),
+      });
+      if (!v) return report(this.id, this.title, 'skipped', 'cancelled');
+      id = normaliseAccessId(v)!;
+    }
+    const list = env.allowlist ? await env.allowlist() : null;
+    if (list && !list.includes(id)) return report(this.id, this.title, 'failed', `${id} is not on the lab's pre-approved list; ask your lead to add you, then sign in again`);
     await env.saveSetting('accessId', id);
+    await env.saveSetting('wsuEmail', email ?? `${id}@wayne.edu`);
     env.settings.accessId = id;
-    return report(this.id, this.title, 'done', id);
+    env.settings.wsuEmail = email ?? `${id}@wayne.edu`;
+    return report(this.id, this.title, 'done', `${env.settings.wsuEmail} (AccessID ${id})`);
   },
 };
 
@@ -354,8 +388,11 @@ function tokenStep(svc: ServiceConfig, blurb: string): WizardStep {
     blurb,
     async check(env) {
       const v = await env.getSecret(svc.id);
-      if (v) return report(svc.id, this.title, 'done', 'stored in the OS keychain');
-      return report(svc.id, this.title, svc.optional ? 'skipped' : 'todo', svc.optional ? 'optional, not set' : 'not set');
+      if (!v) return report(svc.id, this.title, svc.optional ? 'skipped' : 'todo', svc.optional ? 'optional, not set' : 'not set');
+      // live: a token the service now rejects (expired, revoked) shows as failed, with Renew next to it
+      const c = await validateToken(svc, v);
+      if (!c.ok && !c.network) return report(svc.id, this.title, 'failed', `no longer accepted (${c.detail}): press Renew`);
+      return report(svc.id, this.title, 'done', c.ok ? `works (${c.detail})` : 'stored (could not check it online just now)');
     },
     async run(env) {
       let token: string | undefined;
@@ -373,25 +410,20 @@ function tokenStep(svc: ServiceConfig, blurb: string): WizardStep {
         }
       }
       if (!token && svc.id === 'claudeOauth') {
+        const who = env.settings.accessId ? `${env.settings.accessId}@wayne.edu` : 'your WSU e-mail';
         const go = await env.ui.confirm(
-          [
-            'Claude token for the grid: what happens.',
-            '1. A terminal opens and runs "claude setup-token" (a command of the Claude Code you already use).',
-            '2. Your browser opens claude.ai; sign in if asked and press Authorize. If the page shows a code, paste it into that terminal.',
-            '3. The terminal prints a long token that starts with sk-ant-oat. Ashley reads it from the terminal itself and stores it; if it cannot, copy the token and the panel picks it up.',
-            'The token lets the grid worker use YOUR subscription for a year; you can revoke it any time at claude.ai (Settings, Integrations).',
-          ].join('\n'),
-          'Run it',
-          'I already have a token',
+          `Claude: your browser opens claude.ai. Sign in with the account you made with ${who} (Claude Pro at the minimum) and press Authorize. That is all: Ashley receives the token, keeps it in your keychain, and your grid worker uses your subscription with it for a year.`,
+          'Sign in with Claude',
+          'Paste a token instead',
         );
         if (go) {
           if (env.ui.runCapturing) {
-            const r = await env.ui.runCapturing('Ashley: claude setup-token', env.settings.claudeExecutable, ['setup-token'], svc.pattern!);
+            const r = await env.ui.runCapturing('Claude sign-in', env.settings.claudeExecutable, ['setup-token'], svc.pattern!);
             if (r.match) {
               token = r.match;
-              via = 'captured from the terminal';
+              via = 'signed in with Claude';
             }
-          } else await env.ui.runInteractive('Ashley: claude setup-token', env.settings.claudeExecutable, ['setup-token']);
+          } else await env.ui.runInteractive('Claude sign-in', env.settings.claudeExecutable, ['setup-token']);
         }
       }
       if (!token) {
@@ -407,14 +439,20 @@ function tokenStep(svc: ServiceConfig, blurb: string): WizardStep {
       }
       await env.setSecret(svc.id, token);
       await env.onTokensChanged?.();
-      return report(svc.id, this.title, 'done', check.ok ? `${via}; verified as ${check.detail}` : `${via}; ${check.detail}; it will be verified on the grid`);
+      // renewing a token later updates the grid in the same click
+      let grid = '';
+      if (await gridInstalled(env)) {
+        const pr = await pushTokens(env);
+        grid = pr.ok ? '; updated on the grid' : `; the grid copy was not updated (${pr.detail})`;
+      }
+      return report(svc.id, this.title, 'done', (check.ok ? `${via}; verified as ${check.detail}` : `${via}; ${check.detail}; it will be verified on the grid`) + grid);
     },
   };
 }
 
-export const stepGithub = tokenStep(SERVICES.find((s) => s.id === 'github')!, 'Sign in with your browser; the token arrives by itself.');
-export const stepHuggingFace = tokenStep(SERVICES.find((s) => s.id === 'huggingface')!, 'Create a token on the page that opens; copy it; the panel notices.');
-export const stepClaudeToken = tokenStep(SERVICES.find((s) => s.id === 'claudeOauth')!, 'claude setup-token: approve in the browser, copy the printed token.');
+export const stepGithub = tokenStep(SERVICES.find((s) => s.id === 'github')!, 'Sign in to GitHub in the browser; the token arrives by itself.');
+export const stepHuggingFace = tokenStep(SERVICES.find((s) => s.id === 'huggingface')!, 'On the page that opens press Create token, then Copy; the panel takes it.');
+export const stepClaudeToken = tokenStep(SERVICES.find((s) => s.id === 'claudeOauth')!, 'Sign in to claude.ai in the browser and press Authorize; the token arrives by itself.');
 export const stepAnthropicKey = tokenStep(SERVICES.find((s) => s.id === 'anthropicApiKey')!, 'Optional pay-per-use overflow for the grid worker.');
 
 export function gridScriptFiles(dir: string): string[] {
@@ -422,15 +460,54 @@ export function gridScriptFiles(dir: string): string[] {
   return fs.readdirSync(dir).filter((f) => !f.startsWith('.')).map((f) => path.join(dir, f)).filter((p) => fs.statSync(p).isFile());
 }
 
+
+/** Is Ashley installed on the grid and reachable without a prompt? */
+export async function gridInstalled(env: WizardEnv): Promise<boolean> {
+  if (!env.settings.accessId) return false;
+  const r = await ssh(env.settings.sshAlias, ['~/.ashley/bin/ashley', 'version'], { timeoutMs: 40_000 });
+  return r.code === 0;
+}
+
+/** Every token on this laptop goes to the grid in one pass (files with mode 600, via ssh stdin, never argv). */
+export async function pushTokens(env: WizardEnv): Promise<{ ok: boolean; detail: string }> {
+  const alias = env.settings.sshAlias;
+  const claude = await env.getSecret('claudeOauth');
+  const apiKey = await env.getSecret('anthropicApiKey');
+  const gh = await env.getSecret('github');
+  const hf = await env.getSecret('huggingface');
+  const secrets = [gh ? `GITHUB_TOKEN=${gh}\nGH_TOKEN=${gh}` : '', hf ? `HF_TOKEN=${hf}` : ''].filter(Boolean).join('\n') + '\n';
+  let r = await ssh(alias, ['bash', '-c', 'umask 077; mkdir -p ~/.ashley; cat > ~/.ashley/secrets.env'], { input: secrets });
+  if (r.code !== 0) return { ok: false, detail: `writing secrets.env: ${r.stderr.trim()}` };
+  if (claude) {
+    r = await ssh(alias, ['bash', '-c', 'umask 077; mkdir -p ~/.ashley/accounts/default; cat > ~/.ashley/accounts/default/token; rm -f ~/.ashley/accounts/default/state.json'], { input: claude + '\n' });
+    if (r.code !== 0) return { ok: false, detail: `writing the Claude token: ${r.stderr.trim()}` };
+  }
+  if (apiKey) {
+    r = await ssh(alias, ['bash', '-c', 'umask 077; mkdir -p ~/.ashley/accounts/apikey; cat > ~/.ashley/accounts/apikey/apikey'], { input: apiKey + '\n' });
+    if (r.code !== 0) return { ok: false, detail: `writing the API key: ${r.stderr.trim()}` };
+  }
+  return { ok: true, detail: 'tokens updated on the grid' };
+}
+
+function bundledGridVersion(env: WizardEnv): string {
+  try {
+    return fs.readFileSync(path.join(env.settings.gridScriptsDir, 'VERSION'), 'utf8').trim();
+  } catch {
+    return '';
+  }
+}
+
 export const stepGridInstall: WizardStep = {
   id: 'gridInstall',
   title: 'Install on the grid',
-  blurb: 'Scripts, your tokens (files with mode 600), a bashrc block, and a job that builds the container.',
+  blurb: 'Everything above goes to the grid in one pass: scripts, your tokens (private files), the VS Code settings.',
   async check(env) {
     const r = await ssh(env.settings.sshAlias, ['~/.ashley/bin/ashley', 'status', '--json'], { timeoutMs: 60_000 });
     if (r.code !== 0) return report(this.id, this.title, 'todo', 'not installed on the grid');
     try {
       const j = JSON.parse(r.stdout.trim().split('\n').pop() ?? '{}');
+      const want = bundledGridVersion(env);
+      if (want && String(j.version) !== want) return report(this.id, this.title, 'todo', `the grid has Ashley v${j.version}; this extension brings v${want}`);
       const missing: string[] = [];
       const gridSecrets: string[] = Array.isArray(j.secrets) ? j.secrets : [];
       const gridAccounts: string[] = Array.isArray(j.accounts) ? j.accounts.map((a: { name: string }) => a.name) : [];
@@ -456,23 +533,10 @@ export const stepGridInstall: WizardStep = {
     if (r.code !== 0) return report(this.id, this.title, 'failed', `cannot create ~/.ashley: ${r.stderr.trim()}`);
     r = await scp(alias, files, '~/.ashley/bin/');
     if (r.code !== 0) return report(this.id, this.title, 'failed', `upload failed: ${r.stderr.trim()}`);
-    env.ui.progress('Writing tokens to your grid home (mode 600, never on a command line)...');
-    const claude = await env.getSecret('claudeOauth');
-    const apiKey = await env.getSecret('anthropicApiKey');
-    const gh = await env.getSecret('github');
-    const hf = await env.getSecret('huggingface');
-    const secrets = [gh ? `GITHUB_TOKEN=${gh}\nGH_TOKEN=${gh}` : '', hf ? `HF_TOKEN=${hf}` : ''].filter(Boolean).join('\n') + '\n';
-    r = await ssh(alias, ['bash', '-c', 'umask 077; cat > ~/.ashley/secrets.env'], { input: secrets });
-    if (r.code !== 0) return report(this.id, this.title, 'failed', `writing secrets.env: ${r.stderr.trim()}`);
-    if (claude) {
-      r = await ssh(alias, ['bash', '-c', 'umask 077; mkdir -p ~/.ashley/accounts/default; cat > ~/.ashley/accounts/default/token'], { input: claude + '\n' });
-      if (r.code !== 0) return report(this.id, this.title, 'failed', `writing the Claude token: ${r.stderr.trim()}`);
-    }
-    if (apiKey) {
-      r = await ssh(alias, ['bash', '-c', 'umask 077; mkdir -p ~/.ashley/accounts/apikey; cat > ~/.ashley/accounts/apikey/apikey'], { input: apiKey + '\n' });
-      if (r.code !== 0) return report(this.id, this.title, 'failed', `writing the API key: ${r.stderr.trim()}`);
-    }
-    env.ui.progress('Installing on the grid and submitting the container build job...');
+    env.ui.progress('Writing your tokens to your grid home (private files, never on a command line)...');
+    const pr = await pushTokens(env);
+    if (!pr.ok) return report(this.id, this.title, 'failed', pr.detail);
+    env.ui.progress('Installing on the grid...');
     const installArgs = ['~/.ashley/bin/ashley', 'install'];
     if (env.settings.gridRoot) installArgs.push('--root', env.settings.gridRoot);
     r = await ssh(alias, installArgs, { timeoutMs: 180_000 });
@@ -525,7 +589,7 @@ export const stepLabAccess: WizardStep = {
     // every earlier step must be done (the optional API key excepted)
     const missing: string[] = [];
     for (const s of STEPS) {
-      if (s.id === 'labAccess' || s.id === 'anthropicApiKey') continue;
+      if (s.id === 'labAccess') continue;
       const c = await s.check(env);
       if (c.status !== 'done') missing.push(`${s.title}: ${c.detail}`);
     }
@@ -551,7 +615,9 @@ export const stepLabAccess: WizardStep = {
   },
 };
 
-export const STEPS: WizardStep[] = [stepAccessId, stepTwoFactor, stepSshKey, stepSshConfig, stepInstallKey, stepGithub, stepHuggingFace, stepClaudeToken, stepAnthropicKey, stepGridInstall, stepLabAccess];
+// Strict order: who you are, then your accounts (tokens live on this laptop first), then the grid
+// (tokens pushed in one pass), then the lab. A step never runs before every earlier step is done.
+export const STEPS: WizardStep[] = [stepWsuSignIn, stepGithub, stepHuggingFace, stepClaudeToken, stepTwoFactor, stepSshKey, stepSshConfig, stepInstallKey, stepGridInstall, stepLabAccess];
 
 export interface RunOptions {
   force?: boolean;
@@ -563,8 +629,19 @@ export interface RunOptions {
 /** Run every step that is not done, in order. Stops at the first failure of a required step. */
 export async function runWizard(env: WizardEnv, opts: RunOptions = {}): Promise<StepReport[]> {
   const out: StepReport[] = [];
-  for (const step of STEPS) {
+  for (const [i, step] of STEPS.entries()) {
     if (opts.only && !opts.only.includes(step.id)) continue;
+    if (opts.only) {
+      // a single step (Renew, Run again) still needs every earlier step done
+      for (const prev of STEPS.slice(0, i)) {
+        const c = await prev.check(env);
+        if (c.status !== 'done') {
+          out.push(report(step.id, step.title, 'skipped', `first finish "${prev.title}"`));
+          opts.onStep?.(out, null);
+          return out;
+        }
+      }
+    }
     const pre = opts.force ? report(step.id, step.title, 'todo', 'forced') : await step.check(env);
     if (pre.status === 'done') {
       out.push(pre);
@@ -576,8 +653,7 @@ export async function runWizard(env: WizardEnv, opts: RunOptions = {}): Promise<
     const res = await step.run(env);
     out.push(res);
     opts.onStep?.(out, null);
-    const required = step.id !== 'anthropicApiKey';
-    if (required && (res.status === 'failed' || res.status === 'skipped')) break;
+    if (res.status === 'failed' || res.status === 'skipped') break;
   }
   return out;
 }

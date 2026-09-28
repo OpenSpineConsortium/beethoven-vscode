@@ -85,6 +85,22 @@ export class GridApi {
     return (r.stdout + r.stderr).trim();
   }
 
+  /** Phone access (Claude Code Remote Control hosted by a worker). */
+  async phone(action: 'on' | 'off', worker = 'default'): Promise<string> {
+    const r = await this.ashley(['phone', action, '--worker', worker], { timeoutMs: 60_000 });
+    return (r.stdout + r.stderr).trim();
+  }
+
+  async phoneStatus(worker = 'default'): Promise<{ job_running: boolean; enabled: boolean; status: { phase: string; url?: string | null; session_url?: string | null; message?: string; attempts?: number } } | null> {
+    const r = await this.ashley(['phone', 'status', '--worker', worker, '--json'], { timeoutMs: 60_000 });
+    return r.code === 0 ? parseLastJson(r.stdout) : null;
+  }
+
+  async phoneCode(code: string, worker = 'default'): Promise<string> {
+    const r = await this.ashley(['phone', 'code', '--worker', worker], { input: code + '\n', timeoutMs: 60_000 });
+    return (r.stdout + r.stderr).trim();
+  }
+
   async workers(): Promise<WorkerState[]> {
     const r = await this.ashley(['worker', 'list', '--json'], { timeoutMs: 60_000 });
     return (r.code === 0 && parseLastJson<{ workers: WorkerState[] }>(r.stdout)?.workers) || [];

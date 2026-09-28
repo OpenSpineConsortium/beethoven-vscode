@@ -8,7 +8,7 @@ import { VsCodeUI, resolveExecutable } from './vscode/ui';
 import { SetupPanel } from './vscode/panel';
 import { AshleyTree } from './vscode/tree';
 import { registerMcp, isMcpRegistered } from './vscode/mcpRegister';
-import { runWizard, checkAll, StepReport, testConnection, STEPS } from './core/wizard';
+import { runWizard, checkAll, StepReport, testConnection, STEPS, validateToken } from './core/wizard';
 import { GridApi } from './core/gridApi';
 import { GridRelay } from './core/relay';
 import { SERVICES, SecretId, gridHome } from './core/services';
@@ -77,6 +77,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<{ _int
   reg('ashley.openTerminal', () => commandOpenTerminal());
   reg('ashley.reset', () => commandReset(context));
   reg('ashley.access', () => commandAccess(context, grid()));
+  reg('ashley.phone', (item?: any) => commandPhone(context, grid(), item?.data?.name));
   reg('ashley.refresh', () => tree.refresh());
 
   const s = store.settings();
@@ -87,6 +88,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<{ _int
       else if (pick === 'Read the manual') void vscode.commands.executeCommand('ashley.openManual');
     });
   }
+  setTimeout(() => void checkTokensQuietly(context).catch((e) => output.appendLine(`token check: ${e}`)), 20_000);
   output.appendLine(`Ashley ${context.extension.packageJSON.version} active (build ${process.env.ASHLEY_BUILD ?? 'dev'})`);
   return { _internal };
 }
@@ -105,8 +107,27 @@ function format(reports: StepReport[]): string {
 
 function openPanel(context: vscode.ExtensionContext, title = 'Ashley setup'): SetupPanel {
   panel?.dispose();
-  panel = new SetupPanel(context, output, title);
-  return panel;
+  const p = new SetupPanel(context, output, title);
+  panel = p;
+  let busy = false;
+  p.onRunStep = async (id) => {
+    if (busy) return;
+    busy = true;
+    try {
+      const env = store.wizardEnv(p);
+      const reports = await runWizard(env, { force: true, only: [id], onStep: (rs, cur) => p.setSteps(rs, cur) });
+      output.appendLine(format(reports));
+      const r = reports[reports.length - 1];
+      const all = await checkAll(env);
+      p.setSteps(all, null);
+      p.finish(r ? `${r.title}: ${r.detail}` : 'done', r?.status === 'done');
+      await store.hydrateEnvironment();
+      tree.refresh();
+    } finally {
+      busy = false;
+    }
+  };
+  return p;
 }
 
 async function commandSetup(context: vscode.ExtensionContext): Promise<void> {
@@ -143,21 +164,31 @@ function mergeReports(base: StepReport[], updates: StepReport[]): StepReport[] {
 }
 
 async function commandTokenStep(context: vscode.ExtensionContext, id: SecretId): Promise<void> {
-  const p = openPanel(context, 'Ashley token');
+  const p = openPanel(context, 'Ashley: renew a token');
   const env = store.wizardEnv(p);
   const reports = await runWizard(env, { force: true, only: [id], onStep: (rs, cur) => p.setSteps(rs, cur) });
   output.appendLine(format(reports));
-  const r = reports[0];
-  if (r?.status === 'done') {
-    const push = await p.confirm(`${r.title}: ${r.detail}. Push it to the grid now?`, 'Push to grid', 'Later');
-    if (push) {
-      const gi = await runWizard(env, { force: true, only: ['gridInstall'], onStep: (rs, cur) => p.setSteps(rs, cur) });
-      output.appendLine(format(gi));
-      p.finish(gi[0]?.detail ?? 'done', gi[0]?.status === 'done');
-    } else p.finish(r.detail, true);
-  } else p.finish(r?.detail ?? 'cancelled', false);
+  const r = reports[reports.length - 1];
+  p.setSteps(await checkAll(env), null);
+  p.finish(r ? `${r.title}: ${r.detail}` : 'cancelled', r?.status === 'done');
   await store.hydrateEnvironment();
   tree.refresh();
+}
+
+/** Once a day: a token the service no longer accepts gets a Renew button (it updates the grid too). */
+async function checkTokensQuietly(context: vscode.ExtensionContext): Promise<void> {
+  const last = context.globalState.get<number>('ashley.tokenCheck', 0);
+  if (Date.now() - last < 24 * 3600e3 || !store.settings().accessId) return;
+  await context.globalState.update('ashley.tokenCheck', Date.now());
+  for (const svc of SERVICES.filter((s) => ['github', 'huggingface', 'claudeOauth'].includes(s.id))) {
+    const v = await store.getSecret(svc.id);
+    if (!v) continue;
+    const c = await validateToken(svc, v);
+    if (!c.ok && !c.network) {
+      const pick = await vscode.window.showWarningMessage(`Your ${svc.name.split(' (')[0]} no longer works (${c.detail}). Renew it: one click in the browser, and the grid is updated too.`, 'Renew');
+      if (pick) await commandTokenStep(context, svc.id);
+    }
+  }
 }
 
 async function commandDoctor(context: vscode.ExtensionContext): Promise<void> {
@@ -446,7 +477,7 @@ async function commandReset(context: vscode.ExtensionContext): Promise<void> {
     done.push('ssh block and key removed (the grid still lists the old public key; harmless)');
   }
   if (ids.has('settings')) {
-    for (const k of ['accessId', 'gridRoot', 'twoFactorDone']) await store.config.update(k, undefined, vscode.ConfigurationTarget.Global);
+    for (const k of ['accessId', 'wsuEmail', 'gridRoot', 'twoFactorDone']) await store.config.update(k, undefined, vscode.ConfigurationTarget.Global);
     await context.globalState.update('ashley.offered', undefined);
     await context.globalState.update('ashley.osBannerExplained', undefined);
     done.push('settings cleared');
@@ -466,20 +497,11 @@ async function commandAccess(context: vscode.ExtensionContext, grid: GridApi): P
       const rows = await grid.accessList();
       const order = { pending: 0, approved: 1, denied: 2, removed: 3 } as Record<string, number>;
       rows.sort((a, b) => (order[a.state] ?? 9) - (order[b.state] ?? 9) || a.user.localeCompare(b.user));
-      const items = rows.map((r) => ({ label: `${r.state === 'pending' ? '$(bell) ' : r.state === 'approved' ? '$(pass) ' : '$(circle-slash) '}${r.user}`, description: `${r.state}${r.state === 'approved' ? ((r as any).in_group ? ', in the unix group' : ', folder access only (not yet in the unix group)') : ''}`, detail: [r.note ? `note: ${r.note}` : '', r.requested ? `requested ${r.requested}` : '', r.message ? `message: ${r.message}` : ''].filter(Boolean).join('   '), user: r.user }));
-      items.push({ label: '$(add) Grant a user directly', description: 'no request needed', detail: 'opens the lab folder for an AccessID you type', user: '' });
-      const toGroup = rows.filter((r) => r.state === 'approved' && !(r as any).in_group).map((r) => r.user);
-      if (toGroup.length) items.push({ label: `$(mail) Email C&IT to add ${toGroup.length} approved student(s) to the unix group`, description: toGroup.join(', '), detail: 'opens a drafted email to hpc@wayne.edu in your mail program; you send it', user: '__email__' });
+      const items = rows.map((r) => ({ label: `${r.state === 'pending' ? '$(bell) ' : r.state === 'approved' ? '$(pass) ' : '$(circle-slash) '}${r.user}`, description: r.state === 'pending' ? `pending: Claude account (assumed) ${r.user}@wayne.edu` : r.state, detail: [r.note ? `note: ${r.note}` : '', r.requested ? `requested ${r.requested}` : '', r.message ? `message: ${r.message}` : ''].filter(Boolean).join('   '), user: r.user }));
+      items.push({ label: '$(add) Grant a user directly', description: 'no request needed', detail: 'opens the lab folder, read-only, for an AccessID you type', user: '' });
       const pick = await vscode.window.showQuickPick(items, { title: `Shared library access: ${rows.filter((r) => r.state === 'pending').length} pending, ${rows.filter((r) => r.state === 'approved').length} approved (lab admin ${who.user})`, matchOnDetail: true });
       if (!pick) return;
       let user = pick.user;
-      if (user === '__email__') {
-        const ids = rows.filter((r) => r.state === 'approved' && !(r as any).in_group).map((r) => r.user);
-        const subject = 'Please add lab members to the oschome group (Ceph volume rs_grp_oschome)';
-        const body = `Hello,\n\nAs the administrator of the oschome group, please add these AccessIDs to the group:\n\n${ids.join('\n')}\n\nThank you,\n${who.user}`;
-        await vscode.env.openExternal(vscode.Uri.parse(`mailto:hpc@wayne.edu?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`));
-        continue;
-      }
       if (!user) {
         user = (await vscode.window.showInputBox({ title: 'AccessID to grant', validateInput: (v) => (/^[a-z]{2}\d{4}$/.test(v) ? undefined : 'ab1234') })) ?? '';
         if (!user) continue;
@@ -503,6 +525,54 @@ async function commandAccess(context: vscode.ExtensionContext, grid: GridApi): P
   const r = reports[0];
   output.appendLine(format(reports));
   p.finish(r ? `${r.title}: ${r.detail}` : 'nothing to do', r?.status === 'done');
+  tree.refresh();
+}
+
+async function commandPhone(context: vscode.ExtensionContext, grid: GridApi, workerName?: string): Promise<void> {
+  const w = workerName ? { name: workerName } : await pickWorker(grid, 'Phone access on which worker?');
+  if (!w) {
+    const start = await vscode.window.showInformationMessage('Phone access runs on a Claude worker, and none is running.', { modal: true }, 'Start a worker');
+    if (start) await commandWorkerStart(grid);
+    return;
+  }
+  const p = openPanel(context, 'Ashley: phone access');
+  p.setSteps([], null);
+  const id = store.settings().accessId;
+  const wait = async (phases: string[], seconds: number) => {
+    const end = Date.now() + seconds * 1000;
+    for (;;) {
+      const s = await grid.phoneStatus(w.name);
+      const st = s?.status;
+      if (st?.message) p.progress(st.message);
+      if (st && phases.includes(st.phase)) return st;
+      if (Date.now() > end) return st ?? null;
+      await new Promise((r) => setTimeout(r, 2500));
+    }
+  };
+  p.progress(await grid.phone('on', w.name));
+  let st = await wait(['need_code', 'running', 'error'], 120);
+  for (let round = 0; st && st.phase === 'need_code' && round < 3; round++) {
+    const go = await p.confirm(
+      `Phone access: your browser opens claude.ai. Sign in with the account you made with ${id ? `${id}@wayne.edu` : 'your WSU e-mail'}, press Authorize, then press Copy next to the code the page shows. Ashley hands the code to your worker on the grid.${round ? `\n\n${st.message ?? ''}` : ''}`,
+      'Open the sign-in',
+      'Not now',
+    );
+    if (!go) return p.finish('Phone access is waiting for the sign-in; run this again any time.', false);
+    if (st.url) await vscode.env.openExternal(vscode.Uri.parse(st.url));
+    const code = await p.askToken!('The code from the claude.ai page', { pattern: /^[A-Za-z0-9_\-#.~]{20,}$/, instructions: 'Press Copy on the page; Ashley notices the copied code.' });
+    if (!code) return p.finish('Cancelled.', false);
+    p.progress(await grid.phoneCode(code, w.name));
+    st = await wait(['need_code', 'running', 'error'], 180);
+  }
+  if (st?.phase === 'running' || st?.phase === 'starting') {
+    p.finish(`Phone access is on. Open the Claude app on your phone (or claude.ai/code), go to Code, and pick the session on ${w.name}. It runs as long as the worker job does; the sign-in lasts about 30 days.${st.session_url ? ` Link: ${st.session_url}` : ''}`, true);
+    if (st.session_url) {
+      const open = await vscode.window.showInformationMessage('Phone access is on. Open the session on this laptop too?', 'Open');
+      if (open) await vscode.env.openExternal(vscode.Uri.parse(st.session_url));
+    }
+  } else {
+    p.finish(`Phone access did not start: ${st?.message ?? 'no answer from the worker'}. Show log for details.`, false);
+  }
   tree.refresh();
 }
 

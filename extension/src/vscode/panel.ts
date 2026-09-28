@@ -14,6 +14,8 @@ export class SetupPanel implements WizardUI, vscode.Disposable {
   private log: string[] = [];
   private disposed = false;
   private clipboardTimer: NodeJS.Timeout | null = null;
+  /** Set by the extension: the student clicked Renew / Run next to a step. */
+  onRunStep?: (id: string) => void;
 
   constructor(context: vscode.ExtensionContext, private output: vscode.OutputChannel, title = 'Ashley setup') {
     this.panel = vscode.window.createWebviewPanel('ashley.setup', title, vscode.ViewColumn.One, { enableScripts: true, retainContextWhenHidden: true });
@@ -104,8 +106,8 @@ export class SetupPanel implements WizardUI, vscode.Disposable {
    * no integration within a few seconds, falls back to the plain terminal (clipboard capture).
    */
   async runCapturing(title: string, command: string, args: string[], pattern: RegExp): Promise<{ code: number | null; match?: string }> {
-    const term = vscode.window.createTerminal({ name: title, isTransient: true });
-    term.show(false);
+    // hidden: the student sees only the browser; the terminal appears only if something needs typing
+    const term = vscode.window.createTerminal({ name: title, isTransient: true, hideFromUser: true });
     const si = await new Promise<vscode.TerminalShellIntegration | undefined>((resolve) => {
       if (term.shellIntegration) return resolve(term.shellIntegration);
       const d = vscode.window.onDidChangeTerminalShellIntegration((e) => {
@@ -125,7 +127,14 @@ export class SetupPanel implements WizardUI, vscode.Disposable {
       const code = await this.runInteractive(title, command, args);
       return { code };
     }
-    this.post({ type: 'toast', message: `Follow the terminal "${title}" below (approve in the browser). Ashley reads the token when it is printed.`, level: 'info' });
+    this.post({ type: 'toast', message: 'Your browser opens claude.ai: sign in and press Authorize.', level: 'info' });
+    this.progress('Waiting for you to press Authorize in the browser...');
+    const reveal = setTimeout(() => {
+      if (!match) {
+        term.show(false);
+        this.post({ type: 'toast', message: 'If the browser page shows a code, paste it into the terminal that just opened below.', level: 'warn' });
+      }
+    }, 60_000);
     const exec = si.executeCommand(command, args);
     let text = '';
     let match: string | undefined;
@@ -156,6 +165,7 @@ export class SetupPanel implements WizardUI, vscode.Disposable {
       }
     })();
     const code = await done;
+    clearTimeout(reveal);
     if (!match) {
       const m = pattern.exec(text);
       if (m) match = m[0];
@@ -209,6 +219,8 @@ export class SetupPanel implements WizardUI, vscode.Disposable {
       p?.resolve(undefined);
     } else if (m.type === 'command' && typeof m.command === 'string' && m.command.startsWith('ashley.')) {
       void vscode.commands.executeCommand(m.command);
+    } else if (m.type === 'runStep' && typeof m.id === 'string') {
+      this.onRunStep?.(m.id);
     } else if (m.type === 'showLog') {
       this.output.show(true);
     }
@@ -264,6 +276,8 @@ export class SetupPanel implements WizardUI, vscode.Disposable {
   ol.steps li .t { font-weight: 600; }
   ol.steps li .b { font-size: 12px; opacity: .8; }
   ol.steps li .d { font-size: 12px; opacity: .9; margin-top: 2px; }
+  ol.steps li .act { margin-top: 4px; padding: 2px 10px; font-size: 12px; }
+  ol.steps li.failed .d { color: var(--vscode-errorForeground); }
   .dot { width: 22px; height: 22px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 13px; border: 2px solid var(--vscode-descriptionForeground); color: transparent; margin-top: 2px; }
   .dot.done { background: var(--vscode-testing-iconPassed, #2e7d32); border-color: var(--vscode-testing-iconPassed, #2e7d32); color: #fff; animation: pop .35s ease; }
   .dot.failed { background: var(--vscode-testing-iconFailed, #b71c1c); border-color: var(--vscode-testing-iconFailed, #b71c1c); color: #fff; }
@@ -330,8 +344,11 @@ function renderSteps(steps, reports, current){
     const r = byId[s.id];
     const st = current === s.id ? 'current' : r ? r.status : '';
     const mark = st === 'done' ? '✓' : st === 'failed' ? '!' : st === 'skipped' ? '–' : '';
-    return '<li class="' + (current === s.id ? 'current' : '') + '"><span class="dot ' + st + '">' + mark + '</span><div><div class="t">' + (i+1) + '. ' + esc(s.title) + '</div><div class="b">' + esc(s.blurb) + '</div>' + (r ? '<div class="d">' + esc(r.detail) + '</div>' : '') + '</div></li>';
+    const tokenStep = ['github','huggingface','claudeOauth'].includes(s.id);
+    const act = !current && r ? '<button class="act secondary" data-step="' + s.id + '">' + (tokenStep ? 'Renew' : (r.status === 'done' ? 'Run again' : 'Run')) + '</button>' : '';
+    return '<li class="' + (current === s.id ? 'current ' : '') + (r && r.status === 'failed' ? 'failed' : '') + '"><span class="dot ' + st + '">' + mark + '</span><div><div class="t">' + (i+1) + '. ' + esc(s.title) + '</div><div class="b">' + esc(s.blurb) + '</div>' + (r ? '<div class="d">' + esc(r.detail) + '</div>' : '') + act + '</div></li>';
   }).join('');
+  document.querySelectorAll('button[data-step]').forEach(b => b.onclick = () => vscode.postMessage({ type: 'runStep', id: b.dataset.step }));
   if (current) { const s = steps.find(x => x.id === current); if (s) { $('title').textContent = s.title; } }
 }
 function renderPrompt(p){

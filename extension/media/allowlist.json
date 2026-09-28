@@ -1,0 +1,6 @@
+{
+  "about": "AccessIDs pre-approved to use Ashley. Add one with: python tools/allow.py add ab1234 (then rebuild the VSIX).",
+  "accessIds": [
+    "go2432"
+  ]
+}

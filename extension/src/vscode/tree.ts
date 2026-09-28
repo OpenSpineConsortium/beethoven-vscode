@@ -95,7 +95,7 @@ export class AshleyTree implements vscode.TreeDataProvider<Item> {
       return new Item(`Worker ${w.name}`, 'worker', {
         description: desc,
         icon: w.job_state === 'RUNNING' ? (alive ? 'vm-running' : 'vm-connect') : w.job_state === 'PENDING' ? 'clock' : 'vm-outline',
-        tooltip: `job ${w.job} ${w.job_state}\nnode ${w.node}\nprocessed ${state.processed ?? 0}, running ${(state.running ?? []).length}, queued ${w.queued ?? 0}\nclaude ${state.claude_version ?? ''}`,
+        tooltip: `job ${w.job} ${w.job_state}\nnode ${w.node}\nprocessed ${state.processed ?? 0}, running ${(state.running ?? []).length}, queued ${w.queued ?? 0}\nclaude ${state.claude_version ?? ''}\nphone access: ${state.phone ?? 'off'}`,
         data: w,
       });
     });

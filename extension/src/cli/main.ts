@@ -35,6 +35,7 @@ function settings(): WizardSettings {
   const gridScripts = [path.join(__dirname, 'grid'), path.join(__dirname, '..', 'grid'), path.join(__dirname, '..', '..', 'grid')].find((d) => fs.existsSync(d)) ?? path.join(__dirname, 'grid');
   return loadJson<WizardSettings>(SETTINGS, {
     accessId: '',
+    wsuEmail: '',
     twoFactorDone: false,
     loginHost: 'warrior.grid.wayne.edu',
     sshAlias: 'wsu-grid',
@@ -65,6 +66,17 @@ function env(ui: TerminalUI): WizardEnv {
       saveJson(SECRETS, cur, 0o600);
     },
     ui,
+    allowlist: async () => {
+      for (const f of [path.join(__dirname, '..', 'media', 'allowlist.json'), path.join(__dirname, 'allowlist.json')]) {
+        try {
+          const j = JSON.parse(fs.readFileSync(f, 'utf8')) as { accessIds?: string[] };
+          if (Array.isArray(j.accessIds)) return j.accessIds.map((x) => x.toLowerCase());
+        } catch {
+          /* next */
+        }
+      }
+      return null;
+    },
     installKeyWithPassword: (pub) =>
       installPublicKey({
         host: s.loginHost,

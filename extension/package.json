@@ -77,6 +77,12 @@
         "icon": "$(comment-discussion)"
       },
       {
+        "command": "ashley.phone",
+        "title": "Phone access: drive a grid worker from the Claude app",
+        "category": "Ashley",
+        "icon": "$(device-mobile)"
+      },
+      {
         "command": "ashley.gridStatus",
         "title": "Grid status (my jobs, quota, workers)",
         "category": "Ashley",
@@ -195,6 +201,11 @@
           "command": "ashley.connect",
           "when": "view == ashley.status && viewItem == worker",
           "group": "inline"
+        },
+        {
+          "command": "ashley.phone",
+          "when": "view == ashley.status && viewItem == worker",
+          "group": "inline"
         }
       ]
     },
@@ -202,7 +213,7 @@
       {
         "id": "ashley.gettingStarted",
         "title": "Ashley: research on the Wayne State grid",
-        "description": "Ten steps from a fresh laptop to a Claude worker on the grid.",
+        "description": "From a fresh laptop to a Claude worker on the grid, in one panel.",
         "steps": [
           {
             "id": "setup",
@@ -257,7 +268,7 @@
         "ashley.accessId": {
           "type": "string",
           "default": "",
-          "description": "Your Wayne State AccessID (two letters and four digits, e.g. ab1234)."
+          "description": "Your Wayne State AccessID (set by the wizard's Wayne State sign-in)."
         },
         "ashley.loginHost": {
           "type": "string",
@@ -345,6 +356,16 @@
           "type": "boolean",
           "default": false,
           "description": "Set by the wizard once you confirmed a grid account with Google Authenticator (or once the grid accepted this laptop's key)."
+        },
+        "ashley.wsuEmail": {
+          "type": "string",
+          "default": "",
+          "description": "The Wayne State account you signed in with (set by the wizard's first step)."
+        },
+        "ashley.allowlistUrl": {
+          "type": "string",
+          "default": "",
+          "description": "Optional: where a newer list of the lab's pre-approved AccessIDs is published (JSON {\"accessIds\": [...]}). Empty = the list shipped with this build."
         }
       }
     }
