@@ -16,13 +16,13 @@ REQUEST_PAGE = "https://openspineconsortium.github.io/ashley/request.html"
 # paste the ids that `wrangler kv namespace create` prints
 [[kv_namespaces]]
 binding = "TRIALS"
-id = "REPLACE_WITH_TRIALS_ID"
+id = "328006d0894d4b45be7fb5e7becaec62"
 
 [[kv_namespaces]]
 binding = "REPORTS"
-id = "REPLACE_WITH_REPORTS_ID"
+id = "1af1580f28a248e7b51b084df7d40955"
 
 # approved, pending and denied people, the revocation list and the audit lines
 [[kv_namespaces]]
 binding = "ACCESS"
-id = "REPLACE_WITH_ACCESS_ID"
+id = "d0604151a4c3417a8c372becb4e6a984"

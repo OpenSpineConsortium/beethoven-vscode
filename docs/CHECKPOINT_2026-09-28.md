@@ -10,6 +10,17 @@ SHA256SUMS signed by k1). Committed and pushed as this checkpoint says below.
 
 ### What version 3 changed (pass 18)
 
+- **Access service DEPLOYED (pass 20, 2026-09-28 ~19:25 UTC).** Cloudflare account: go2432@wayne.edu
+  (account id 66f368d9f6e408c98d7f0547bcd94303; wrangler OAuth login on this laptop and in WSL, config
+  `~/.config/.wrangler/config/default.toml`). Worker `ashley-service` at
+  `https://ashley-service.openspineconsortium.workers.dev` (subdomain `openspineconsortium`). KV:
+  TRIALS 328006d0894d4b45be7fb5e7becaec62, REPORTS 1af1580f28a248e7b51b084df7d40955, ACCESS
+  d0604151a4c3417a8c372becb4e6a984. Secrets set: TRIAL_KEY_PKCS8_B64, TRIAL_KID, ADMIN_TOKEN (copy in
+  `~/.ashley-vendor/admin_token`), IP_SALT; GITHUB_TOKEN/GITHUB_REPO not set (requests are stored, no
+  issue opened). `docs/site/services.json` filled; site pages pushed to openspineconsortium.github.io.
+  Tools: `tools/intake/deploy.sh` (idempotent; run from WSL with `~/node22/bin` on PATH: the Windows
+  network path times out against Cloudflare's API), `register_subdomain.sh`, `admin.mjs`
+  (list/add/approve/deny/remove). go2432 added as approved.
 - **Grid etiquette (C&IT e-mail, 2026-09-28, pass 19).** A 6.9 GB Apptainer `rootfs-*` from a
   build run on warrior sat under `/tmp` there; removed (91 % -> 63 %). Now enforced: `bootstrap.sbatch`
   refuses outside a Slurm job and keeps temp and cache on the compute node's local disk with a trap;
