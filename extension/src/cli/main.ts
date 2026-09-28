@@ -10,6 +10,8 @@ import { SecretId } from '../core/services';
 import { GridApi } from '../core/gridApi';
 import { TerminalUI } from './terminalUi';
 import { renderBlock } from '../core/sshConfig';
+import { installPublicKey, probeWithKey } from '../core/sshInstall';
+import { expandHome } from '../core/shell';
 
 const LOCAL = path.join(os.homedir(), '.ashley-local');
 const SETTINGS = path.join(LOCAL, 'settings.json');
@@ -35,7 +37,6 @@ function settings(): WizardSettings {
     sshAlias: 'wsu-grid',
     nodeDomain: 'nas.grid.wayne.edu',
     identityFile: '~/.ssh/id_ed25519_wsu',
-    mirrorToWsl: true,
     gridRoot: '',
     gridScriptsDir: gridScripts,
     claudeExecutable: 'claude',
@@ -61,6 +62,15 @@ function env(ui: TerminalUI): WizardEnv {
       saveJson(SECRETS, cur, 0o600);
     },
     ui,
+    installKeyWithPassword: (pub) =>
+      installPublicKey({
+        host: s.loginHost,
+        username: s.accessId,
+        publicKey: pub,
+        password: () => ui.ask(`Grid password for ${s.accessId} (used once, never stored)`, { password: true }),
+        prompt: (text, echo) => ui.ask(/verification|code|token/i.test(text) ? 'Six-digit Google Authenticator code' : text, { password: !echo }),
+        log: (l) => ui.progress(l),
+      }),
   };
 }
 
@@ -87,6 +97,12 @@ async function main(argv: string[]): Promise<number> {
       console.log((r.stdout + r.stderr).trim());
       return 0;
     }
+    case 'ssh2-probe': {
+      const key = expandHome(s.identityFile);
+      const r = await probeWithKey(s.loginHost, s.accessId, fs.readFileSync(key, 'utf8'));
+      console.log(r.ok ? `ssh2 reached ${s.loginHost} as ${s.accessId}: ${r.detail}` : `ssh2 failed: ${r.detail}`);
+      return r.ok ? 0 : 1;
+    }
     case 'ssh-config': {
       console.log(renderBlock({ accessId: s.accessId || 'ab1234', loginHost: s.loginHost, alias: s.sshAlias, nodeDomain: s.nodeDomain, identityFile: s.identityFile, includeGridAlias: true }));
       return 0;
@@ -112,6 +128,7 @@ async function main(argv: string[]): Promise<number> {
   setup [--force] [--only step,step]   the wizard in the terminal (accessId, sshKey, sshConfig, installKey, github, huggingface, claudeOauth, anthropicApiKey, gridInstall)
   doctor               every check, laptop and grid
   ssh-config           print the ~/.ssh/config block
+  ssh2-probe           prove the in-panel SSH client reaches the grid with your key
   ask [--session S] [--worker W] [--cwd DIR] <prompt...>   ask the grid Claude and stream the answer
   <anything else>      passed to the grid: status, worker start|stop|list|log, sessions, accounts, result, tail, bootstrap
 Settings: ${SETTINGS}; secrets: ${SECRETS} (mode 600)`);

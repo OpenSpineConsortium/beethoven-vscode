@@ -1,4 +1,24 @@
-# CHECKPOINT 2026-09-28 01:25 UTC (grid clock) — Ashley, the WSU grid + Claude Code extension
+# CHECKPOINT 2026-09-28 (updated 02:35 UTC, second pass) — Ashley, the WSU grid + Claude Code extension
+
+## Second pass (Greg's feedback after trying the wizard, 2026-09-27 22:06 local)
+
+Feedback and what changed:
+
+| Feedback | Change | Status |
+|---|---|---|
+| "mirrored into WSL": keep it native | WSL mirror removed entirely (setting, code, docs). Windows OpenSSH only | done, built |
+| Token steps should sign in like Claude does, no copy-paste into the command bar | GitHub: `vscode.authentication.getSession('github', ...)` (browser sign-in, token arrives by itself). Hugging Face and Claude token: one copy; the panel watches the clipboard and offers "Use it". Anthropic API key: paste (optional). `claude setup-token` cannot be driven by pipes (prints nothing without a TTY, probed), so it still runs in a terminal; the token is caught from the clipboard | done, built; human run pending |
+| "token could not be verified (network: fetch failed)" | a network failure now keeps the token and says it will be verified on the grid; only 401/403 rejects. `ashley verify-tokens` on the grid (curl whoami, names only) runs after the grid install and inside `ashley doctor`; verified HF ok, GitHub ok when present | done, tested on the grid |
+| Password in a terminal | in-panel login with the pure-JS ssh2 client (password field, then code field); falls back to the terminal on non-auth failure. `ashley-cli ssh2-probe` proved ssh2 negotiates with warrior (hmac-sha1) using the key; the keyboard-interactive path itself needs Greg's password to test | built; human run pending |
+| Terminal log, no animations, layout | new `SetupPanel` webview (`src/vscode/panel.ts`): nine steps with state, progress bar, spinner, inline prompts (text/password/buttons), clipboard detection, toasts, collapsed log, buttons to start a worker / open files / doctor. Used by setup, token replace, grid install | built; human run pending |
+| Emulate a from-scratch install | `Ashley: Reset this laptop (emulate a fresh install)` (multi-select: tokens, key+block, settings, MCP registration, grid `~/.ashley` via new `ashley uninstall`, optionally the container with `--purge-root`) plus the `code --user-data-dir ... --extensions-dir ...` recipe in INSTALL.md and the manual | done |
+| "unsupported OS" banner | VS Code's FAQ (Greg's PDF, `CTSpinoPelvic1K-1/Remote Development FAQ.pdf`) says the banner and a dialog appear on every such connection and offers no suppression; Ashley explains it once before the first connection; troubleshooting row added | done |
+| WSU email for GitHub/HF accounts? | Not enforceable by the extension and it does not simplify token creation, but it helps the lab map people to org invitations; the wizard texts now recommend creating the accounts with the WSU email | done (text) |
+
+Still to do after this pass: a human run of the new panel (Greg), the `claude setup-token` click, screenshots for the manual. The old checkpoint follows.
+
+---
+
 
 Read this first. It is written so a fresh Claude session, on any account, continues as if
 nothing was interrupted. Everything below is on disk; nothing lives only in a conversation.

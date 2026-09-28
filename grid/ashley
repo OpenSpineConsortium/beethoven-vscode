@@ -164,7 +164,7 @@ cmd_doctor() {
   if is_ready; then ok "READY: $(cat "$ASHLEY_HOME/READY")"; else bad "not ready (bootstrap job ${BOOTSTRAP_JOB:-none}: $(job_state "$BOOTSTRAP_JOB"))"; fi
   [ -n "$RUNTIME" ] && [ -x "$RUNTIME" ] && ok "runtime $RUNTIME" || bad "runtime missing on this host (fine on the login node if the compute nodes have it)"
   local n; n=$(accounts_json | grep -o '"name"' | wc -l); [ "$n" -gt 0 ] && ok "$n Claude account(s): $(accounts_json)" || bad "no Claude account (setup wizard step 'Claude token', or ashley accounts add-token default)"
-  [ -s "$ASHLEY_HOME/secrets.env" ] && ok "secrets.env present ($(stat -c %a "$ASHLEY_HOME/secrets.env"))" || bad "secrets.env missing (GitHub / Hugging Face tokens for the worker)"
+  [ -s "$ASHLEY_HOME/secrets.env" ] && ok "secrets.env present ($(stat -c %a "$ASHLEY_HOME/secrets.env")): $(cmd_verify_tokens 2>/dev/null | tr '\n' ';')" || bad "secrets.env missing (GitHub / Hugging Face tokens for the worker)"
   read -r used soft < <(home_quota); ok "home quota ${used:-?}/${soft:-?} GB"
   for w in $(worker_dirs); do echo "      worker $(worker_json "$w")"; done
   [ $fail -eq 0 ] && echo "doctor: all checks passed" || echo "doctor: some checks failed"
@@ -297,8 +297,36 @@ cmd_accounts() {
   esac
 }
 
+cmd_verify_tokens() { # prove the stored tokens work, from the login node (tiny requests); prints names, never values
+  [ -s "$ASHLEY_HOME/secrets.env" ] || { echo "no secrets.env"; return 1; }
+  unset HF_TOKEN GITHUB_TOKEN GH_TOKEN
+  # shellcheck disable=SC1090
+  source "$ASHLEY_HOME/secrets.env"
+  if [ -n "${HF_TOKEN:-}" ]; then
+    local who; who=$(curl -s -m 15 -H "Authorization: Bearer $HF_TOKEN" https://huggingface.co/api/whoami-v2 | grep -o '"name":"[^"]*"' | head -1 | cut -d'"' -f4)
+    [ -n "$who" ] && echo "HF_TOKEN ok ($who)" || echo "HF_TOKEN rejected or unreachable"
+  else echo "HF_TOKEN missing"; fi
+  if [ -n "${GITHUB_TOKEN:-}" ]; then
+    local gl; gl=$(curl -s -m 15 -H "Authorization: Bearer $GITHUB_TOKEN" https://api.github.com/user | grep -o '"login": *"[^"]*"' | head -1 | sed 's/.*"\([^"]*\)"$/\1/')
+    [ -n "$gl" ] && echo "GITHUB_TOKEN ok ($gl)" || echo "GITHUB_TOKEN rejected or unreachable"
+  else echo "GITHUB_TOKEN missing"; fi
+  [ -s "$ASHLEY_HOME/accounts/default/token" ] && echo "Claude token present (verified by the worker's first request)" || echo "Claude token missing"
+}
+cmd_uninstall() { # what a brand-new grid account looks like to Ashley
+  local purge=0; [ "${1:-}" = "--purge-root" ] && purge=1
+  load_cfg
+  for w in $(worker_dirs); do local jid; jid=$(cat "$ASHLEY_HOME/workers/$w/job.id" 2>/dev/null || echo ""); [ -n "$jid" ] && scancel "$jid" 2>/dev/null && echo "cancelled worker $w (job $jid)"; done
+  local rc="$HOME/.bashrc"
+  if [ -f "$rc" ] && grep -q '# >>> ashley' "$rc"; then awk '/^# >>> ashley/{skip=1; next} /^# <<< ashley/{skip=0; next} skip==0{print}' "$rc" > "$rc.ashley.tmp" && mv "$rc.ashley.tmp" "$rc"; echo "bashrc block removed"; fi
+  if [ $purge -eq 1 ] && [ -n "$ROOT" ] && [ -d "$ROOT" ]; then rm -rf "$ROOT" && echo "removed $ROOT"; fi
+  # remove ourselves last; the shell keeps running the already-read script
+  rm -rf "$ASHLEY_HOME" && echo "removed $ASHLEY_HOME; Ashley is uninstalled for $USER"
+}
+
 case "${1:-help}" in
   install) shift; cmd_install "$@";;
+  verify-tokens) shift; cmd_verify_tokens "$@";;
+  uninstall) shift; cmd_uninstall "$@";;
   bootstrap) shift; cmd_bootstrap "$@";;
   status) shift; cmd_status "$@";;
   doctor) shift; cmd_doctor "$@";;

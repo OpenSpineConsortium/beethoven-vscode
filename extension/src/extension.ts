@@ -1,22 +1,26 @@
 // Ashley: VS Code entry point. UI and OS integration only; the logic lives in src/core.
 import * as vscode from 'vscode';
 import * as fs from 'node:fs';
+import * as os from 'node:os';
 import * as path from 'node:path';
 import { AshleyStore } from './vscode/store';
-import { VsCodeUI } from './vscode/ui';
+import { VsCodeUI, resolveExecutable } from './vscode/ui';
+import { SetupPanel } from './vscode/panel';
 import { AshleyTree } from './vscode/tree';
 import { registerMcp, isMcpRegistered } from './vscode/mcpRegister';
 import { runWizard, checkAll, StepReport, testConnection, STEPS } from './core/wizard';
 import { GridApi } from './core/gridApi';
-import { SERVICES, SecretId } from './core/services';
-import { remoteUri } from './core/sshConfig';
-import { gridHome } from './core/services';
+import { SERVICES, SecretId, gridHome } from './core/services';
+import { remoteUri, stripBlock, hasBlock } from './core/sshConfig';
 import { WorkerJobSpec, describeWall } from './core/slurm';
 import { AshleyResult } from './core/protocol';
+import { run, expandHome } from './core/shell';
+import { findClaudeExecutable } from './vscode/store';
 
 let output: vscode.OutputChannel;
 let store: AshleyStore;
 let tree: AshleyTree;
+let panel: SetupPanel | undefined;
 
 export async function activate(context: vscode.ExtensionContext): Promise<{ _internal: typeof _internal }> {
   output = vscode.window.createOutputChannel('Ashley');
@@ -25,7 +29,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<{ _int
   tree = new AshleyTree(store, grid);
   context.subscriptions.push(output, vscode.window.registerTreeDataProvider('ashley.status', tree));
 
-  // 1. Every integrated terminal gets the tokens (except ANTHROPIC_API_KEY; see store.ts).
   try {
     const names = await store.hydrateEnvironment();
     if (names.length) output.appendLine(`environment: ${names.join(', ')}`);
@@ -48,7 +51,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<{ _int
 
   reg('ashley.setup', () => commandSetup(context));
   reg('ashley.doctor', () => commandDoctor(context));
-  reg('ashley.connect', (item?: any) => commandConnect(grid(), item?.data?.name));
+  reg('ashley.connect', (item?: any) => commandConnect(context, grid(), item?.data?.name));
   reg('ashley.workerStart', () => commandWorkerStart(grid()));
   reg('ashley.workerStop', (item?: any) => commandWorkerStop(grid(), item?.data?.name));
   reg('ashley.workerLogs', (item?: any) => commandWorkerLogs(grid(), item?.data?.name));
@@ -56,13 +59,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<{ _int
   reg('ashley.gridStatus', () => commandGridStatus(grid()));
   reg('ashley.gridBootstrap', () => commandBootstrap(context));
   reg('ashley.registerMcp', () => commandRegisterMcp(context));
-  reg('ashley.claudeToken', () => commandClaudeToken(context));
-  reg('ashley.manageTokens', () => commandManageTokens());
+  reg('ashley.claudeToken', () => commandTokenStep(context, 'claudeOauth'));
+  reg('ashley.manageTokens', () => commandManageTokens(context));
   reg('ashley.openManual', () => commandOpenManual(context));
   reg('ashley.openTerminal', () => commandOpenTerminal());
+  reg('ashley.reset', () => commandReset(context));
   reg('ashley.refresh', () => tree.refresh());
 
-  // 2. First run: offer the wizard once. Never awaited: activation must not block on a dialog.
   const s = store.settings();
   if (!s.accessId && !context.globalState.get('ashley.offered')) {
     void context.globalState.update('ashley.offered', true);
@@ -76,7 +79,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<{ _int
 }
 
 export function deactivate(): void {
-  /* nothing to release: no background processes are kept */
+  panel?.dispose();
 }
 
 // ---------------------------------------------------------------------------------------
@@ -86,34 +89,61 @@ function format(reports: StepReport[]): string {
   return reports.map((r) => `${mark[r.status]}  ${r.title}: ${r.detail}`).join('\n');
 }
 
+function openPanel(context: vscode.ExtensionContext, title = 'Ashley setup'): SetupPanel {
+  panel?.dispose();
+  panel = new SetupPanel(context, output, title);
+  return panel;
+}
+
 async function commandSetup(context: vscode.ExtensionContext): Promise<void> {
-  const ui = new VsCodeUI(output);
-  const env = store.wizardEnv(ui);
-  output.show(true);
+  const p = openPanel(context);
+  const env = store.wizardEnv(p);
   output.appendLine('--- Ashley setup wizard ---');
+  p.setSteps([], null);
   const before = await checkAll(env);
+  p.setSteps(before, null);
   output.appendLine(format(before));
-  const todo = before.filter((r) => r.status !== 'done');
-  if (todo.length === 0) {
-    const again = await vscode.window.showInformationMessage('Everything is already set up. Run the wizard again anyway (re-enter tokens, reinstall on the grid)?', { modal: true }, 'Run everything again', 'Only the grid install', 'No');
-    if (again === 'No' || !again) return;
-    const reports = await runWizard(env, { force: true, only: again === 'Only the grid install' ? ['gridInstall'] : undefined });
-    output.appendLine(format(reports));
-  } else {
-    const reports = await runWizard(env);
-    output.appendLine(format(reports));
-    const failed = reports.find((r) => r.status === 'failed');
-    if (failed) {
-      void vscode.window.showErrorMessage(`Ashley setup stopped at "${failed.title}": ${failed.detail}`, 'Show log').then((c) => c && output.show());
-    } else {
-      void vscode.window.showInformationMessage('Ashley setup finished. The Ashley view shows when the grid container is ready; then start a worker.', 'Open Ashley view').then((c) => c && vscode.commands.executeCommand('ashley.status.focus'));
-    }
+  let opts: { force?: boolean; only?: string[] } = {};
+  if (before.every((r) => r.status === 'done' || r.status === 'skipped')) {
+    const again = await p.confirm('Everything is already set up on this laptop and on the grid. Run every step again anyway, or only the grid install (uploads scripts and tokens)?', 'Run everything again', 'Only the grid install');
+    opts = again ? { force: true } : { force: true, only: ['gridInstall'] };
   }
+  const reports = await runWizard(env, { ...opts, onStep: (rs, cur) => p.setSteps(mergeReports(before, rs), cur) });
+  const all = mergeReports(before, reports);
+  p.setSteps(all, null);
+  output.appendLine(format(reports));
+  const failed = reports.find((r) => r.status === 'failed');
+  const skipped = reports.find((r) => r.status === 'skipped' && r.id !== 'anthropicApiKey');
+  if (failed) p.finish(`Stopped at "${failed.title}": ${failed.detail}`, false);
+  else if (skipped) p.finish(`Paused at "${skipped.title}". Run the wizard again to continue.`, false);
+  else p.finish('Setup finished. The Ashley view shows when the grid container is ready; then start a worker.', true);
   await store.hydrateEnvironment();
   tree.refresh();
-  if (store.config.get<boolean>('mcp.autoRegister', true) && !(await isMcpRegistered())) {
-    await commandRegisterMcp(context, true);
-  }
+  if (!failed && store.config.get<boolean>('mcp.autoRegister', true) && !(await isMcpRegistered())) await commandRegisterMcp(context, true);
+}
+
+function mergeReports(base: StepReport[], updates: StepReport[]): StepReport[] {
+  const m = new Map(base.map((r) => [r.id, r]));
+  for (const u of updates) m.set(u.id, u);
+  return STEPS.map((s) => m.get(s.id)).filter((x): x is StepReport => !!x);
+}
+
+async function commandTokenStep(context: vscode.ExtensionContext, id: SecretId): Promise<void> {
+  const p = openPanel(context, 'Ashley token');
+  const env = store.wizardEnv(p);
+  const reports = await runWizard(env, { force: true, only: [id], onStep: (rs, cur) => p.setSteps(rs, cur) });
+  output.appendLine(format(reports));
+  const r = reports[0];
+  if (r?.status === 'done') {
+    const push = await p.confirm(`${r.title}: ${r.detail}. Push it to the grid now?`, 'Push to grid', 'Later');
+    if (push) {
+      const gi = await runWizard(env, { force: true, only: ['gridInstall'], onStep: (rs, cur) => p.setSteps(rs, cur) });
+      output.appendLine(format(gi));
+      p.finish(gi[0]?.detail ?? 'done', gi[0]?.status === 'done');
+    } else p.finish(r.detail, true);
+  } else p.finish(r?.detail ?? 'cancelled', false);
+  await store.hydrateEnvironment();
+  tree.refresh();
 }
 
 async function commandDoctor(context: vscode.ExtensionContext): Promise<void> {
@@ -131,12 +161,13 @@ async function commandDoctor(context: vscode.ExtensionContext): Promise<void> {
   output.appendLine(format(reports));
   const mcp = await isMcpRegistered();
   output.appendLine(`${mcp ? 'PASS' : 'TODO'}  MCP bridge registered with Claude Code${mcp ? '' : ' (Ashley: Connect the Claude Code extension to the grid)'}`);
+  const summary = reports.map((r) => `${r.status === 'done' ? '✓' : r.status === 'skipped' ? '–' : '✗'} ${r.title}`).join('   ');
   if (reports.every((r) => r.status === 'done' || r.status === 'skipped')) {
-    const s = store.settings();
-    const g = new GridApi(s.sshAlias, (l) => output.appendLine(l));
+    const g = new GridApi(store.settings().sshAlias, (l) => output.appendLine(l));
     const r = await g.ashley(['doctor'], { timeoutMs: 120_000 });
     output.appendLine('--- grid doctor ---\n' + (r.stdout + r.stderr).trim());
   }
+  void vscode.window.showInformationMessage(`Ashley doctor: ${summary}`, 'Show details').then((c) => c && output.show());
   if (!remoteSsh) {
     const inst = await vscode.window.showWarningMessage('The Remote-SSH extension is missing; it is what shows your grid files and images. Install it?', 'Install');
     if (inst) await vscode.commands.executeCommand('workbench.extensions.installExtension', 'ms-vscode-remote.remote-ssh');
@@ -149,14 +180,11 @@ async function pickWorker(grid: GridApi, prompt: string, onlyRunning = true): Pr
   const rows = (workers as any[]).filter((w) => !onlyRunning || w.job_state === 'RUNNING');
   if (rows.length === 0) return undefined;
   if (rows.length === 1) return { name: rows[0].name, node: rows[0].node, state: rows[0].job_state };
-  const pick = await vscode.window.showQuickPick(
-    rows.map((w) => ({ label: w.name, description: `${w.job_state} ${w.node ?? ''}`, w })),
-    { title: prompt },
-  );
+  const pick = await vscode.window.showQuickPick(rows.map((w) => ({ label: w.name, description: `${w.job_state} ${w.node ?? ''}`, w })), { title: prompt });
   return pick ? { name: pick.w.name, node: pick.w.node, state: pick.w.job_state } : undefined;
 }
 
-async function commandConnect(grid: GridApi, workerName?: string): Promise<void> {
+async function commandConnect(context: vscode.ExtensionContext, grid: GridApi, workerName?: string): Promise<void> {
   const s = store.settings();
   if (!s.accessId) return void vscode.commands.executeCommand('ashley.setup');
   if (!vscode.extensions.getExtension('ms-vscode-remote.remote-ssh')) {
@@ -186,8 +214,6 @@ async function commandConnect(grid: GridApi, workerName?: string): Promise<void>
   }
   const folder = await vscode.window.showInputBox({ title: 'Folder to open on the grid', value: gridHome(s.accessId), prompt: 'Your grid home, or a project folder', ignoreFocusOut: true });
   if (!folder) return;
-  // Tell Remote-SSH the platform up front, so it never shows the "select platform" dialog,
-  // and give the jump through the login node time to settle.
   const host = remoteUri(node, s.nodeDomain, '').replace('vscode-remote://ssh-remote+', '');
   const sshCfg = vscode.workspace.getConfiguration('remote.SSH');
   const platforms = { ...(sshCfg.get<Record<string, string>>('remotePlatform') ?? {}) };
@@ -195,9 +221,17 @@ async function commandConnect(grid: GridApi, workerName?: string): Promise<void>
     platforms[host] = 'linux';
     await sshCfg.update('remotePlatform', platforms, vscode.ConfigurationTarget.Global);
   }
-  // The compute nodes' sshd takes ~25 s before it runs anything (measured 2026-09-28), and the
-  // first connection also downloads the server on the node; 60 s was not enough.
+  // The compute nodes' sshd takes ~25 s before it runs anything, and the first connection
+  // downloads the server on the node; 60 s was not enough.
   if ((sshCfg.get<number>('connectTimeout') ?? 15) < 300) await sshCfg.update('connectTimeout', 300, vscode.ConfigurationTarget.Global);
+  if (!context.globalState.get('ashley.osBannerExplained')) {
+    await context.globalState.update('ashley.osBannerExplained', true);
+    await vscode.window.showInformationMessage(
+      'The grid runs CentOS 7, which VS Code no longer supports officially, so the new window will show a banner saying the OS is unsupported. That is expected: Wayne State provides the compatibility libraries and everything works. Dismiss the banner (or choose "Don\'t show again"). The first connection takes one or two minutes.',
+      { modal: true },
+      'Connect',
+    );
+  }
   const uri = vscode.Uri.parse(remoteUri(node, s.nodeDomain, folder));
   output.appendLine(`opening ${uri.toString()}`);
   await vscode.commands.executeCommand('vscode.openFolder', uri, { forceNewWindow: true });
@@ -253,16 +287,15 @@ async function commandWorkerLogs(grid: GridApi, workerName?: string): Promise<vo
 }
 
 async function commandAsk(grid: GridApi): Promise<void> {
-  const s = store.settings();
   const w = await pickWorker(grid, 'Ask which worker?');
   if (!w) {
     const start = await vscode.window.showInformationMessage('No Claude worker is running on the grid.', { modal: true }, 'Start one');
     if (start) await commandWorkerStart(grid);
     return;
   }
-  const prompt = await vscode.window.showInputBox({ title: `Ask the grid Claude (worker ${w.name}, session ${store.config.get('defaultSession', 'default')})`, prompt: 'What should it do? It runs in your grid home with your subscription.', ignoreFocusOut: true });
-  if (!prompt) return;
   const session = store.config.get<string>('defaultSession', 'default');
+  const prompt = await vscode.window.showInputBox({ title: `Ask the grid Claude (worker ${w.name}, session ${session})`, prompt: 'What should it do? It runs in your grid home with your subscription.', ignoreFocusOut: true });
+  if (!prompt) return;
   const chan = vscode.window.createOutputChannel(`Ashley: ${session}`, 'markdown');
   chan.show(true);
   chan.appendLine(`> ${prompt}\n`);
@@ -271,7 +304,7 @@ async function commandAsk(grid: GridApi): Promise<void> {
     token.onCancellationRequested(() => ctl.abort());
     let turns = 0;
     const result: AshleyResult = await grid.ask(
-      { prompt, session, from: `vscode@${require('node:os').hostname()}` },
+      { prompt, session, from: `vscode@${os.hostname()}` },
       w.name,
       3600,
       {
@@ -292,9 +325,7 @@ async function commandAsk(grid: GridApi): Promise<void> {
     );
     chan.appendLine(`\n---\n**${result.status}** in ${result.duration_ms ? Math.round(result.duration_ms / 1000) : '?'} s, ${result.num_turns ?? '?'} turns, $${result.cost_usd?.toFixed(3) ?? '?'} (${result.account ?? ''})`);
     if (result.status !== 'ok') chan.appendLine(`${result.error ?? ''}${result.retry_after ? ` retry after ${result.retry_after}` : ''}`);
-    if (result.status === 'ok' && !result.result) chan.appendLine('(no text; see the events)');
   });
-  output.appendLine(`ask done (session ${session}, worker ${w.name}); accessId ${s.accessId}`);
 }
 
 function summariseInput(input: any): string {
@@ -313,14 +344,12 @@ async function commandGridStatus(grid: GridApi): Promise<void> {
 }
 
 async function commandBootstrap(context: vscode.ExtensionContext): Promise<void> {
-  const ui = new VsCodeUI(output);
-  const env = store.wizardEnv(ui);
-  output.show(true);
-  const reports = await runWizard(env, { force: true, only: ['gridInstall'] });
+  const p = openPanel(context, 'Ashley: grid install');
+  const env = store.wizardEnv(p);
+  const reports = await runWizard(env, { force: true, only: ['gridInstall'], onStep: (rs, cur) => p.setSteps(rs, cur) });
   output.appendLine(format(reports));
-  void vscode.window.showInformationMessage(reports[0]?.detail ?? 'done');
+  p.finish(reports[0]?.detail ?? 'done', reports[0]?.status === 'done');
   tree.refresh();
-  void context;
 }
 
 async function commandRegisterMcp(context: vscode.ExtensionContext, quiet = false): Promise<void> {
@@ -333,18 +362,7 @@ async function commandRegisterMcp(context: vscode.ExtensionContext, quiet = fals
   }
 }
 
-async function commandClaudeToken(context: vscode.ExtensionContext): Promise<void> {
-  const ui = new VsCodeUI(output);
-  const env = store.wizardEnv(ui);
-  const reports = await runWizard(env, { force: true, only: ['claudeOauth'] });
-  output.appendLine(format(reports));
-  if (reports[0]?.status === 'done') {
-    const push = await vscode.window.showInformationMessage('Token stored. Push it to the grid now (rewrites ~/.ashley/accounts/default/token)?', 'Push to grid');
-    if (push) await commandBootstrap(context);
-  }
-}
-
-async function commandManageTokens(): Promise<void> {
+async function commandManageTokens(context: vscode.ExtensionContext): Promise<void> {
   const summary = await store.secretSummary();
   const pick = await vscode.window.showQuickPick(
     summary.map((x) => ({ label: x.name, description: x.present ? 'stored' : 'missing', id: x.id })),
@@ -357,29 +375,75 @@ async function commandManageTokens(): Promise<void> {
     await store.hydrateEnvironment();
     tree.refresh();
   } else if (action === 'Replace') {
-    const ui = new VsCodeUI(output);
-    const env = store.wizardEnv(ui);
-    const svc = SERVICES.find((x) => x.id === pick.id)!;
-    const reports = await runWizard(env, { force: true, only: [svc.id] });
-    output.appendLine(format(reports));
-    tree.refresh();
+    await commandTokenStep(context, pick.id as SecretId);
   }
+}
+
+async function commandReset(context: vscode.ExtensionContext): Promise<void> {
+  const s = store.settings();
+  const items: Array<vscode.QuickPickItem & { id: string }> = [
+    { id: 'tokens', label: 'Tokens in the OS keychain', description: 'GitHub, Hugging Face, Claude, API key', picked: true },
+    { id: 'ssh', label: 'SSH key and the config block', description: `${s.identityFile}, the Ashley block in ~/.ssh/config`, picked: true },
+    { id: 'settings', label: 'Ashley settings', description: 'AccessID and preferences', picked: true },
+    { id: 'mcp', label: 'MCP bridge registration', description: 'claude mcp remove ashley', picked: true },
+    { id: 'grid', label: 'Ashley on the grid', description: 'stop workers, remove ~/.ashley and the bashrc block (the container stays)', picked: false },
+    { id: 'gridRoot', label: 'The container and workspaces on the grid storage', description: 'rebuilt by the next install (7 min)', picked: false },
+  ];
+  const picks = await vscode.window.showQuickPick(items, { canPickMany: true, title: 'Ashley: reset. What should be forgotten?' });
+  if (!picks || picks.length === 0) return;
+  const sure = await vscode.window.showWarningMessage(`Forget: ${picks.map((p) => p.label).join('; ')}? This is what a brand-new laptop looks like to Ashley.`, { modal: true }, 'Reset');
+  if (!sure) return;
+  const ids = new Set(picks.map((p) => p.id));
+  const done: string[] = [];
+  if (ids.has('grid') || ids.has('gridRoot')) {
+    const g = new GridApi(s.sshAlias, (l) => output.appendLine(l));
+    const r = await g.ashley(['uninstall', ...(ids.has('gridRoot') ? ['--purge-root'] : [])], { timeoutMs: 180_000 });
+    done.push(`grid: ${(r.stdout + r.stderr).trim().split('\n').pop()}`);
+  }
+  if (ids.has('tokens')) {
+    for (const svc of SERVICES) await store.setSecret(svc.id, undefined);
+    done.push('tokens deleted');
+  }
+  if (ids.has('mcp')) {
+    const r = await run(findClaudeExecutable(), ['mcp', 'remove', '--scope', 'user', 'ashley'], { timeoutMs: 60_000 });
+    done.push(`mcp: ${(r.stdout || r.stderr).trim().split('\n')[0] || 'removed'}`);
+  }
+  if (ids.has('ssh')) {
+    const cfg = path.join(os.homedir(), '.ssh', 'config');
+    if (fs.existsSync(cfg)) {
+      const t = fs.readFileSync(cfg, 'utf8');
+      if (hasBlock(t)) fs.writeFileSync(cfg, stripBlock(t));
+    }
+    for (const f of [expandHome(s.identityFile), expandHome(s.identityFile) + '.pub']) if (fs.existsSync(f)) fs.rmSync(f);
+    done.push('ssh block and key removed (the grid still lists the old public key; harmless)');
+  }
+  if (ids.has('settings')) {
+    for (const k of ['accessId', 'gridRoot']) await store.config.update(k, undefined, vscode.ConfigurationTarget.Global);
+    await context.globalState.update('ashley.offered', undefined);
+    await context.globalState.update('ashley.osBannerExplained', undefined);
+    done.push('settings cleared');
+  }
+  await store.hydrateEnvironment();
+  tree.refresh();
+  output.appendLine(`reset: ${done.join('; ')}`);
+  const reload = await vscode.window.showInformationMessage(`Reset done: ${done.join('; ')}. Reload the window to see Ashley as a new student would.`, 'Reload window');
+  if (reload) void vscode.commands.executeCommand('workbench.action.reloadWindow');
 }
 
 async function commandOpenManual(context: vscode.ExtensionContext): Promise<void> {
   const html = path.join(context.extensionPath, 'media', 'manual.html');
   if (!fs.existsSync(html)) return void vscode.window.showWarningMessage('The manual is not bundled in this build; see docs/manual.html in the Ashley repository.');
-  const panel = vscode.window.createWebviewPanel('ashley.manual', 'Ashley manual', vscode.ViewColumn.One, { enableScripts: true, enableFindWidget: true, localResourceRoots: [vscode.Uri.file(path.join(context.extensionPath, 'media'))] });
+  const p = vscode.window.createWebviewPanel('ashley.manual', 'Ashley manual', vscode.ViewColumn.One, { enableScripts: true, enableFindWidget: true, localResourceRoots: [vscode.Uri.file(path.join(context.extensionPath, 'media'))] });
   let text = fs.readFileSync(html, 'utf8');
-  const base = panel.webview.asWebviewUri(vscode.Uri.file(path.join(context.extensionPath, 'media'))).toString();
+  const base = p.webview.asWebviewUri(vscode.Uri.file(path.join(context.extensionPath, 'media'))).toString();
   text = text.replace(/(src|href)="(?!https?:|#|data:|command:)([^"]+)"/g, (_m, attr, rel) => `${attr}="${base}/${rel}"`);
-  panel.webview.html = text;
+  p.webview.html = text;
 }
 
 async function commandOpenTerminal(): Promise<void> {
   const s = store.settings();
   if (!s.accessId) return void vscode.commands.executeCommand('ashley.setup');
-  const t = vscode.window.createTerminal({ name: `grid (${s.accessId})`, shellPath: require('./vscode/ui').resolveExecutable('ssh'), shellArgs: ['-t', s.sshAlias] });
+  const t = vscode.window.createTerminal({ name: `grid (${s.accessId})`, shellPath: resolveExecutable('ssh'), shellArgs: ['-t', s.sshAlias] });
   t.show();
 }
 

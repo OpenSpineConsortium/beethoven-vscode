@@ -33,7 +33,7 @@ export const SERVICES: ServiceConfig[] = [
     tokenUrl:
       'https://github.com/settings/tokens/new?description=Ashley%20WSU%20grid&scopes=repo,workflow,read:org,gist',
     instructions:
-      'The page is pre-filled with the scopes the lab uses (repo, workflow, read:org, gist). Choose an expiry (90 days is fine; the wizard can be rerun), press "Generate token", copy the value that starts with ghp_.',
+      "Normally you sign in to GitHub in the browser and the token arrives by itself (VS Code's GitHub sign-in). If you have no GitHub account, create one with your WSU email first. This page is the fallback for a pasted token: scopes pre-filled (repo, workflow, read:org, gist).",
     prompt: 'Paste your GitHub token (starts with ghp_ or github_pat_)',
     validate: { url: 'https://api.github.com/user', header: 'Authorization', expectField: 'login' },
     injectLocally: true,
@@ -45,9 +45,9 @@ export const SERVICES: ServiceConfig[] = [
     id: 'huggingface',
     name: 'Hugging Face access token',
     envVars: ['HF_TOKEN'],
-    tokenUrl: 'https://huggingface.co/settings/tokens/new?tokenType=write',
+    tokenUrl: 'https://huggingface.co/settings/tokens/new?tokenType=write&name=wsu-grid',
     instructions:
-      'Name it "wsu-grid". "Write" lets you push datasets and models later; "Read" is enough for downloading. Copy the value that starts with hf_.',
+      'If you have no Hugging Face account yet, create one with your WSU email first (huggingface.co/join). The page that opens is pre-filled: name wsu-grid, type Write. Press Create token, then Copy: Ashley notices the copied token and offers to save it.',
     prompt: 'Paste your Hugging Face token (starts with hf_)',
     validate: { url: 'https://huggingface.co/api/whoami-v2', header: 'Authorization', expectField: 'name' },
     injectLocally: true,

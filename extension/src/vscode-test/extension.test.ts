@@ -7,7 +7,7 @@ import * as vscode from 'vscode';
 const EXT_ID = 'openspineconsortium.ashley-wsu';
 const COMMANDS = [
   'ashley.setup', 'ashley.doctor', 'ashley.connect', 'ashley.workerStart', 'ashley.workerStop', 'ashley.workerLogs', 'ashley.ask',
-  'ashley.gridStatus', 'ashley.gridBootstrap', 'ashley.registerMcp', 'ashley.claudeToken', 'ashley.manageTokens', 'ashley.openManual', 'ashley.openTerminal', 'ashley.refresh',
+  'ashley.gridStatus', 'ashley.gridBootstrap', 'ashley.registerMcp', 'ashley.claudeToken', 'ashley.manageTokens', 'ashley.openManual', 'ashley.openTerminal', 'ashley.reset', 'ashley.refresh',
 ];
 
 suite('Ashley extension', () => {

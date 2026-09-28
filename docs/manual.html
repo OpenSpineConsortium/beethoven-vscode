@@ -234,15 +234,21 @@ ondemand.grid.wayne.edu, Interactive Apps, 2FA Setup, scan the QR
 code.</li>
 <li><strong>A Claude Pro or Max subscription</strong>, and the Claude
 Code extension signed in.</li>
-<li>GitHub and Hugging Face accounts.</li>
+<li><strong>GitHub and Hugging Face accounts.</strong> Create them with
+your WSU email if you do not have them; the lab adds you to its GitHub
+organisation by that address.</li>
 </ol>
 <h3 id="install">Install</h3>
 <p>VS Code, then the extensions <strong>Claude Code</strong>,
 <strong>Remote - SSH</strong>, and <code>ashley-wsu-1.0.0.vsix</code>
 (Extensions view, <code>...</code>, <em>Install from VSIX</em>). Ashley
-offers to run its wizard on first start; or press Ctrl/Cmd+Shift+P and
-type <strong>Ashley: Set up my research environment</strong>.</p>
-<h3 id="the-wizard-step-by-step">The wizard, step by step</h3>
+offers its wizard on first start; or press Ctrl/Cmd+Shift+P and type
+<strong>Ashley: Set up my research environment</strong>.</p>
+<h3 id="the-setup-panel">The setup panel</h3>
+<p>Everything happens in one panel: the nine steps on the left with
+their state, the current question on the right, a progress bar on top,
+the log one click away. Finished steps are skipped, so the wizard can be
+rerun at any time. Nothing is typed into a terminal.</p>
 <figure>
 <img role="img" aria-label="The nine wizard steps" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA5ODAgMzAwIiBmb250LWZhbWlseT0iU2Vnb2UgVUksIEhlbHZldGljYSwgQXJpYWwsIHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTMiPgogIDxkZWZzPgogICAgPG1hcmtlciBpZD0iYyIgdmlld0JveD0iMCAwIDEwIDEwIiByZWZYPSI5IiByZWZZPSI1IiBtYXJrZXJXaWR0aD0iNyIgbWFya2VySGVpZ2h0PSI3IiBvcmllbnQ9ImF1dG8iPjxwYXRoIGQ9Ik0wLDAgTDEwLDUgTDAsMTAgeiIgZmlsbD0iIzU1NSIvPjwvbWFya2VyPgogICAgPHN0eWxlPgogICAgICAuc3R7ZmlsbDojZmZmO3N0cm9rZTojMzMzO3N0cm9rZS13aWR0aDoxLjQ7cng6OH0KICAgICAgLnlvdXtmaWxsOiNmZmY4ZTE7c3Ryb2tlOiNiODg2MGI7c3Ryb2tlLXdpZHRoOjEuNDtyeDo4fQogICAgICAubntmb250LXdlaWdodDo2MDA7ZmlsbDojMjIyfS5ze2ZpbGw6IzU1NTtmb250LXNpemU6MTEuNXB4fQogICAgICAuYXtzdHJva2U6IzU1NTtzdHJva2Utd2lkdGg6MS4zO2ZpbGw6bm9uZTttYXJrZXItZW5kOnVybCgjYyl9CiAgICAgIC5sZWdlbmR7ZmlsbDojNTU1O2ZvbnQtc2l6ZToxMnB4fQogICAgPC9zdHlsZT4KICA8L2RlZnM+CiAgPHRleHQgeD0iMjAiIHk9IjI2IiBmb250LXNpemU9IjE1IiBmb250LXdlaWdodD0iNjAwIiBmaWxsPSIjMjIyIj5UaGUgd2l6YXJkOiBuaW5lIHN0ZXBzLCBlYWNoIHNraXBwZWQgd2hlbiBhbHJlYWR5IGRvbmU8L3RleHQ+CiAgPHRleHQgeD0iMjAiIHk9IjQ2IiBjbGFzcz0ibGVnZW5kIj53aGl0ZSA9IGF1dG9tYXRpYzsgZ29sZCA9IHlvdSBkbyBvbmUgdGhpbmc8L3RleHQ+CiAgPGcgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoMjAsNzApIj4KICAgIDxyZWN0IGNsYXNzPSJ5b3UiIHg9IjAiIHk9IjAiIHdpZHRoPSIxNTAiIGhlaWdodD0iNzAiLz48dGV4dCB4PSIxMCIgeT0iMjIiIGNsYXNzPSJuIj4xIEFjY2Vzc0lEPC90ZXh0Pjx0ZXh0IHg9IjEwIiB5PSI0MCIgY2xhc3M9InMiPnR5cGUgYWIxMjM0PC90ZXh0PgogICAgPHJlY3QgY2xhc3M9InN0IiB4PSIxNzAiIHk9IjAiIHdpZHRoPSIxNTAiIGhlaWdodD0iNzAiLz48dGV4dCB4PSIxODAiIHk9IjIyIiBjbGFzcz0ibiI+MiBTU0gga2V5PC90ZXh0Pjx0ZXh0IHg9IjE4MCIgeT0iNDAiIGNsYXNzPSJzIj5lZDI1NTE5LCBubyBwYXNzcGhyYXNlPC90ZXh0PgogICAgPHJlY3QgY2xhc3M9InN0IiB4PSIzNDAiIHk9IjAiIHdpZHRoPSIxNTAiIGhlaWdodD0iNzAiLz48dGV4dCB4PSIzNTAiIHk9IjIyIiBjbGFzcz0ibiI+MyBTU0ggY29uZmlnPC90ZXh0Pjx0ZXh0IHg9IjM1MCIgeT0iNDAiIGNsYXNzPSJzIj5qdW1wIGhvc3QgYmxvY2ssPC90ZXh0Pjx0ZXh0IHg9IjM1MCIgeT0iNTUiIGNsYXNzPSJzIj5taXJyb3JlZCBpbnRvIFdTTDwvdGV4dD4KICAgIDxyZWN0IGNsYXNzPSJ5b3UiIHg9IjUxMCIgeT0iMCIgd2lkdGg9IjE1MCIgaGVpZ2h0PSI3MCIvPjx0ZXh0IHg9IjUyMCIgeT0iMjIiIGNsYXNzPSJuIj40IEluc3RhbGwga2V5PC90ZXh0Pjx0ZXh0IHg9IjUyMCIgeT0iNDAiIGNsYXNzPSJzIj5wYXNzd29yZCArIGNvZGUsIG9uY2U8L3RleHQ+CiAgICA8cmVjdCBjbGFzcz0ieW91IiB4PSI2ODAiIHk9IjAiIHdpZHRoPSIxMzAiIGhlaWdodD0iNzAiLz48dGV4dCB4PSI2OTAiIHk9IjIyIiBjbGFzcz0ibiI+NSBHaXRIdWI8L3RleHQ+PHRleHQgeD0iNjkwIiB5PSI0MCIgY2xhc3M9InMiPnBhc3RlIHRva2VuPC90ZXh0PgogICAgPHBhdGggY2xhc3M9ImEiIGQ9Ik0xNTAgMzUgTDE3MCAzNSIvPjxwYXRoIGNsYXNzPSJhIiBkPSJNMzIwIDM1IEwzNDAgMzUiLz48cGF0aCBjbGFzcz0iYSIgZD0iTTQ5MCAzNSBMNTEwIDM1Ii8+PHBhdGggY2xhc3M9ImEiIGQ9Ik02NjAgMzUgTDY4MCAzNSIvPgogIDwvZz4KICA8ZyB0cmFuc2Zvcm09InRyYW5zbGF0ZSgyMCwxNzApIj4KICAgIDxyZWN0IGNsYXNzPSJ5b3UiIHg9IjAiIHk9IjAiIHdpZHRoPSIxNTAiIGhlaWdodD0iNzAiLz48dGV4dCB4PSIxMCIgeT0iMjIiIGNsYXNzPSJuIj42IEh1Z2dpbmcgRmFjZTwvdGV4dD48dGV4dCB4PSIxMCIgeT0iNDAiIGNsYXNzPSJzIj5wYXN0ZSB0b2tlbjwvdGV4dD4KICAgIDxyZWN0IGNsYXNzPSJ5b3UiIHg9IjE3MCIgeT0iMCIgd2lkdGg9IjE3MCIgaGVpZ2h0PSI3MCIvPjx0ZXh0IHg9IjE4MCIgeT0iMjIiIGNsYXNzPSJuIj43IENsYXVkZSB0b2tlbjwvdGV4dD48dGV4dCB4PSIxODAiIHk9IjQwIiBjbGFzcz0icyI+Y2xhdWRlIHNldHVwLXRva2VuIG9wZW5zPC90ZXh0Pjx0ZXh0IHg9IjE4MCIgeT0iNTUiIGNsYXNzPSJzIj50aGUgYnJvd3NlcjsgcGFzdGUgaXQ8L3RleHQ+CiAgICA8cmVjdCBjbGFzcz0ic3QiIHg9IjM2MCIgeT0iMCIgd2lkdGg9IjE1MCIgaGVpZ2h0PSI3MCIvPjx0ZXh0IHg9IjM3MCIgeT0iMjIiIGNsYXNzPSJuIj44IEFQSSBrZXk8L3RleHQ+PHRleHQgeD0iMzcwIiB5PSI0MCIgY2xhc3M9InMiPm9wdGlvbmFsIG92ZXJmbG93PC90ZXh0PgogICAgPHJlY3QgY2xhc3M9InN0IiB4PSI1MzAiIHk9IjAiIHdpZHRoPSIyODAiIGhlaWdodD0iNzAiLz48dGV4dCB4PSI1NDAiIHk9IjIyIiBjbGFzcz0ibiI+OSBHcmlkIGluc3RhbGwgKGEgam9iKTwvdGV4dD48dGV4dCB4PSI1NDAiIHk9IjQwIiBjbGFzcz0icyI+dXBsb2FkIHNjcmlwdHMsIHRva2VucyB0byBmaWxlcyAoNjAwKSwgYmFzaHJjIGJsb2NrLDwvdGV4dD48dGV4dCB4PSI1NDAiIHk9IjU1IiBjbGFzcz0icyI+YnVpbGQgdGhlIGNvbnRhaW5lcjogNSB0byAxNSBtaW51dGVzPC90ZXh0PgogICAgPHBhdGggY2xhc3M9ImEiIGQ9Ik0xNTAgMzUgTDE3MCAzNSIvPjxwYXRoIGNsYXNzPSJhIiBkPSJNMzQwIDM1IEwzNjAgMzUiLz48cGF0aCBjbGFzcz0iYSIgZD0iTTUxMCAzNSBMNTMwIDM1Ii8+CiAgPC9nPgogIDxwYXRoIGNsYXNzPSJhIiBkPSJNODMwIDEwNSBDIDkwMCAxMDUsIDkwMCAyMDUsIDgzMCAyMDUiLz4KPC9zdmc+Cg==" alt="The nine wizard steps" />
 <figcaption aria-hidden="true">The nine wizard steps</figcaption>
@@ -256,67 +262,73 @@ type <strong>Ashley: Set up my research environment</strong>.</p>
 <thead>
 <tr>
 <th>Step</th>
-<th>What you see</th>
+<th>What you see in the panel</th>
 <th>What you do</th>
 </tr>
 </thead>
 <tbody>
 <tr>
 <td>1 AccessID</td>
-<td>an input box</td>
+<td>a text field</td>
 <td>type it (<code>ab1234</code>)</td>
 </tr>
 <tr>
 <td>2 SSH key</td>
-<td>nothing (a second)</td>
+<td>a spinner for a second</td>
 <td>nothing</td>
 </tr>
 <tr>
-<td>3 SSH config</td>
-<td>nothing (a second)</td>
+<td>3 SSH configuration</td>
+<td>a spinner for a second</td>
 <td>nothing</td>
 </tr>
 <tr>
-<td>4 Install key</td>
-<td>a terminal titled <em>Ashley: install key on the grid</em></td>
-<td>type your grid password, then the six-digit code. Once.</td>
+<td>4 Log in to the grid once</td>
+<td>a password field, then a code field</td>
+<td>type your grid password, then the six-digit Authenticator code.
+Once. Ashley installs its key and the grid never asks again.</td>
 </tr>
 <tr>
 <td>5 GitHub</td>
-<td>a dialog, then the browser on the token page (scopes
-pre-filled)</td>
-<td>Generate token, copy it, paste into the input box</td>
+<td>your browser opens on GitHub’s sign-in</td>
+<td>sign in and approve; the token arrives in the panel by itself</td>
 </tr>
 <tr>
 <td>6 Hugging Face</td>
-<td>same</td>
-<td>same</td>
+<td>a button <em>Open the page in my browser</em>; the token page opens
+pre-filled (name <code>wsu-grid</code>, type Write)</td>
+<td>press <em>Create token</em>, then <em>Copy</em>; the panel notices
+the copied token and offers <em>Use it</em></td>
 </tr>
 <tr>
 <td>7 Claude token</td>
-<td>a terminal running <code>claude setup-token</code>; the browser
-opens</td>
-<td>approve; copy the printed <code>sk-ant-oat...</code> token; paste
-it</td>
+<td>a terminal titled <em>claude setup-token</em> opens below; the
+browser asks you to approve</td>
+<td>approve, copy the printed <code>sk-ant-oat...</code> token; the
+panel notices it and offers <em>Use it</em></td>
 </tr>
 <tr>
 <td>8 API key</td>
-<td>an input box</td>
-<td>leave empty (Enter) unless your lead gave you a key</td>
+<td>a field</td>
+<td>leave it empty and press <em>Skip</em> unless your lead gave you a
+key</td>
 </tr>
 <tr>
-<td>9 Grid install</td>
-<td>a progress note; then “bootstrap job N submitted”</td>
+<td>9 Install on the grid</td>
+<td>a progress line; then “bootstrap job N submitted”</td>
 <td>wait 5 to 15 minutes; the Ashley view turns to <em>Grid
 ready</em></td>
 </tr>
 </tbody>
 </table>
+<p>If a token cannot be checked from your laptop’s network (some campus
+Wi-Fi blocks it), the panel keeps it and the grid verifies it a moment
+later; a token the service actually rejects is refused with a
+reason.</p>
 <p>The wizard writes only: a key pair and one block in
 <code>~/.ssh/config</code> on the laptop; tokens in the OS keychain; on
 the grid <code>~/.ashley/</code>, a block in <code>~/.bashrc</code>, and
-a container in your storage. It can be rerun at any time; finished steps
-are skipped.</p>
+a container in your storage.</p>
 <h3 id="your-first-worker-and-your-first-question">Your first worker and
 your first question</h3>
 <ol type="1">
@@ -330,7 +342,9 @@ and what Python version you have.”</em> The answer streams into an
 output channel; tool calls appear as italics.</li>
 <li><strong>Ashley: Open my grid files on a compute node</strong>: a new
 VS Code window opens on the node; you see <code>hello/README.md</code>
-in the Explorer.</li>
+in the Explorer. The window shows a banner that the OS is unsupported:
+expected on the grid’s CentOS 7 (Wayne State supplies the compatibility
+libraries); dismiss it.</li>
 </ol>
 <h3 id="talking-to-it-from-claude-code">Talking to it from Claude
 Code</h3>
@@ -341,6 +355,17 @@ idle.”</em> The local Claude calls <code>ashley_status</code>. For work:
 <em>“Ask the grid Claude, in session <code>demo</code>, to run
 <code>examples/pelvic_width_dimorphism/measure_pelvic_width.py</code> on
 ten records and report the mean.”</em></p>
+<h3 id="starting-over-or-showing-a-friend">Starting over, or showing a
+friend</h3>
+<p><strong>Ashley: Reset this laptop (emulate a fresh install)</strong>
+forgets, as you choose, the tokens, the key and config block, the
+settings, the Claude Code registration, and Ashley on the grid. After a
+reload, VS Code looks the way it does to a brand-new student, and the
+wizard runs from the start. To emulate a brand-new VS Code as well,
+start it with its own profile folders:
+<code>code --user-data-dir %TEMP%\fresh-vscode --extensions-dir %TEMP%\fresh-ext</code>
+(macOS/Linux: <code>/tmp/...</code>), install the three extensions
+there, and run the wizard.</p>
 <h3 id="every-day-after-that">Every day after that</h3>
 <ul>
 <li>Start a worker when you sit down (or keep one running for a day); it
@@ -352,8 +377,8 @@ say “submit”.</li>
 <li>Pull small results back with git or <code>rsync</code>; open PNGs on
 the node with Remote-SSH.</li>
 <li>If something is off: <strong>Ashley: Check everything
-(doctor)</strong>. Read the last lines; they name the step and the
-fix.</li>
+(doctor)</strong>. Its notification names the step; the details are in
+the Ashley output.</li>
 </ul>
 <h1 id="how-it-works">How it works</h1>
 <p>Ashley is three small things that agree on one file format.</p>
@@ -822,10 +847,6 @@ libsecret)</td>
 <td>VS Code user settings <code>ashley.*</code></td>
 <td>your AccessID and preferences</td>
 </tr>
-<tr>
-<td>WSL (Windows only, optional)</td>
-<td>the same key and block in the WSL home</td>
-</tr>
 </tbody>
 </table>
 <p>On the grid it writes <code>~/.ashley/</code> (scripts, tokens with
@@ -837,16 +858,26 @@ large files under
 key, run <strong>Ashley: Manage stored tokens</strong> to delete tokens,
 uninstall the extension; on the grid, <code>rm -rf ~/.ashley</code> and
 the block in <code>~/.bashrc</code>.</p>
+<h3 id="emulating-a-from-scratch-install">Emulating a from-scratch
+install</h3>
+<p><code>Ashley: Reset this laptop (emulate a fresh install)</code>
+forgets tokens, key and config block, settings, the Claude Code
+registration, and optionally Ashley on the grid
+(<code>ashley uninstall</code>, with <code>--purge-root</code> for the
+container). For a brand-new VS Code as well:</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode powershell"><code class="sourceCode powershell"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>code <span class="op">--</span>user-data-dir <span class="va">$env</span><span class="op">:</span><span class="va">TEMP</span>\fresh-vscode <span class="op">--</span>extensions-dir <span class="va">$env</span><span class="op">:</span><span class="va">TEMP</span>\fresh-ext</span></code></pre></div>
+<p>install Claude Code, Remote - SSH and the Ashley VSIX in that window,
+and run the wizard. Delete the two folders afterwards.</p>
 <h3 id="building-from-source">Building from source</h3>
 <p>Requirements: Node.js 22 (the packaging tool refuses older), Git.</p>
-<div class="sourceCode" id="cb2"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="fu">git</span> clone <span class="op">&lt;</span>this repository<span class="op">&gt;</span> ashley</span>
-<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="bu">cd</span> ashley/extension</span>
-<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="ex">npm</span> install</span>
-<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="ex">npm</span> run build          <span class="co"># bundles dist/extension.js, dist/mcp-server.js, dist/ashley-cli.js, copies ../grid into dist/grid</span></span>
-<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a><span class="ex">npm</span> run test:unit      <span class="co"># 22 tests: ssh config, protocol, slurm parsing, and the daemon with a fake claude</span></span>
-<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a><span class="ex">npm</span> run test:vscode    <span class="co"># downloads a VS Code build once, runs the integration suite</span></span>
-<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a><span class="ex">npm</span> run package        <span class="co"># writes ../dist/ashley-wsu-&lt;version&gt;.vsix</span></span>
-<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a><span class="ex">code</span> <span class="at">--install-extension</span> ../dist/ashley-wsu-1.0.0.vsix</span></code></pre></div>
+<div class="sourceCode" id="cb3"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="fu">git</span> clone <span class="op">&lt;</span>this repository<span class="op">&gt;</span> ashley</span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="bu">cd</span> ashley/extension</span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="ex">npm</span> install</span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="ex">npm</span> run build          <span class="co"># bundles dist/extension.js, dist/mcp-server.js, dist/ashley-cli.js, copies ../grid into dist/grid</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a><span class="ex">npm</span> run test:unit      <span class="co"># 22 tests: ssh config, protocol, slurm parsing, and the daemon with a fake claude</span></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a><span class="ex">npm</span> run test:vscode    <span class="co"># downloads a VS Code build once, runs the integration suite</span></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a><span class="ex">npm</span> run package        <span class="co"># writes ../dist/ashley-wsu-&lt;version&gt;.vsix</span></span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a><span class="ex">code</span> <span class="at">--install-extension</span> ../dist/ashley-wsu-1.0.0.vsix</span></code></pre></div>
 <p>On a Windows machine without Node on <code>PATH</code>, the portable
 build works: download <code>node-v22.x-win-x64.zip</code> from
 nodejs.org, unzip, and prefix <code>PATH</code> with that folder for the
@@ -859,10 +890,10 @@ commands above.</p>
 (macOS, Linux, Xcode users)</h3>
 <p><code>extension/dist/ashley-cli.js</code> is the wizard and the grid
 calls without VS Code:</p>
-<div class="sourceCode" id="cb3"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="ex">node</span> dist/ashley-cli.js setup            <span class="co"># the same nine steps, in the terminal</span></span>
-<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="ex">node</span> dist/ashley-cli.js doctor</span>
-<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="ex">node</span> dist/ashley-cli.js worker start <span class="at">--name</span> default <span class="at">--hours</span> 24</span>
-<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="ex">node</span> dist/ashley-cli.js ask <span class="at">--session</span> thesis <span class="st">&quot;read PREREG.md and list its hypotheses&quot;</span></span></code></pre></div>
+<div class="sourceCode" id="cb4"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="ex">node</span> dist/ashley-cli.js setup            <span class="co"># the same nine steps, in the terminal</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="ex">node</span> dist/ashley-cli.js doctor</span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a><span class="ex">node</span> dist/ashley-cli.js worker start <span class="at">--name</span> default <span class="at">--hours</span> 24</span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a><span class="ex">node</span> dist/ashley-cli.js ask <span class="at">--session</span> thesis <span class="st">&quot;read PREREG.md and list its hypotheses&quot;</span></span></code></pre></div>
 <p><code>cli/ashley</code> (bash) and <code>cli/ashley.ps1</code>
 forward any command to the grid over ssh and need only an ssh client and
 the config block (<code>node dist/ashley-cli.js ssh-config</code> prints
@@ -903,10 +934,23 @@ the grid’s own checks.</p>
 you edited the file</td>
 </tr>
 <tr>
-<td>Wizard step 4 loops on the password</td>
-<td>wrong password/code, or the account is not yet created</td>
-<td>try in a terminal:
-<code>ssh ab1234@warrior.grid.wayne.edu</code></td>
+<td>Step 4 rejects the password or code three times</td>
+<td>wrong password/code, an account not yet created, or Authenticator
+not set up</td>
+<td>check ondemand.grid.wayne.edu logs you in; then rerun the wizard. If
+the in-panel login cannot reach the grid at all, the wizard falls back
+to a terminal for the same two prompts</td>
+</tr>
+<tr>
+<td>Step 5: GitHub sign-in does not open a browser</td>
+<td>VS Code’s GitHub sign-in is disabled or blocked</td>
+<td>the panel shows a pasted-token field with the token page
+pre-filled</td>
+</tr>
+<tr>
+<td>Step 6/7: the panel does not notice the copied token</td>
+<td>clipboard access blocked, or the copy did not happen</td>
+<td>paste it into the field; the check is the same</td>
 </tr>
 <tr>
 <td><code>Permission denied (publickey...)</code> after step 4</td>
@@ -948,8 +992,16 @@ token</td>
 <td>Remote-SSH: <em>Connecting with SSH timed out</em></td>
 <td>the compute node’s sshd needs about 25 s per session; the first
 connection also downloads the server</td>
-<td>Ashley sets <code>remote.SSH.connectTimeout</code> to 60; raise it
-to 300 in Settings, connect again</td>
+<td>Ashley sets <code>remote.SSH.connectTimeout</code> to 300 when it
+opens a node; if you connect by hand, set it yourself in Settings and
+connect again</td>
+</tr>
+<tr>
+<td>Remote-SSH window: <em>You are connecting to an OS version that is
+unsupported by Visual Studio Code</em></td>
+<td>the grid is CentOS 7; VS Code’s FAQ says the banner and a dialog
+appear on every such connection even when the sysroot makes it work</td>
+<td>dismiss it, or <em>Don’t show again</em>; nothing else to do</td>
 </tr>
 <tr>
 <td>Remote-SSH: <em>glibc</em> or <em>exit code 207</em></td>

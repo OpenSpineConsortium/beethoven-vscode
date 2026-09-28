@@ -1,11 +1,14 @@
-// Settings, secrets and terminal environment: the VS Code side of WizardEnv.
+// Settings, secrets, terminal environment and the host services the wizard can use
+// (GitHub sign-in through VS Code, in-panel key installation): the VS Code side of WizardEnv.
 import * as vscode from 'vscode';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { SecretId, SERVICES, localEnvironment } from '../core/services';
-import { WizardEnv, WizardSettings } from '../core/wizard';
+import { WizardEnv, WizardSettings, WizardUI } from '../core/wizard';
+import { installPublicKey } from '../core/sshInstall';
 
 const SECRET_PREFIX = 'ashley.';
+export const GITHUB_SCOPES = ['repo', 'workflow', 'read:org', 'gist'];
 
 export class AshleyStore {
   constructor(private context: vscode.ExtensionContext) {}
@@ -22,7 +25,6 @@ export class AshleyStore {
       sshAlias: c.get<string>('sshAlias', 'wsu-grid'),
       nodeDomain: c.get<string>('nodeDomain', 'nas.grid.wayne.edu'),
       identityFile: c.get<string>('identityFile', '~/.ssh/id_ed25519_wsu'),
-      mirrorToWsl: c.get<boolean>('mirrorToWsl', true),
       gridRoot: c.get<string>('gridRoot', ''),
       gridScriptsDir: path.join(this.context.extensionPath, 'dist', 'grid'),
       claudeExecutable: findClaudeExecutable(),
@@ -52,8 +54,7 @@ export class AshleyStore {
   /**
    * Integrated terminals get GITHUB_TOKEN / HF_TOKEN and a few harmless variables.
    * ANTHROPIC_API_KEY is deliberately never injected: with it set, the local Claude Code
-   * would bill the key instead of the student's subscription. The Claude token for the grid
-   * only ever travels to the grid.
+   * would bill the key instead of the student's subscription.
    */
   async hydrateEnvironment(): Promise<string[]> {
     const col = this.context.environmentVariableCollection;
@@ -71,18 +72,26 @@ export class AshleyStore {
     if (this.config.get<boolean>('injectTokensIntoTerminals', true)) {
       for (const svc of SERVICES.filter((x) => x.injectLocally)) {
         const v = await this.getSecret(svc.id);
-        if (v) for (const name of svc.envVars) {
-          col.replace(name, v);
-          names.push(name);
-        }
+        if (v)
+          for (const name of svc.envVars) {
+            col.replace(name, v);
+            names.push(name);
+          }
       }
     }
     return names;
   }
 
-  wizardEnv(ui: WizardEnv['ui']): WizardEnv {
+  /** GitHub through VS Code's own sign-in: the browser opens, the token comes back by itself. */
+  async signInGitHub(): Promise<{ token: string; login?: string } | undefined> {
+    const session = await vscode.authentication.getSession('github', GITHUB_SCOPES, { createIfNone: true });
+    return session ? { token: session.accessToken, login: session.account?.label } : undefined;
+  }
+
+  wizardEnv(ui: WizardUI): WizardEnv {
+    const s = this.settings();
     return {
-      settings: this.settings(),
+      settings: s,
       saveSetting: (k, v) => this.saveSetting(k, v),
       getSecret: (id) => this.getSecret(id),
       setSecret: (id, v) => this.setSecret(id, v),
@@ -90,6 +99,16 @@ export class AshleyStore {
       onTokensChanged: async () => {
         await this.hydrateEnvironment();
       },
+      signInGitHub: () => this.signInGitHub(),
+      installKeyWithPassword: (pub) =>
+        installPublicKey({
+          host: s.loginHost,
+          username: s.accessId,
+          publicKey: pub,
+          password: () => ui.ask(`Your grid password for ${s.accessId} (used once, never stored)`, { password: true }),
+          prompt: (text, echo) => ui.ask(/verification|code|token/i.test(text) ? 'The six-digit code from Google Authenticator' : text, { password: !echo }),
+          log: (l) => ui.progress(l),
+        }),
     };
   }
 }

@@ -27,7 +27,14 @@ Everything else: [docs/manual.html](docs/manual.html) (also `docs/manual.pdf`, 2
 [docs/INSTALL.md](docs/INSTALL.md), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md),
 [docs/LIMITS.md](docs/LIMITS.md), [docs/PITCH.md](docs/PITCH.md), [docs/RESEARCH.md](docs/RESEARCH.md).
 
-## Status (2026-09-28)
+## Status (2026-09-28, second pass after the first student feedback)
+
+Windows-native only (no WSL mirror). GitHub arrives through VS Code's sign-in; Hugging Face and Claude tokens
+are picked up from the clipboard after one copy; the grid password and code are typed in the panel (ssh2),
+not a terminal; a setup panel with step states replaces the input boxes; `Ashley: Reset` emulates a fresh
+install; tokens the laptop's network cannot check are verified on the grid.
+
+### Earlier
 
 Tested end to end on Windows 11 + WSL against the grid: key install, SSH config (login node as
 jump host, `MACs +hmac-sha1`, `AddressFamily inet`), container build on a compute node

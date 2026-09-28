@@ -22,7 +22,6 @@ through ondemand.grid.wayne.edu, Interactive Apps, 2FA Setup (VPN required for O
 | `~/.ssh/config` | one block between `# >>> ashley` and `# <<< ashley` (a backup `config.ashley.bak` is kept) |
 | OS keychain (Windows Credential Manager / macOS Keychain / libsecret) | GitHub, Hugging Face, Claude tokens |
 | VS Code user settings `ashley.*` | your AccessID and preferences |
-| WSL (Windows only, optional) | the same key and block in the WSL home |
 
 On the grid it writes `~/.ashley/` (scripts, tokens with mode 600, workers, sessions), a block in
 `~/.bashrc`, and large files under `/rs/rs_grp_oschome/<AccessID>/ashley` or `~/ashley`.
@@ -30,6 +29,19 @@ On the grid it writes `~/.ashley/` (scripts, tokens with mode 600, workers, sess
 To undo: remove the block from `~/.ssh/config`, delete the key, run **Ashley: Manage stored tokens**
 to delete tokens, uninstall the extension; on the grid, `rm -rf ~/.ashley` and the block in
 `~/.bashrc`.
+
+## Emulating a from-scratch install
+
+`Ashley: Reset this laptop (emulate a fresh install)` forgets tokens, key and config block, settings, the
+Claude Code registration, and optionally Ashley on the grid (`ashley uninstall`, with `--purge-root` for the
+container). For a brand-new VS Code as well:
+
+```powershell
+code --user-data-dir $env:TEMP\fresh-vscode --extensions-dir $env:TEMP\fresh-ext
+```
+
+install Claude Code, Remote - SSH and the Ashley VSIX in that window, and run the wizard. Delete the two
+folders afterwards.
 
 ## Building from source
 

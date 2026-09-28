@@ -80,8 +80,13 @@ browsers = [r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe", r"C
             r"C:\Program Files\Google\Chrome\Application\chrome.exe", shutil.which("msedge") or "", shutil.which("google-chrome") or "", shutil.which("chromium") or ""]
 browser = next((b for b in browsers if b and os.path.exists(b)), None)
 if browser:
-    if os.path.exists(pdf):
-        os.remove(pdf)
+    try:
+        if os.path.exists(pdf):
+            os.remove(pdf)
+    except PermissionError:
+        # a viewer holds the file open; write beside it rather than fail the build
+        pdf = os.path.join(DOCS, "manual.new.pdf")
+        print("manual.pdf is open in a viewer; writing manual.new.pdf instead", file=sys.stderr)
     cmd = [browser, "--headless=new", "--disable-gpu", "--no-pdf-header-footer", f"--print-to-pdf={pdf}", "file:///" + html.replace("\\", "/")]
     print(" ".join(cmd))
     subprocess.run(cmd, check=False, timeout=180)

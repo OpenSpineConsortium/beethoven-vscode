@@ -22,11 +22,11 @@ const common = {
 
 const builds = [
   // The VS Code extension host entry point. 'vscode' is provided by the host.
-  { ...common, entryPoints: ['src/extension.ts'], outfile: 'dist/extension.js', external: ['vscode'] },
+  { ...common, entryPoints: ['src/extension.ts'], outfile: 'dist/extension.js', external: ['vscode', 'cpu-features', '*.node'] },
   // The MCP server Claude Code launches as a child process (plain Node, no vscode).
-  { ...common, entryPoints: ['src/mcp/server.ts'], outfile: 'dist/mcp-server.js', banner: { js: '#!/usr/bin/env node' } },
+  { ...common, entryPoints: ['src/mcp/server.ts'], outfile: 'dist/mcp-server.js', external: ['cpu-features', '*.node'], banner: { js: '#!/usr/bin/env node' } },
   // The local CLI (plain Node), used by Xcode / terminal users and by the tests.
-  { ...common, entryPoints: ['src/cli/main.ts'], outfile: 'dist/ashley-cli.js', banner: { js: '#!/usr/bin/env node' } },
+  { ...common, entryPoints: ['src/cli/main.ts'], outfile: 'dist/ashley-cli.js', external: ['cpu-features', '*.node'], banner: { js: '#!/usr/bin/env node' } },
 ];
 
 function listTests(dir) {
@@ -44,8 +44,8 @@ if (tests) {
   // are compiled one file per suite so @vscode/test-cli can pick them up.
   const unit = listTests('src').filter((p) => !p.includes('vscode-test'));
   const integ = listTests('src').filter((p) => p.includes('vscode-test'));
-  builds.push({ ...common, entryPoints: unit, outdir: 'dist-test/unit', external: ['vscode'], outbase: 'src' });
-  builds.push({ ...common, entryPoints: integ, outdir: 'dist-test/vscode', external: ['vscode', 'mocha'], outbase: 'src' });
+  builds.push({ ...common, entryPoints: unit, outdir: 'dist-test/unit', external: ['vscode', 'cpu-features', '*.node'], outbase: 'src' });
+  builds.push({ ...common, entryPoints: integ, outdir: 'dist-test/vscode', external: ['vscode', 'mocha', 'cpu-features', '*.node'], outbase: 'src' });
 }
 
 // The grid-side scripts ship inside the extension so the wizard can upload them. They are
