@@ -186,6 +186,16 @@ async function commandConnect(grid: GridApi, workerName?: string): Promise<void>
   }
   const folder = await vscode.window.showInputBox({ title: 'Folder to open on the grid', value: gridHome(s.accessId), prompt: 'Your grid home, or a project folder', ignoreFocusOut: true });
   if (!folder) return;
+  // Tell Remote-SSH the platform up front, so it never shows the "select platform" dialog,
+  // and give the jump through the login node time to settle.
+  const host = remoteUri(node, s.nodeDomain, '').replace('vscode-remote://ssh-remote+', '');
+  const sshCfg = vscode.workspace.getConfiguration('remote.SSH');
+  const platforms = { ...(sshCfg.get<Record<string, string>>('remotePlatform') ?? {}) };
+  if (platforms[host] !== 'linux') {
+    platforms[host] = 'linux';
+    await sshCfg.update('remotePlatform', platforms, vscode.ConfigurationTarget.Global);
+  }
+  if ((sshCfg.get<number>('connectTimeout') ?? 15) < 60) await sshCfg.update('connectTimeout', 60, vscode.ConfigurationTarget.Global);
   const uri = vscode.Uri.parse(remoteUri(node, s.nodeDomain, folder));
   output.appendLine(`opening ${uri.toString()}`);
   await vscode.commands.executeCommand('vscode.openFolder', uri, { forceNewWindow: true });

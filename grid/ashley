@@ -118,6 +118,12 @@ accounts_json() {
     printf '{"name":%s,"kind":"%s","enabled":%s,"cooldown_until":%s}' "$(json_str "$n")" "$kind" "$en" "$cd"
   done; printf ']'
 }
+secrets_json() { # names (never values) of the variables in secrets.env
+  local first=1; printf '['
+  if [ -s "$ASHLEY_HOME/secrets.env" ]; then
+    while IFS='=' read -r k _; do [[ "$k" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || continue; [ $first -eq 1 ] || printf ','; first=0; printf '"%s"' "$k"; done < "$ASHLEY_HOME/secrets.env"
+  fi; printf ']'
+}
 jobs_json() {
   local first=1; printf '['
   while IFS='|' read -r i j t n m l p r; do
@@ -137,7 +143,7 @@ cmd_status() {
     printf '{"version":%s,"host":%s,"ready":%s,"root":%s,"runtime":%s,"claude_version":%s,"bootstrap_job":%s,"bootstrap_state":%s,"home_used_gb":%s,"home_soft_gb":%s,"workers":[' \
       "$(json_str "$VERSION")" "$(json_str "$(hostname)")" "$ready" "$(json_str "$ROOT")" "$(json_str "$RUNTIME")" "$(json_str "$cv")" "$(json_str "$BOOTSTRAP_JOB")" "$(json_str "$bst")" "${used:-0}" "${soft:-0}"
     local first=1; for w in $(worker_dirs); do [ $first -eq 1 ] || printf ','; first=0; worker_json "$w"; done
-    printf '],"accounts":%s,"jobs":%s}\n' "$(accounts_json)" "$(jobs_json)"
+    printf '],"accounts":%s,"secrets":%s,"jobs":%s}\n' "$(accounts_json)" "$(secrets_json)" "$(jobs_json)"
   else
     echo "ashley $VERSION on $(hostname)  ready=$ready  claude=${cv:-?}  root=${ROOT:-?}"
     [ -n "$BOOTSTRAP_JOB" ] && echo "bootstrap job $BOOTSTRAP_JOB: ${bst:-finished}"

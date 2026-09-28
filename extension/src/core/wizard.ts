@@ -289,6 +289,15 @@ export const stepGridInstall: WizardStep = {
     if (r.code !== 0) return report(this.id, this.title, 'todo', 'not installed on the grid');
     try {
       const j = JSON.parse(r.stdout.trim().split('\n').pop() ?? '{}');
+      // the grid must hold every token the laptop holds: compare names, never values
+      const missing: string[] = [];
+      const gridSecrets: string[] = Array.isArray(j.secrets) ? j.secrets : [];
+      const gridAccounts: string[] = Array.isArray(j.accounts) ? j.accounts.map((a: { name: string }) => a.name) : [];
+      if ((await env.getSecret('github')) && !gridSecrets.includes('GITHUB_TOKEN')) missing.push('GitHub token');
+      if ((await env.getSecret('huggingface')) && !gridSecrets.includes('HF_TOKEN')) missing.push('Hugging Face token');
+      if ((await env.getSecret('claudeOauth')) && !gridAccounts.includes('default')) missing.push('Claude token');
+      if ((await env.getSecret('anthropicApiKey')) && !gridAccounts.includes('apikey')) missing.push('Anthropic API key');
+      if (missing.length) return report(this.id, this.title, 'todo', `grid is missing: ${missing.join(', ')}`);
       if (j.ready) return report(this.id, this.title, 'done', `ready (Claude Code ${j.claude_version ?? '?'}, scripts v${j.version ?? '?'})`);
       if (j.bootstrap_job) return report(this.id, this.title, 'todo', `bootstrap job ${j.bootstrap_job} is ${j.bootstrap_state ?? 'queued'}`);
       return report(this.id, this.title, 'todo', 'scripts present, container not built');
