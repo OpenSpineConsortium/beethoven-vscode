@@ -12,7 +12,7 @@ $A worker stop --name default >/dev/null 2>&1; sleep 2
 $A worker start --name default --container claude-node22 --partition secp --qos secondary --hours 6 || exit 1
 $A worker start --name peer --container claude-node22 --partition secp --qos secondary --hours 2 || exit 1
 for i in $(seq 1 30); do
-  st=$($A worker list --json | python3 -c 'import sys,json; ws=json.load(sys.stdin)["workers"]; print(" ".join(f"{w[\"name\"]}:{w[\"job_state\"]}:{w[\"alive\"]}:{w[\"node\"]}" for w in ws))')
+  st=$($A worker list --json | python3 -c 'import sys,json; ws=json.load(sys.stdin)["workers"]; print(" ".join("{}:{}:{}:{}".format(w["name"], w["job_state"], w["alive"], w["node"]) for w in ws))')
   echo "   $st"
   case "$st" in *"default:RUNNING:True"*"peer:RUNNING:True"*|*"peer:RUNNING:True"*"default:RUNNING:True"*) break;; esac
   sleep 10

@@ -56,7 +56,7 @@ lib_field() { # NAME FIELD -> value (string fields only; python-free)
   tr -d '\n' < "$(lib_file)" | grep -o "\"$name\": *{[^}]*}" | grep -o "\"$field\": *\"[^\"]*\"" | head -1 | sed 's/.*: *"\([^"]*\)"$/\1/'
 }
 lib_default() { tr -d '\n' < "$(lib_file)" | grep -o '"default": *"[^"]*"' | head -1 | sed 's/.*"\([^"]*\)"$/\1/'; }
-lib_names() { tr -d '\n' < "$(lib_file)" | grep -o '"containers": *{.*' | grep -o '"[A-Za-z0-9_.-]*": *{' | sed 's/"\([^"]*\)".*/\1/'; }
+lib_names() { tr -d '\n' < "$(lib_file)" | grep -o '"containers": *{.*' | grep -o '"[A-Za-z0-9_.-]*": *{' | sed 's/"\([^"]*\)".*/\1/' | grep -v '^containers$'; }
 cmd_library() {
   local sub="${1:-list}"; shift || true
   case "$sub" in

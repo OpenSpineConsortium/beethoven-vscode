@@ -18,9 +18,16 @@
   section, INSTALL "for leads", getting started step 9, LIMITS.
 - Access: `getent group oschome` = ab5188, go2432 only. Students must be added to `oschome` by the
   HPC admins (Greg requests with the AccessID); until then the wizard builds in their own space.
-- Test in flight when this was written: `docs/research/library_peer_test.sh` (adopt, restart
-  `default` on the shared container, start `peer`, send from inside default's allocation with
-  `srun --overlap` into peer's inbox, read peer's answer); log at `docs/research/library_peer_test.log`.
+- Tested 03:22 UTC: `ashley adopt` -> "adopted shared container 'claude-node22' (2.1.283); nothing
+  to build"; `default` (job 40486616) and `peer` (job 40486617) both RUNNING on asx1 with the shared
+  container (`W_SANDBOX=.../shared/ashley/containers/claude-node22` in their job scripts), heartbeats
+  alive, `claude_version 2.1.283`; a request written from inside default's allocation (`srun
+  --jobid --overlap`) into peer's inbox was answered by peer 3.4 s later (srun start-up included; the
+  answer is the expected "no enabled Claude account" until Greg's setup-token). Script:
+  `docs/research/library_peer_test.sh`, log `docs/research/library_peer_test.log`.
+- First publish attempt (job 40486583) failed at `npm install` with ENOENT on the shared path: the
+  container bound only the user's own CephFS dir. Fixed (a shared ROOT is bound explicitly);
+  job 40486610 published the entry. Greg's account now runs the shared container too (`source=shared`).
 - Future entries Greg named: a CUDA/torch container for GPU workers; an R/Bioconductor one; the
   image must run Node 22 (Debian 12 / Ubuntu 22.04+). Worker-to-worker messaging with live Claude
   needs the setup-token first.
