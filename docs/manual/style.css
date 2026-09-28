@@ -1,0 +1,25 @@
+:root { --fg: #1e1e1e; --muted: #555; --line: #d9ded9; --accent: #0b573c; --gold: #b8860b; --bg: #ffffff; }
+@media (prefers-color-scheme: dark) { :root { --fg: #e6e6e6; --muted: #b0b0b0; --line: #3a3f3a; --accent: #6fcf97; --gold: #e0b34a; --bg: #1b1f1c; } }
+html { background: var(--bg); }
+body { font-family: "Segoe UI", Helvetica, Arial, sans-serif; color: var(--fg); background: var(--bg); max-width: 860px; margin: 0 auto; padding: 24px 16px 80px; line-height: 1.5; font-size: 15.5px; }
+h1 { font-size: 30px; margin: 1.6em 0 0.4em; border-bottom: 2px solid var(--accent); padding-bottom: 6px; }
+h1:first-of-type { margin-top: 0.4em; }
+h2 { font-size: 22px; margin: 1.5em 0 0.4em; color: var(--accent); }
+h3 { font-size: 17px; margin: 1.2em 0 0.3em; }
+p, li { max-width: 72ch; }
+code, pre { font-family: Consolas, "SFMono-Regular", Menlo, monospace; font-size: 13.5px; }
+pre { background: rgba(127,127,127,0.08); border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; overflow-x: auto; }
+code { background: rgba(127,127,127,0.10); padding: 1px 4px; border-radius: 3px; }
+pre code { background: none; padding: 0; }
+table { border-collapse: collapse; margin: 0.8em 0 1.2em; width: 100%; font-size: 14px; }
+th, td { border: 1px solid var(--line); padding: 6px 8px; vertical-align: top; text-align: left; }
+th { background: rgba(127,127,127,0.08); }
+img, svg { max-width: 100%; height: auto; display: block; margin: 12px auto; }
+figure { margin: 1em 0; } figcaption { color: var(--muted); font-size: 13px; text-align: center; }
+blockquote { border-left: 3px solid var(--gold); margin: 1em 0; padding: 2px 14px; color: var(--muted); }
+nav#TOC { border: 1px solid var(--line); border-radius: 8px; padding: 10px 18px; background: rgba(127,127,127,0.05); }
+nav#TOC ul { margin: 4px 0; padding-left: 18px; }
+a { color: var(--accent); }
+.title { font-size: 34px; margin-bottom: 0; }
+.subtitle, .author, .date { color: var(--muted); margin: 2px 0; }
+@media print { body { max-width: none; font-size: 11.5pt; padding: 0; } h1 { page-break-before: always; } h1:first-of-type, header h1 { page-break-before: avoid; } pre, table, figure, img { page-break-inside: avoid; } nav#TOC { page-break-after: always; } a { color: inherit; text-decoration: none; } }

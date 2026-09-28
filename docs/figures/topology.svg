@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 420" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="14">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#333"/></marker>
+    <style>
+      .box{fill:#fff;stroke:#333;stroke-width:1.5;rx:8}
+      .zone{fill:#f3f6f4;stroke:#9aa;stroke-dasharray:6 4;rx:12}
+      .t{fill:#222}.s{fill:#555;font-size:12px}.h{font-weight:600;font-size:15px}
+      .line{stroke:#333;stroke-width:1.6;fill:none;marker-end:url(#a)}
+      .file{fill:#fff8e1;stroke:#b8860b;stroke-width:1.2;rx:4}
+    </style>
+  </defs>
+  <!-- zones -->
+  <rect class="zone" x="14" y="30" width="250" height="360"/>
+  <text x="26" y="52" class="h">Student laptop</text>
+  <rect class="zone" x="300" y="30" width="230" height="360"/>
+  <text x="312" y="52" class="h">warrior (login node)</text>
+  <text x="312" y="70" class="s">jump host only: sbatch, squeue, ls, cat</text>
+  <rect class="zone" x="566" y="30" width="400" height="360"/>
+  <text x="578" y="52" class="h">Compute node, your Slurm job</text>
+  <text x="578" y="70" class="s">internet, CPUs or a GPU, 24 h by default</text>
+
+  <!-- laptop boxes -->
+  <rect class="box" x="30" y="90" width="218" height="54"/>
+  <text x="40" y="112" class="t h">VS Code + Ashley</text>
+  <text x="40" y="132" class="s">wizard, tokens in the keychain, Ask</text>
+  <rect class="box" x="30" y="160" width="218" height="54"/>
+  <text x="40" y="182" class="t h">Claude Code (local)</text>
+  <text x="40" y="202" class="s">MCP bridge: ashley_ask, ashley_status ...</text>
+  <rect class="box" x="30" y="230" width="218" height="54"/>
+  <text x="40" y="252" class="t h">Remote-SSH</text>
+  <text x="40" y="272" class="s">Explorer, editor, images on the node</text>
+  <rect class="box" x="30" y="316" width="218" height="54"/>
+  <text x="40" y="338" class="t h">ssh key, one config block</text>
+  <text x="40" y="358" class="s">no password after the first login</text>
+
+  <!-- warrior -->
+  <rect class="box" x="318" y="130" width="194" height="60"/>
+  <text x="328" y="152" class="t h">~/.ashley/bin/ashley</text>
+  <text x="328" y="172" class="s">bash: status, worker, send, wait</text>
+  <rect class="file" x="318" y="215" width="194" height="110"/>
+  <text x="328" y="237" class="t h">shared home (Panasas)</text>
+  <text x="328" y="257" class="s">workers/default/inbox/ *.json</text>
+  <text x="328" y="275" class="s">workers/default/outbox/ *.json</text>
+  <text x="328" y="293" class="s">accounts/ (token, 600)  sessions/</text>
+  <text x="328" y="311" class="s">secrets.env (600)  READY  config.env</text>
+
+  <!-- compute -->
+  <rect class="box" x="584" y="100" width="364" height="230"/>
+  <text x="596" y="122" class="t h">apptainer exec node22-bookworm (glibc 2.36)</text>
+  <rect class="box" x="600" y="140" width="330" height="60"/>
+  <text x="612" y="162" class="t h">ashleyd.js</text>
+  <text x="612" y="182" class="s">polls inbox, claims, spawns Claude, writes outbox</text>
+  <rect class="box" x="600" y="215" width="330" height="60"/>
+  <text x="612" y="237" class="t h">claude -p ... --output-format stream-json</text>
+  <text x="612" y="257" class="s">your subscription token, --resume &lt;session&gt;, cwd = project</text>
+  <text x="600" y="300" class="s">reads and writes the same home; CephFS holds the container,</text>
+  <text x="600" y="316" class="s">npm prefix and workspaces</text>
+  <rect class="box" x="584" y="345" width="364" height="34"/>
+  <text x="596" y="367" class="s">VS Code server for Remote-SSH (C&amp;IT sysroot for glibc 2.17 hosts)</text>
+
+  <!-- arrows -->
+  <path class="line" d="M248 117 L318 150"/>
+  <path class="line" d="M248 187 L318 165"/>
+  <path class="line" d="M512 160 L512 215"/>
+  <path class="line" d="M512 270 L600 250"/>
+  <path class="line" d="M600 170 L512 250"/>
+  <path class="line" d="M248 257 C 400 257, 420 362, 584 362"/>
+  <text x="270" y="105" class="s">ssh</text>
+  <text x="270" y="300" class="s">ProxyJump</text>
+</svg>

@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 300" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="13">
+  <defs>
+    <marker id="c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#555"/></marker>
+    <style>
+      .st{fill:#fff;stroke:#333;stroke-width:1.4;rx:8}
+      .you{fill:#fff8e1;stroke:#b8860b;stroke-width:1.4;rx:8}
+      .n{font-weight:600;fill:#222}.s{fill:#555;font-size:11.5px}
+      .a{stroke:#555;stroke-width:1.3;fill:none;marker-end:url(#c)}
+      .legend{fill:#555;font-size:12px}
+    </style>
+  </defs>
+  <text x="20" y="26" font-size="15" font-weight="600" fill="#222">The wizard: nine steps, each skipped when already done</text>
+  <text x="20" y="46" class="legend">white = automatic; gold = you do one thing</text>
+  <g transform="translate(20,70)">
+    <rect class="you" x="0" y="0" width="150" height="70"/><text x="10" y="22" class="n">1 AccessID</text><text x="10" y="40" class="s">type ab1234</text>
+    <rect class="st" x="170" y="0" width="150" height="70"/><text x="180" y="22" class="n">2 SSH key</text><text x="180" y="40" class="s">ed25519, no passphrase</text>
+    <rect class="st" x="340" y="0" width="150" height="70"/><text x="350" y="22" class="n">3 SSH config</text><text x="350" y="40" class="s">jump host block,</text><text x="350" y="55" class="s">mirrored into WSL</text>
+    <rect class="you" x="510" y="0" width="150" height="70"/><text x="520" y="22" class="n">4 Install key</text><text x="520" y="40" class="s">password + code, once</text>
+    <rect class="you" x="680" y="0" width="130" height="70"/><text x="690" y="22" class="n">5 GitHub</text><text x="690" y="40" class="s">paste token</text>
+    <path class="a" d="M150 35 L170 35"/><path class="a" d="M320 35 L340 35"/><path class="a" d="M490 35 L510 35"/><path class="a" d="M660 35 L680 35"/>
+  </g>
+  <g transform="translate(20,170)">
+    <rect class="you" x="0" y="0" width="150" height="70"/><text x="10" y="22" class="n">6 Hugging Face</text><text x="10" y="40" class="s">paste token</text>
+    <rect class="you" x="170" y="0" width="170" height="70"/><text x="180" y="22" class="n">7 Claude token</text><text x="180" y="40" class="s">claude setup-token opens</text><text x="180" y="55" class="s">the browser; paste it</text>
+    <rect class="st" x="360" y="0" width="150" height="70"/><text x="370" y="22" class="n">8 API key</text><text x="370" y="40" class="s">optional overflow</text>
+    <rect class="st" x="530" y="0" width="280" height="70"/><text x="540" y="22" class="n">9 Grid install (a job)</text><text x="540" y="40" class="s">upload scripts, tokens to files (600), bashrc block,</text><text x="540" y="55" class="s">build the container: 5 to 15 minutes</text>
+    <path class="a" d="M150 35 L170 35"/><path class="a" d="M340 35 L360 35"/><path class="a" d="M510 35 L530 35"/>
+  </g>
+  <path class="a" d="M830 105 C 900 105, 900 205, 830 205"/>
+</svg>

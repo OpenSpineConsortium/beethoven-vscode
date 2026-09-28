@@ -1,0 +1,1018 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <meta name="dcterms.date" content="2026-09-27" />
+  <title>Ashley</title>
+  <style>
+
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+
+ul.task-list[class]{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+font-size: inherit;
+width: 0.8em;
+margin: 0 0.8em 0.2em -1.6em;
+vertical-align: middle;
+}
+.display.math{display: block; text-align: center; margin: 0.5rem auto;}
+
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+{ counter-reset: source-line 0; }
+pre.numberSource code > span
+{ position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+{ content: counter(source-line);
+position: relative; left: -1em; text-align: right; vertical-align: baseline;
+border: none; display: inline-block;
+-webkit-touch-callout: none; -webkit-user-select: none;
+-khtml-user-select: none; -moz-user-select: none;
+-ms-user-select: none; user-select: none;
+padding: 0 4px; width: 4em;
+color: #aaaaaa;
+}
+pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa; padding-left: 4px; }
+div.sourceCode
+{ }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+code span.al { color: #ff0000; font-weight: bold; } 
+code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.at { color: #7d9029; } 
+code span.bn { color: #40a070; } 
+code span.bu { color: #008000; } 
+code span.cf { color: #007020; font-weight: bold; } 
+code span.ch { color: #4070a0; } 
+code span.cn { color: #880000; } 
+code span.co { color: #60a0b0; font-style: italic; } 
+code span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.do { color: #ba2121; font-style: italic; } 
+code span.dt { color: #902000; } 
+code span.dv { color: #40a070; } 
+code span.er { color: #ff0000; font-weight: bold; } 
+code span.ex { } 
+code span.fl { color: #40a070; } 
+code span.fu { color: #06287e; } 
+code span.im { color: #008000; font-weight: bold; } 
+code span.in { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.kw { color: #007020; font-weight: bold; } 
+code span.op { color: #666666; } 
+code span.ot { color: #007020; } 
+code span.pp { color: #bc7a00; } 
+code span.sc { color: #4070a0; } 
+code span.ss { color: #bb6688; } 
+code span.st { color: #4070a0; } 
+code span.va { color: #19177c; } 
+code span.vs { color: #4070a0; } 
+code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } 
+</style>
+  <style type="text/css">:root { --fg: #1e1e1e; --muted: #555; --line: #d9ded9; --accent: #0b573c; --gold: #b8860b; --bg: #ffffff; }
+@media (prefers-color-scheme: dark) { :root { --fg: #e6e6e6; --muted: #b0b0b0; --line: #3a3f3a; --accent: #6fcf97; --gold: #e0b34a; --bg: #1b1f1c; } }
+html { background: var(--bg); }
+body { font-family: "Segoe UI", Helvetica, Arial, sans-serif; color: var(--fg); background: var(--bg); max-width: 860px; margin: 0 auto; padding: 24px 16px 80px; line-height: 1.5; font-size: 15.5px; }
+h1 { font-size: 30px; margin: 1.6em 0 0.4em; border-bottom: 2px solid var(--accent); padding-bottom: 6px; }
+h1:first-of-type { margin-top: 0.4em; }
+h2 { font-size: 22px; margin: 1.5em 0 0.4em; color: var(--accent); }
+h3 { font-size: 17px; margin: 1.2em 0 0.3em; }
+p, li { max-width: 72ch; }
+code, pre { font-family: Consolas, "SFMono-Regular", Menlo, monospace; font-size: 13.5px; }
+pre { background: rgba(127,127,127,0.08); border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; overflow-x: auto; }
+code { background: rgba(127,127,127,0.10); padding: 1px 4px; border-radius: 3px; }
+pre code { background: none; padding: 0; }
+table { border-collapse: collapse; margin: 0.8em 0 1.2em; width: 100%; font-size: 14px; }
+th, td { border: 1px solid var(--line); padding: 6px 8px; vertical-align: top; text-align: left; }
+th { background: rgba(127,127,127,0.08); }
+img, svg { max-width: 100%; height: auto; display: block; margin: 12px auto; }
+figure { margin: 1em 0; } figcaption { color: var(--muted); font-size: 13px; text-align: center; }
+blockquote { border-left: 3px solid var(--gold); margin: 1em 0; padding: 2px 14px; color: var(--muted); }
+nav#TOC { border: 1px solid var(--line); border-radius: 8px; padding: 10px 18px; background: rgba(127,127,127,0.05); }
+nav#TOC ul { margin: 4px 0; padding-left: 18px; }
+a { color: var(--accent); }
+.title { font-size: 34px; margin-bottom: 0; }
+.subtitle, .author, .date { color: var(--muted); margin: 2px 0; }
+@media print { body { max-width: none; font-size: 11.5pt; padding: 0; } h1 { page-break-before: always; } h1:first-of-type, header h1 { page-break-before: avoid; } pre, table, figure, img { page-break-inside: avoid; } nav#TOC { page-break-after: always; } a { color: inherit; text-decoration: none; } }
+</style>
+</head>
+<body>
+<header id="title-block-header">
+<h1 class="title">Ashley</h1>
+<p class="subtitle">The Wayne State grid and Claude Code, from one
+wizard. Manual, version 1.0.0</p>
+<p class="date">2026-09-27</p>
+</header>
+<nav id="TOC" role="doc-toc">
+<ul>
+<li><a href="#why" id="toc-why">Why</a></li>
+<li><a href="#getting-started-1" id="toc-getting-started-1">Getting
+started</a></li>
+<li><a href="#how-it-works" id="toc-how-it-works">How it works</a></li>
+<li><a href="#what-you-can-ask-and-what-you-cannot" id="toc-what-you-can-ask-and-what-you-cannot">What you can ask, and what
+you cannot</a></li>
+<li><a href="#installing-and-building" id="toc-installing-and-building">Installing and building</a></li>
+<li><a href="#troubleshooting" id="toc-troubleshooting">Troubleshooting</a></li>
+<li><a href="#appendix" id="toc-appendix">Appendix</a></li>
+</ul>
+</nav>
+<blockquote>
+<p>Ashley is a VS Code extension for medical students in
+OpenSpineConsortium projects. It sets up the laptop for the Wayne State
+HPC grid, keeps a Claude Code worker running there on the student’s own
+subscription, and lets the Claude Code extension on the laptop hand work
+to it. This manual is the pitch, the first hour, how it works, what you
+can and cannot ask, installation, and troubleshooting. The design notes
+and the research behind them are in the repository
+(<code>docs/ARCHITECTURE.md</code>, <code>docs/RESEARCH.md</code>).</p>
+</blockquote>
+<h1 id="why">Why</h1>
+<p><em>For Wayne State medical students joining an OpenSpineConsortium
+project.</em></p>
+<p>You know things no computer scientist on the grid knows. You know why
+a sacral slope of 9° is implausible, what a transitional vertebra does
+to a surgeon’s count, which patients get the second operation. What you
+may not have is the year it takes to turn that knowledge into a
+measurement, a job on 802 CT scans, a figure and a paragraph in a paper.
+Ashley is built to remove that year.</p>
+<h3 id="what-wayne-state-already-gave-you">What Wayne State already gave
+you</h3>
+<p>The university runs a grid with more than four hundred compute nodes,
+NVIDIA H200, L40S and A30 GPUs, hundreds of CPU cores you can hold at
+once, four terabytes of personal storage and twenty more on the lab’s
+shared volume, and an internet connection from every compute node. Every
+student with an AccessID may apply for an account. Almost none do,
+because the entry fee is a week of learning SSH, Slurm, containers and
+shell quoting, and one misstep runs your job on the login node and gets
+it killed.</p>
+<p>Ashley pays that fee for you. One wizard: your AccessID, one password
+and one Authenticator code, your GitHub and Hugging Face tokens, and a
+click in the browser that lets Claude work on the grid as you. From then
+on the grid never asks you for anything.</p>
+<h3 id="what-you-get">What you get</h3>
+<p><strong>A Claude that lives where the data is.</strong> Ashley starts
+a Slurm job, on a CPU node or one with a GPU, that runs Claude Code
+inside a container in your grid space, with your own subscription. You
+talk to it from the Claude Code panel in VS Code, or from a prompt box,
+or from a phone over ssh if you like. You say <em>“in my project folder,
+measure the bi-iliac width on the ten development cases and show me the
+numbers with units”</em> and it reads the manifest, writes the script,
+runs it, looks at the output, fixes what is wrong and answers. Close the
+laptop. It is still running.</p>
+<p><strong>A conversation that does not forget.</strong> Sessions are
+named. <em>“In session <code>thesis</code>, what did we decide about the
+exclusion list?”</em> works next week, from a different node.</p>
+<p><strong>Your files, in your editor.</strong> One command opens your
+grid home in VS Code on the compute node where your job runs: Explorer,
+editor, terminal, and a click on a PNG shows the figure. No X server, no
+copying files back and forth.</p>
+<p><strong>Two Claudes that work together.</strong> The Claude Code
+extension on your laptop gets a handful of tools for the grid. It can
+plan, and hand the heavy step to the grid worker, and bring the answer
+back into the panel. You can say <em>“check the grid, run the pelvic
+width demo on ten records, and tell me whether the sex difference
+matches the published value”</em> in one sentence.</p>
+<p><strong>Honesty about limits.</strong> When your subscription window
+is used up, the worker says so, tells you when it resets, and waits. It
+never uses anyone else’s account, never types a token on a command line,
+and never runs anything heavy on the login node.</p>
+<h3 id="what-becomes-possible">What becomes possible</h3>
+<ul>
+<li>A first-year student with an idea on Monday has ten measured cases
+by Tuesday and a pre-registered plan by Friday, because the parts that
+used to take a month (environment, data path, job script, first plot)
+now take an afternoon.</li>
+<li>A lead runs three projects at once: each has its own worker, its own
+sessions, its own journal written by the worker at the end of every
+task.</li>
+<li>A literature question becomes a scoping review pipeline: the worker
+searches PubMed and OpenAlex with your criteria, logs every inclusion
+and exclusion, and drafts the PRISMA table, overnight, on a node you are
+not paying for.</li>
+<li>A model that needs a GPU trains on an H200 while you are in clinic;
+the loss curve is a PNG in your grid folder when you come back.</li>
+</ul>
+<h3 id="what-it-asks-of-you">What it asks of you</h3>
+<p>Follow the recipe. Write the question before the number. Freeze the
+pre-registration. Let the worker run scripts and jobs, and read what it
+produced yourself: render the mask, check the spread against the
+literature, ask what could make a plausible number wrong. Ashley makes
+the machine easy; the judgement is still the point, and it is yours.</p>
+<h3 id="getting-started">Getting started</h3>
+<p>Install the extension, run <strong>Ashley: Set up my research
+environment</strong>, and start a worker. The manual walks through every
+step with screenshots of what you will see. Your lead can add you to a
+project card on the board the same week.</p>
+<h1 id="getting-started-1">Getting started</h1>
+<h3 id="before-you-open-vs-code">Before you open VS Code</h3>
+<ol type="1">
+<li><strong>A grid account.</strong> Apply with your AccessID at
+tech.wayne.edu/kb/high-performance-computing (“Grid account request”),
+naming your project’s lead as sponsor. Two business days.</li>
+<li><strong>Google Authenticator</strong> for the grid (not Microsoft
+Authenticator): connect to the WSU VPN, log in to
+ondemand.grid.wayne.edu, Interactive Apps, 2FA Setup, scan the QR
+code.</li>
+<li><strong>A Claude Pro or Max subscription</strong>, and the Claude
+Code extension signed in.</li>
+<li>GitHub and Hugging Face accounts.</li>
+</ol>
+<h3 id="install">Install</h3>
+<p>VS Code, then the extensions <strong>Claude Code</strong>,
+<strong>Remote - SSH</strong>, and <code>ashley-wsu-1.0.0.vsix</code>
+(Extensions view, <code>...</code>, <em>Install from VSIX</em>). Ashley
+offers to run its wizard on first start; or press Ctrl/Cmd+Shift+P and
+type <strong>Ashley: Set up my research environment</strong>.</p>
+<h3 id="the-wizard-step-by-step">The wizard, step by step</h3>
+<figure>
+<img role="img" aria-label="The nine wizard steps" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA5ODAgMzAwIiBmb250LWZhbWlseT0iU2Vnb2UgVUksIEhlbHZldGljYSwgQXJpYWwsIHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTMiPgogIDxkZWZzPgogICAgPG1hcmtlciBpZD0iYyIgdmlld0JveD0iMCAwIDEwIDEwIiByZWZYPSI5IiByZWZZPSI1IiBtYXJrZXJXaWR0aD0iNyIgbWFya2VySGVpZ2h0PSI3IiBvcmllbnQ9ImF1dG8iPjxwYXRoIGQ9Ik0wLDAgTDEwLDUgTDAsMTAgeiIgZmlsbD0iIzU1NSIvPjwvbWFya2VyPgogICAgPHN0eWxlPgogICAgICAuc3R7ZmlsbDojZmZmO3N0cm9rZTojMzMzO3N0cm9rZS13aWR0aDoxLjQ7cng6OH0KICAgICAgLnlvdXtmaWxsOiNmZmY4ZTE7c3Ryb2tlOiNiODg2MGI7c3Ryb2tlLXdpZHRoOjEuNDtyeDo4fQogICAgICAubntmb250LXdlaWdodDo2MDA7ZmlsbDojMjIyfS5ze2ZpbGw6IzU1NTtmb250LXNpemU6MTEuNXB4fQogICAgICAuYXtzdHJva2U6IzU1NTtzdHJva2Utd2lkdGg6MS4zO2ZpbGw6bm9uZTttYXJrZXItZW5kOnVybCgjYyl9CiAgICAgIC5sZWdlbmR7ZmlsbDojNTU1O2ZvbnQtc2l6ZToxMnB4fQogICAgPC9zdHlsZT4KICA8L2RlZnM+CiAgPHRleHQgeD0iMjAiIHk9IjI2IiBmb250LXNpemU9IjE1IiBmb250LXdlaWdodD0iNjAwIiBmaWxsPSIjMjIyIj5UaGUgd2l6YXJkOiBuaW5lIHN0ZXBzLCBlYWNoIHNraXBwZWQgd2hlbiBhbHJlYWR5IGRvbmU8L3RleHQ+CiAgPHRleHQgeD0iMjAiIHk9IjQ2IiBjbGFzcz0ibGVnZW5kIj53aGl0ZSA9IGF1dG9tYXRpYzsgZ29sZCA9IHlvdSBkbyBvbmUgdGhpbmc8L3RleHQ+CiAgPGcgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoMjAsNzApIj4KICAgIDxyZWN0IGNsYXNzPSJ5b3UiIHg9IjAiIHk9IjAiIHdpZHRoPSIxNTAiIGhlaWdodD0iNzAiLz48dGV4dCB4PSIxMCIgeT0iMjIiIGNsYXNzPSJuIj4xIEFjY2Vzc0lEPC90ZXh0Pjx0ZXh0IHg9IjEwIiB5PSI0MCIgY2xhc3M9InMiPnR5cGUgYWIxMjM0PC90ZXh0PgogICAgPHJlY3QgY2xhc3M9InN0IiB4PSIxNzAiIHk9IjAiIHdpZHRoPSIxNTAiIGhlaWdodD0iNzAiLz48dGV4dCB4PSIxODAiIHk9IjIyIiBjbGFzcz0ibiI+MiBTU0gga2V5PC90ZXh0Pjx0ZXh0IHg9IjE4MCIgeT0iNDAiIGNsYXNzPSJzIj5lZDI1NTE5LCBubyBwYXNzcGhyYXNlPC90ZXh0PgogICAgPHJlY3QgY2xhc3M9InN0IiB4PSIzNDAiIHk9IjAiIHdpZHRoPSIxNTAiIGhlaWdodD0iNzAiLz48dGV4dCB4PSIzNTAiIHk9IjIyIiBjbGFzcz0ibiI+MyBTU0ggY29uZmlnPC90ZXh0Pjx0ZXh0IHg9IjM1MCIgeT0iNDAiIGNsYXNzPSJzIj5qdW1wIGhvc3QgYmxvY2ssPC90ZXh0Pjx0ZXh0IHg9IjM1MCIgeT0iNTUiIGNsYXNzPSJzIj5taXJyb3JlZCBpbnRvIFdTTDwvdGV4dD4KICAgIDxyZWN0IGNsYXNzPSJ5b3UiIHg9IjUxMCIgeT0iMCIgd2lkdGg9IjE1MCIgaGVpZ2h0PSI3MCIvPjx0ZXh0IHg9IjUyMCIgeT0iMjIiIGNsYXNzPSJuIj40IEluc3RhbGwga2V5PC90ZXh0Pjx0ZXh0IHg9IjUyMCIgeT0iNDAiIGNsYXNzPSJzIj5wYXNzd29yZCArIGNvZGUsIG9uY2U8L3RleHQ+CiAgICA8cmVjdCBjbGFzcz0ieW91IiB4PSI2ODAiIHk9IjAiIHdpZHRoPSIxMzAiIGhlaWdodD0iNzAiLz48dGV4dCB4PSI2OTAiIHk9IjIyIiBjbGFzcz0ibiI+NSBHaXRIdWI8L3RleHQ+PHRleHQgeD0iNjkwIiB5PSI0MCIgY2xhc3M9InMiPnBhc3RlIHRva2VuPC90ZXh0PgogICAgPHBhdGggY2xhc3M9ImEiIGQ9Ik0xNTAgMzUgTDE3MCAzNSIvPjxwYXRoIGNsYXNzPSJhIiBkPSJNMzIwIDM1IEwzNDAgMzUiLz48cGF0aCBjbGFzcz0iYSIgZD0iTTQ5MCAzNSBMNTEwIDM1Ii8+PHBhdGggY2xhc3M9ImEiIGQ9Ik02NjAgMzUgTDY4MCAzNSIvPgogIDwvZz4KICA8ZyB0cmFuc2Zvcm09InRyYW5zbGF0ZSgyMCwxNzApIj4KICAgIDxyZWN0IGNsYXNzPSJ5b3UiIHg9IjAiIHk9IjAiIHdpZHRoPSIxNTAiIGhlaWdodD0iNzAiLz48dGV4dCB4PSIxMCIgeT0iMjIiIGNsYXNzPSJuIj42IEh1Z2dpbmcgRmFjZTwvdGV4dD48dGV4dCB4PSIxMCIgeT0iNDAiIGNsYXNzPSJzIj5wYXN0ZSB0b2tlbjwvdGV4dD4KICAgIDxyZWN0IGNsYXNzPSJ5b3UiIHg9IjE3MCIgeT0iMCIgd2lkdGg9IjE3MCIgaGVpZ2h0PSI3MCIvPjx0ZXh0IHg9IjE4MCIgeT0iMjIiIGNsYXNzPSJuIj43IENsYXVkZSB0b2tlbjwvdGV4dD48dGV4dCB4PSIxODAiIHk9IjQwIiBjbGFzcz0icyI+Y2xhdWRlIHNldHVwLXRva2VuIG9wZW5zPC90ZXh0Pjx0ZXh0IHg9IjE4MCIgeT0iNTUiIGNsYXNzPSJzIj50aGUgYnJvd3NlcjsgcGFzdGUgaXQ8L3RleHQ+CiAgICA8cmVjdCBjbGFzcz0ic3QiIHg9IjM2MCIgeT0iMCIgd2lkdGg9IjE1MCIgaGVpZ2h0PSI3MCIvPjx0ZXh0IHg9IjM3MCIgeT0iMjIiIGNsYXNzPSJuIj44IEFQSSBrZXk8L3RleHQ+PHRleHQgeD0iMzcwIiB5PSI0MCIgY2xhc3M9InMiPm9wdGlvbmFsIG92ZXJmbG93PC90ZXh0PgogICAgPHJlY3QgY2xhc3M9InN0IiB4PSI1MzAiIHk9IjAiIHdpZHRoPSIyODAiIGhlaWdodD0iNzAiLz48dGV4dCB4PSI1NDAiIHk9IjIyIiBjbGFzcz0ibiI+OSBHcmlkIGluc3RhbGwgKGEgam9iKTwvdGV4dD48dGV4dCB4PSI1NDAiIHk9IjQwIiBjbGFzcz0icyI+dXBsb2FkIHNjcmlwdHMsIHRva2VucyB0byBmaWxlcyAoNjAwKSwgYmFzaHJjIGJsb2NrLDwvdGV4dD48dGV4dCB4PSI1NDAiIHk9IjU1IiBjbGFzcz0icyI+YnVpbGQgdGhlIGNvbnRhaW5lcjogNSB0byAxNSBtaW51dGVzPC90ZXh0PgogICAgPHBhdGggY2xhc3M9ImEiIGQ9Ik0xNTAgMzUgTDE3MCAzNSIvPjxwYXRoIGNsYXNzPSJhIiBkPSJNMzQwIDM1IEwzNjAgMzUiLz48cGF0aCBjbGFzcz0iYSIgZD0iTTUxMCAzNSBMNTMwIDM1Ii8+CiAgPC9nPgogIDxwYXRoIGNsYXNzPSJhIiBkPSJNODMwIDEwNSBDIDkwMCAxMDUsIDkwMCAyMDUsIDgzMCAyMDUiLz4KPC9zdmc+Cg==" alt="The nine wizard steps" />
+<figcaption aria-hidden="true">The nine wizard steps</figcaption>
+</figure>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th>Step</th>
+<th>What you see</th>
+<th>What you do</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1 AccessID</td>
+<td>an input box</td>
+<td>type it (<code>ab1234</code>)</td>
+</tr>
+<tr>
+<td>2 SSH key</td>
+<td>nothing (a second)</td>
+<td>nothing</td>
+</tr>
+<tr>
+<td>3 SSH config</td>
+<td>nothing (a second)</td>
+<td>nothing</td>
+</tr>
+<tr>
+<td>4 Install key</td>
+<td>a terminal titled <em>Ashley: install key on the grid</em></td>
+<td>type your grid password, then the six-digit code. Once.</td>
+</tr>
+<tr>
+<td>5 GitHub</td>
+<td>a dialog, then the browser on the token page (scopes
+pre-filled)</td>
+<td>Generate token, copy it, paste into the input box</td>
+</tr>
+<tr>
+<td>6 Hugging Face</td>
+<td>same</td>
+<td>same</td>
+</tr>
+<tr>
+<td>7 Claude token</td>
+<td>a terminal running <code>claude setup-token</code>; the browser
+opens</td>
+<td>approve; copy the printed <code>sk-ant-oat...</code> token; paste
+it</td>
+</tr>
+<tr>
+<td>8 API key</td>
+<td>an input box</td>
+<td>leave empty (Enter) unless your lead gave you a key</td>
+</tr>
+<tr>
+<td>9 Grid install</td>
+<td>a progress note; then “bootstrap job N submitted”</td>
+<td>wait 5 to 15 minutes; the Ashley view turns to <em>Grid
+ready</em></td>
+</tr>
+</tbody>
+</table>
+<p>The wizard writes only: a key pair and one block in
+<code>~/.ssh/config</code> on the laptop; tokens in the OS keychain; on
+the grid <code>~/.ashley/</code>, a block in <code>~/.bashrc</code>, and
+a container in your storage. It can be rerun at any time; finished steps
+are skipped.</p>
+<h3 id="your-first-worker-and-your-first-question">Your first worker and
+your first question</h3>
+<ol type="1">
+<li><strong>Ashley: Start a Claude worker on the grid</strong>: name
+<code>default</code>, CPU node, 24 hours. A Slurm job is submitted. When
+it starts, the Ashley view shows
+<code>Worker default  &lt;node&gt; idle</code>.</li>
+<li><strong>Ashley: Ask the grid Claude</strong>: type <em>“Create a
+folder hello in my home with a README that says which node you are on
+and what Python version you have.”</em> The answer streams into an
+output channel; tool calls appear as italics.</li>
+<li><strong>Ashley: Open my grid files on a compute node</strong>: a new
+VS Code window opens on the node; you see <code>hello/README.md</code>
+in the Explorer.</li>
+</ol>
+<h3 id="talking-to-it-from-claude-code">Talking to it from Claude
+Code</h3>
+<p><strong>Ashley: Connect the Claude Code extension to the
+grid</strong> registers the bridge (once). Then, in the Claude Code
+panel: <em>“Check the grid status and tell me whether my worker is
+idle.”</em> The local Claude calls <code>ashley_status</code>. For work:
+<em>“Ask the grid Claude, in session <code>demo</code>, to run
+<code>examples/pelvic_width_dimorphism/measure_pelvic_width.py</code> on
+ten records and report the mean.”</em></p>
+<h3 id="every-day-after-that">Every day after that</h3>
+<ul>
+<li>Start a worker when you sit down (or keep one running for a day); it
+costs nothing.</li>
+<li>Name your sessions after the project; a session remembers its
+folder.</li>
+<li>Let the worker write scripts and Slurm job files; you read them; you
+say “submit”.</li>
+<li>Pull small results back with git or <code>rsync</code>; open PNGs on
+the node with Remote-SSH.</li>
+<li>If something is off: <strong>Ashley: Check everything
+(doctor)</strong>. Read the last lines; they name the step and the
+fix.</li>
+</ul>
+<h1 id="how-it-works">How it works</h1>
+<p>Ashley is three small things that agree on one file format.</p>
+<table>
+<colgroup>
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+</colgroup>
+<thead>
+<tr>
+<th>Piece</th>
+<th>Runs on</th>
+<th>Language</th>
+<th>Job</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>VS Code extension (<code>extension/</code>)</td>
+<td>the student’s laptop, inside VS Code</td>
+<td>TypeScript</td>
+<td>wizard, secrets, Remote-SSH, the Ashley view, “Ask”, MCP
+registration</td>
+</tr>
+<tr>
+<td>MCP server (<code>extension/dist/mcp-server.js</code>)</td>
+<td>the laptop, spawned by Claude Code</td>
+<td>TypeScript (bundled)</td>
+<td>gives the local Claude the <code>ashley_*</code> tools</td>
+</tr>
+<tr>
+<td>Grid CLI + daemon (<code>grid/</code>)</td>
+<td>the grid: <code>ashley</code> on the login node,
+<code>ashleyd.js</code> inside a container on a compute node</td>
+<td>bash, Node</td>
+<td>install, workers, the request queue, Claude Code itself</td>
+</tr>
+</tbody>
+</table>
+<p>Everything the laptop does on the grid is
+<code>ssh wsu-grid ~/.ashley/bin/ashley &lt;verb&gt;</code>. There is no
+port, no tunnel and no server on the laptop; nothing on the login node
+beyond <code>sbatch</code>, <code>squeue</code>, <code>cat</code>,
+<code>ls</code> and a half-second sleep loop.</p>
+<h3 id="topology">Topology</h3>
+<figure>
+<img role="img" aria-label="The three places and what runs in each; every laptop action is one ssh to the login node." src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA5ODAgNDIwIiBmb250LWZhbWlseT0iU2Vnb2UgVUksIEhlbHZldGljYSwgQXJpYWwsIHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTQiPgogIDxkZWZzPgogICAgPG1hcmtlciBpZD0iYSIgdmlld0JveD0iMCAwIDEwIDEwIiByZWZYPSI5IiByZWZZPSI1IiBtYXJrZXJXaWR0aD0iOCIgbWFya2VySGVpZ2h0PSI4IiBvcmllbnQ9ImF1dG8tc3RhcnQtcmV2ZXJzZSI+PHBhdGggZD0iTTAsMCBMMTAsNSBMMCwxMCB6IiBmaWxsPSIjMzMzIi8+PC9tYXJrZXI+CiAgICA8c3R5bGU+CiAgICAgIC5ib3h7ZmlsbDojZmZmO3N0cm9rZTojMzMzO3N0cm9rZS13aWR0aDoxLjU7cng6OH0KICAgICAgLnpvbmV7ZmlsbDojZjNmNmY0O3N0cm9rZTojOWFhO3N0cm9rZS1kYXNoYXJyYXk6NiA0O3J4OjEyfQogICAgICAudHtmaWxsOiMyMjJ9LnN7ZmlsbDojNTU1O2ZvbnQtc2l6ZToxMnB4fS5oe2ZvbnQtd2VpZ2h0OjYwMDtmb250LXNpemU6MTVweH0KICAgICAgLmxpbmV7c3Ryb2tlOiMzMzM7c3Ryb2tlLXdpZHRoOjEuNjtmaWxsOm5vbmU7bWFya2VyLWVuZDp1cmwoI2EpfQogICAgICAuZmlsZXtmaWxsOiNmZmY4ZTE7c3Ryb2tlOiNiODg2MGI7c3Ryb2tlLXdpZHRoOjEuMjtyeDo0fQogICAgPC9zdHlsZT4KICA8L2RlZnM+CiAgPCEtLSB6b25lcyAtLT4KICA8cmVjdCBjbGFzcz0iem9uZSIgeD0iMTQiIHk9IjMwIiB3aWR0aD0iMjUwIiBoZWlnaHQ9IjM2MCIvPgogIDx0ZXh0IHg9IjI2IiB5PSI1MiIgY2xhc3M9ImgiPlN0dWRlbnQgbGFwdG9wPC90ZXh0PgogIDxyZWN0IGNsYXNzPSJ6b25lIiB4PSIzMDAiIHk9IjMwIiB3aWR0aD0iMjMwIiBoZWlnaHQ9IjM2MCIvPgogIDx0ZXh0IHg9IjMxMiIgeT0iNTIiIGNsYXNzPSJoIj53YXJyaW9yIChsb2dpbiBub2RlKTwvdGV4dD4KICA8dGV4dCB4PSIzMTIiIHk9IjcwIiBjbGFzcz0icyI+anVtcCBob3N0IG9ubHk6IHNiYXRjaCwgc3F1ZXVlLCBscywgY2F0PC90ZXh0PgogIDxyZWN0IGNsYXNzPSJ6b25lIiB4PSI1NjYiIHk9IjMwIiB3aWR0aD0iNDAwIiBoZWlnaHQ9IjM2MCIvPgogIDx0ZXh0IHg9IjU3OCIgeT0iNTIiIGNsYXNzPSJoIj5Db21wdXRlIG5vZGUsIHlvdXIgU2x1cm0gam9iPC90ZXh0PgogIDx0ZXh0IHg9IjU3OCIgeT0iNzAiIGNsYXNzPSJzIj5pbnRlcm5ldCwgQ1BVcyBvciBhIEdQVSwgMjQgaCBieSBkZWZhdWx0PC90ZXh0PgoKICA8IS0tIGxhcHRvcCBib3hlcyAtLT4KICA8cmVjdCBjbGFzcz0iYm94IiB4PSIzMCIgeT0iOTAiIHdpZHRoPSIyMTgiIGhlaWdodD0iNTQiLz4KICA8dGV4dCB4PSI0MCIgeT0iMTEyIiBjbGFzcz0idCBoIj5WUyBDb2RlICsgQXNobGV5PC90ZXh0PgogIDx0ZXh0IHg9IjQwIiB5PSIxMzIiIGNsYXNzPSJzIj53aXphcmQsIHRva2VucyBpbiB0aGUga2V5Y2hhaW4sIEFzazwvdGV4dD4KICA8cmVjdCBjbGFzcz0iYm94IiB4PSIzMCIgeT0iMTYwIiB3aWR0aD0iMjE4IiBoZWlnaHQ9IjU0Ii8+CiAgPHRleHQgeD0iNDAiIHk9IjE4MiIgY2xhc3M9InQgaCI+Q2xhdWRlIENvZGUgKGxvY2FsKTwvdGV4dD4KICA8dGV4dCB4PSI0MCIgeT0iMjAyIiBjbGFzcz0icyI+TUNQIGJyaWRnZTogYXNobGV5X2FzaywgYXNobGV5X3N0YXR1cyAuLi48L3RleHQ+CiAgPHJlY3QgY2xhc3M9ImJveCIgeD0iMzAiIHk9IjIzMCIgd2lkdGg9IjIxOCIgaGVpZ2h0PSI1NCIvPgogIDx0ZXh0IHg9IjQwIiB5PSIyNTIiIGNsYXNzPSJ0IGgiPlJlbW90ZS1TU0g8L3RleHQ+CiAgPHRleHQgeD0iNDAiIHk9IjI3MiIgY2xhc3M9InMiPkV4cGxvcmVyLCBlZGl0b3IsIGltYWdlcyBvbiB0aGUgbm9kZTwvdGV4dD4KICA8cmVjdCBjbGFzcz0iYm94IiB4PSIzMCIgeT0iMzE2IiB3aWR0aD0iMjE4IiBoZWlnaHQ9IjU0Ii8+CiAgPHRleHQgeD0iNDAiIHk9IjMzOCIgY2xhc3M9InQgaCI+c3NoIGtleSwgb25lIGNvbmZpZyBibG9jazwvdGV4dD4KICA8dGV4dCB4PSI0MCIgeT0iMzU4IiBjbGFzcz0icyI+bm8gcGFzc3dvcmQgYWZ0ZXIgdGhlIGZpcnN0IGxvZ2luPC90ZXh0PgoKICA8IS0tIHdhcnJpb3IgLS0+CiAgPHJlY3QgY2xhc3M9ImJveCIgeD0iMzE4IiB5PSIxMzAiIHdpZHRoPSIxOTQiIGhlaWdodD0iNjAiLz4KICA8dGV4dCB4PSIzMjgiIHk9IjE1MiIgY2xhc3M9InQgaCI+fi8uYXNobGV5L2Jpbi9hc2hsZXk8L3RleHQ+CiAgPHRleHQgeD0iMzI4IiB5PSIxNzIiIGNsYXNzPSJzIj5iYXNoOiBzdGF0dXMsIHdvcmtlciwgc2VuZCwgd2FpdDwvdGV4dD4KICA8cmVjdCBjbGFzcz0iZmlsZSIgeD0iMzE4IiB5PSIyMTUiIHdpZHRoPSIxOTQiIGhlaWdodD0iMTEwIi8+CiAgPHRleHQgeD0iMzI4IiB5PSIyMzciIGNsYXNzPSJ0IGgiPnNoYXJlZCBob21lIChQYW5hc2FzKTwvdGV4dD4KICA8dGV4dCB4PSIzMjgiIHk9IjI1NyIgY2xhc3M9InMiPndvcmtlcnMvZGVmYXVsdC9pbmJveC8gKi5qc29uPC90ZXh0PgogIDx0ZXh0IHg9IjMyOCIgeT0iMjc1IiBjbGFzcz0icyI+d29ya2Vycy9kZWZhdWx0L291dGJveC8gKi5qc29uPC90ZXh0PgogIDx0ZXh0IHg9IjMyOCIgeT0iMjkzIiBjbGFzcz0icyI+YWNjb3VudHMvICh0b2tlbiwgNjAwKSAgc2Vzc2lvbnMvPC90ZXh0PgogIDx0ZXh0IHg9IjMyOCIgeT0iMzExIiBjbGFzcz0icyI+c2VjcmV0cy5lbnYgKDYwMCkgIFJFQURZICBjb25maWcuZW52PC90ZXh0PgoKICA8IS0tIGNvbXB1dGUgLS0+CiAgPHJlY3QgY2xhc3M9ImJveCIgeD0iNTg0IiB5PSIxMDAiIHdpZHRoPSIzNjQiIGhlaWdodD0iMjMwIi8+CiAgPHRleHQgeD0iNTk2IiB5PSIxMjIiIGNsYXNzPSJ0IGgiPmFwcHRhaW5lciBleGVjIG5vZGUyMi1ib29rd29ybSAoZ2xpYmMgMi4zNik8L3RleHQ+CiAgPHJlY3QgY2xhc3M9ImJveCIgeD0iNjAwIiB5PSIxNDAiIHdpZHRoPSIzMzAiIGhlaWdodD0iNjAiLz4KICA8dGV4dCB4PSI2MTIiIHk9IjE2MiIgY2xhc3M9InQgaCI+YXNobGV5ZC5qczwvdGV4dD4KICA8dGV4dCB4PSI2MTIiIHk9IjE4MiIgY2xhc3M9InMiPnBvbGxzIGluYm94LCBjbGFpbXMsIHNwYXducyBDbGF1ZGUsIHdyaXRlcyBvdXRib3g8L3RleHQ+CiAgPHJlY3QgY2xhc3M9ImJveCIgeD0iNjAwIiB5PSIyMTUiIHdpZHRoPSIzMzAiIGhlaWdodD0iNjAiLz4KICA8dGV4dCB4PSI2MTIiIHk9IjIzNyIgY2xhc3M9InQgaCI+Y2xhdWRlIC1wIC4uLiAtLW91dHB1dC1mb3JtYXQgc3RyZWFtLWpzb248L3RleHQ+CiAgPHRleHQgeD0iNjEyIiB5PSIyNTciIGNsYXNzPSJzIj55b3VyIHN1YnNjcmlwdGlvbiB0b2tlbiwgLS1yZXN1bWUgJmx0O3Nlc3Npb24mZ3Q7LCBjd2QgPSBwcm9qZWN0PC90ZXh0PgogIDx0ZXh0IHg9IjYwMCIgeT0iMzAwIiBjbGFzcz0icyI+cmVhZHMgYW5kIHdyaXRlcyB0aGUgc2FtZSBob21lOyBDZXBoRlMgaG9sZHMgdGhlIGNvbnRhaW5lciw8L3RleHQ+CiAgPHRleHQgeD0iNjAwIiB5PSIzMTYiIGNsYXNzPSJzIj5ucG0gcHJlZml4IGFuZCB3b3Jrc3BhY2VzPC90ZXh0PgogIDxyZWN0IGNsYXNzPSJib3giIHg9IjU4NCIgeT0iMzQ1IiB3aWR0aD0iMzY0IiBoZWlnaHQ9IjM0Ii8+CiAgPHRleHQgeD0iNTk2IiB5PSIzNjciIGNsYXNzPSJzIj5WUyBDb2RlIHNlcnZlciBmb3IgUmVtb3RlLVNTSCAoQyZhbXA7SVQgc3lzcm9vdCBmb3IgZ2xpYmMgMi4xNyBob3N0cyk8L3RleHQ+CgogIDwhLS0gYXJyb3dzIC0tPgogIDxwYXRoIGNsYXNzPSJsaW5lIiBkPSJNMjQ4IDExNyBMMzE4IDE1MCIvPgogIDxwYXRoIGNsYXNzPSJsaW5lIiBkPSJNMjQ4IDE4NyBMMzE4IDE2NSIvPgogIDxwYXRoIGNsYXNzPSJsaW5lIiBkPSJNNTEyIDE2MCBMNTEyIDIxNSIvPgogIDxwYXRoIGNsYXNzPSJsaW5lIiBkPSJNNTEyIDI3MCBMNjAwIDI1MCIvPgogIDxwYXRoIGNsYXNzPSJsaW5lIiBkPSJNNjAwIDE3MCBMNTEyIDI1MCIvPgogIDxwYXRoIGNsYXNzPSJsaW5lIiBkPSJNMjQ4IDI1NyBDIDQwMCAyNTcsIDQyMCAzNjIsIDU4NCAzNjIiLz4KICA8dGV4dCB4PSIyNzAiIHk9IjEwNSIgY2xhc3M9InMiPnNzaDwvdGV4dD4KICA8dGV4dCB4PSIyNzAiIHk9IjMwMCIgY2xhc3M9InMiPlByb3h5SnVtcDwvdGV4dD4KPC9zdmc+Cg==" alt="The three places and what runs in each; every laptop action is one ssh to the login node." />
+<figcaption aria-hidden="true">The three places and what runs in each;
+every laptop action is one ssh to the login node.</figcaption>
+</figure>
+<pre><code>laptop                       warrior (login node)                compute node (Slurm job)
+──────                       ────────────────────                ────────────────────────
+VS Code ─ Ashley ext ──ssh──▶ ~/.ashley/bin/ashley ──files──▶  apptainer exec node22-bookworm
+Claude Code ─ MCP ─┘          (bash: install, status,           └─ node ashleyd.js
+Remote-SSH ─────────ProxyJump──────────────────────────────────▶   └─ claude -p ... (2.1.283)
+                              sbatch / squeue                        watches  workers/&lt;w&gt;/inbox
+                                                                     writes   workers/&lt;w&gt;/outbox
+                              shared home: ~/.ashley/{accounts,sessions,workers}
+                              CephFS ROOT: containers/, npm/, workspaces/</code></pre>
+<p>The login node is a jump host. VS Code Remote-SSH connects to
+<code>voh3.nas.grid.wayne.edu</code> (any node where the student holds a
+job) through <code>ProxyJump wsu-grid</code>; C&amp;IT forbids the VS
+Code server on <code>warrior</code> and kills it there. Compute nodes
+have internet, so Claude Code, <code>npm</code>, Hugging Face and Zenodo
+all work from inside the job.</p>
+<h3 id="the-request-queue">The request queue</h3>
+<figure>
+<img role="img" aria-label="One request, from the laptop’s ssh to the RESULT line." src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA5ODAgMzYwIiBmb250LWZhbWlseT0iU2Vnb2UgVUksIEhlbHZldGljYSwgQXJpYWwsIHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTMiPgogIDxkZWZzPgogICAgPG1hcmtlciBpZD0iYiIgdmlld0JveD0iMCAwIDEwIDEwIiByZWZYPSI5IiByZWZZPSI1IiBtYXJrZXJXaWR0aD0iOCIgbWFya2VySGVpZ2h0PSI4IiBvcmllbnQ9ImF1dG8iPjxwYXRoIGQ9Ik0wLDAgTDEwLDUgTDAsMTAgeiIgZmlsbD0iIzMzMyIvPjwvbWFya2VyPgogICAgPHN0eWxlPgogICAgICAubGFuZXtzdHJva2U6I2JiYjtzdHJva2Utd2lkdGg6MX0KICAgICAgLmh7Zm9udC13ZWlnaHQ6NjAwO2ZvbnQtc2l6ZToxNHB4O2ZpbGw6IzIyMn0KICAgICAgLm17c3Ryb2tlOiMzMzM7c3Ryb2tlLXdpZHRoOjEuNTtmaWxsOm5vbmU7bWFya2VyLWVuZDp1cmwoI2IpfQogICAgICAuZHtzdHJva2U6IzMzMztzdHJva2Utd2lkdGg6MS41O2ZpbGw6bm9uZTtzdHJva2UtZGFzaGFycmF5OjUgNDttYXJrZXItZW5kOnVybCgjYil9CiAgICAgIC5se2ZpbGw6IzMzM30uc3tmaWxsOiM2NjY7Zm9udC1zaXplOjExLjVweH0KICAgICAgLmZ7ZmlsbDojZmZmOGUxO3N0cm9rZTojYjg4NjBiO3N0cm9rZS13aWR0aDoxO3J4OjN9CiAgICA8L3N0eWxlPgogIDwvZGVmcz4KICA8Zz4KICAgIDx0ZXh0IHg9IjYwIiB5PSIyNCIgY2xhc3M9ImgiIHRleHQtYW5jaG9yPSJtaWRkbGUiPmxhcHRvcDwvdGV4dD4KICAgIDx0ZXh0IHg9IjMzMCIgeT0iMjQiIGNsYXNzPSJoIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5sb2dpbiBub2RlPC90ZXh0PgogICAgPHRleHQgeD0iNjIwIiB5PSIyNCIgY2xhc3M9ImgiIHRleHQtYW5jaG9yPSJtaWRkbGUiPmFzaGxleWQgKGNvbXB1dGUgbm9kZSk8L3RleHQ+CiAgICA8dGV4dCB4PSI4ODAiIHk9IjI0IiBjbGFzcz0iaCIgdGV4dC1hbmNob3I9Im1pZGRsZSI+Y2xhdWRlIC1wPC90ZXh0PgogICAgPGxpbmUgY2xhc3M9ImxhbmUiIHgxPSI2MCIgeTE9IjM0IiB4Mj0iNjAiIHkyPSIzNDAiLz4KICAgIDxsaW5lIGNsYXNzPSJsYW5lIiB4MT0iMzMwIiB5MT0iMzQiIHgyPSIzMzAiIHkyPSIzNDAiLz4KICAgIDxsaW5lIGNsYXNzPSJsYW5lIiB4MT0iNjIwIiB5MT0iMzQiIHgyPSI2MjAiIHkyPSIzNDAiLz4KICAgIDxsaW5lIGNsYXNzPSJsYW5lIiB4MT0iODgwIiB5MT0iMzQiIHgyPSI4ODAiIHkyPSIzNDAiLz4KICA8L2c+CiAgPHBhdGggY2xhc3M9Im0iIGQ9Ik02MCA2MCBMMzMwIDYwIi8+CiAgPHRleHQgeD0iNzAiIHk9IjU0IiBjbGFzcz0ibCI+c3NoIHdzdS1ncmlkIGFzaGxleSBhc2sgKHJlcXVlc3QgSlNPTiBvbiBzdGRpbik8L3RleHQ+CiAgPHJlY3QgY2xhc3M9ImYiIHg9IjMzNiIgeT0iNzIiIHdpZHRoPSIyMDAiIGhlaWdodD0iMjAiLz4KICA8dGV4dCB4PSIzNDIiIHk9Ijg2IiBjbGFzcz0icyI+aW5ib3gvJmx0O2lkJmd0Oy5qc29uICgucGFydCwgdGhlbiByZW5hbWUpPC90ZXh0PgogIDxwYXRoIGNsYXNzPSJkIiBkPSJNMzMwIDExMCBMNjIwIDExMCIvPgogIDx0ZXh0IHg9IjM0MCIgeT0iMTA0IiBjbGFzcz0ibCI+cG9sbCAoMSBzKSwgcmVuYW1lIHRvIC5jbGFpbWVkPC90ZXh0PgogIDxwYXRoIGNsYXNzPSJtIiBkPSJNNjIwIDE0MCBMODgwIDE0MCIvPgogIDx0ZXh0IHg9IjYzMCIgeT0iMTM0IiBjbGFzcz0ibCI+c3Bhd24gd2l0aCBDTEFVREVfQ09ORklHX0RJUj1hY2NvdW50cy8mbHQ7YSZndDssIC0tcmVzdW1lIG9yIC0tc2Vzc2lvbi1pZDwvdGV4dD4KICA8cGF0aCBjbGFzcz0ibSIgZD0iTTg4MCAxNzAgTDYyMCAxNzAiLz4KICA8dGV4dCB4PSI2MzAiIHk9IjE2NCIgY2xhc3M9ImwiPnN0cmVhbS1qc29uIGxpbmVzIChpbml0LCBhc3Npc3RhbnQsIHRvb2xfdXNlLCByZXN1bHQpPC90ZXh0PgogIDxyZWN0IGNsYXNzPSJmIiB4PSIzMzYiIHk9IjE4MiIgd2lkdGg9IjIzMCIgaGVpZ2h0PSIyMCIvPgogIDx0ZXh0IHg9IjM0MiIgeT0iMTk2IiBjbGFzcz0icyI+b3V0Ym94LyZsdDtpZCZndDsuZXZlbnRzLmpzb25sIChhcHBlbmRlZCBsaXZlKTwvdGV4dD4KICA8cGF0aCBjbGFzcz0iZCIgZD0iTTMzMCAyMjIgTDYwIDIyMiIvPgogIDx0ZXh0IHg9IjcwIiB5PSIyMTYiIGNsYXNzPSJsIj5FVkVOVCBsaW5lcyBvdmVyIHRoZSBzYW1lIHNzaCAoYXNobGV5IHdhaXQgLS1zdHJlYW0pPC90ZXh0PgogIDxwYXRoIGNsYXNzPSJtIiBkPSJNODgwIDI1MiBMNjIwIDI1MiIvPgogIDx0ZXh0IHg9IjYzMCIgeT0iMjQ2IiBjbGFzcz0ibCI+ZXhpdDsgcmVzdWx0IGV2ZW50IGhhcyBpc19lcnJvciwgc2Vzc2lvbl9pZCwgY29zdCwgdHVybnM8L3RleHQ+CiAgPHJlY3QgY2xhc3M9ImYiIHg9IjMzNiIgeT0iMjY0IiB3aWR0aD0iMjMwIiBoZWlnaHQ9IjIwIi8+CiAgPHRleHQgeD0iMzQyIiB5PSIyNzgiIGNsYXNzPSJzIj5vdXRib3gvJmx0O2lkJmd0Oy5qc29uICArICBzZXNzaW9ucy8mbHQ7bmFtZSZndDsuanNvbjwvdGV4dD4KICA8cGF0aCBjbGFzcz0ibSIgZD0iTTMzMCAzMDYgTDYwIDMwNiIvPgogIDx0ZXh0IHg9IjcwIiB5PSIzMDAiIGNsYXNzPSJsIj5SRVNVTFQge3N0YXR1cywgcmVzdWx0LCBhY2NvdW50LCByZXRyeV9hZnRlcj99PC90ZXh0PgogIDx0ZXh0IHg9IjYwIiB5PSIzMzYiIGNsYXNzPSJzIj4yIHMgc3NoICsgJmx0Oz0xIHMgcG9sbCArIH41IHMgQ2xhdWRlIHN0YXJ0LCB0aGVuIHRoZSB0YXNrIGl0c2VsZjwvdGV4dD4KPC9zdmc+Cg==" alt="One request, from the laptop’s ssh to the RESULT line." />
+<figcaption aria-hidden="true">One request, from the laptop’s ssh to the
+RESULT line.</figcaption>
+</figure>
+<p>A request is a JSON file. Its life:</p>
+<ol type="1">
+<li>The laptop writes
+<code>~/.ashley/workers/&lt;w&gt;/inbox/&lt;id&gt;.json</code> through
+<code>ashley send</code> (stdin, <code>.part</code> then rename, so the
+daemon never reads a half-written file).</li>
+<li><code>ashleyd.js</code> polls the inbox every second, claims the
+file by renaming it to <code>&lt;id&gt;.json.claimed</code> (an atomic
+operation on the shared filesystem; two daemons cannot both win).</li>
+<li>It picks a credential (below), resolves the session, and spawns
+<code>claude -p &lt;prompt&gt; --output-format stream-json --verbose --permission-mode &lt;mode&gt; --max-turns N [--resume &lt;sid&gt; | --session-id &lt;uuid&gt;]</code>
+in the session’s working directory, with
+<code>CLAUDE_CONFIG_DIR=~/.ashley/accounts/&lt;account&gt;</code>.</li>
+<li>Every stream-json line is appended to
+<code>outbox/&lt;id&gt;.events.jsonl</code> as it arrives.
+<code>ashley wait --stream</code> tails that file to the laptop as
+<code>EVENT {…}</code> lines, so VS Code shows tool calls live.</li>
+<li>On exit, the daemon writes <code>outbox/&lt;id&gt;.json</code>
+(<code>.part</code> then rename): status, result text, session id,
+account, cost, turns, duration, node, job. <code>ashley wait</code>
+prints it as <code>RESULT {…}</code>.</li>
+</ol>
+<p>Latency is one ssh connection plus at most one poll interval plus
+Claude Code’s own start-up (about 5 s cold on the grid). A queued
+request survives a daemon restart, a requeued job or a closed laptop:
+the daemon moves any <code>.claimed</code> file back to the inbox when
+it starts.</p>
+<p>Why not a socket or a TCP port: the laptop can only reach the login
+node; the daemon runs on whichever node Slurm chose; the shared home is
+the one thing both see. Files are also what a student can debug with
+<code>ls</code> and <code>cat</code>.</p>
+<h3 id="sessions">Sessions</h3>
+<p><code>~/.ashley/sessions/&lt;name&gt;.json</code> maps a name the
+student chose (“thesis”, “figure-2”) to a Claude Code session id, the
+working directory it is bound to and the account that owns it. The first
+turn of a session passes <code>--session-id &lt;uuid&gt;</code> so the
+id is known even if the run dies; later turns pass
+<code>--resume &lt;uuid&gt;</code>. Claude Code keeps the transcript
+under
+<code>&lt;CLAUDE_CONFIG_DIR&gt;/projects/&lt;encoded cwd&gt;/&lt;uuid&gt;.jsonl</code>,
+which is why a session stays bound to its directory.</p>
+<h3 id="credentials">Credentials</h3>
+<figure>
+<img role="img" aria-label="Rotation among a student’s own credentials; a limit becomes a cooldown, not a failure." src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA5ODAgMzAwIiBmb250LWZhbWlseT0iU2Vnb2UgVUksIEhlbHZldGljYSwgQXJpYWwsIHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTMiPgogIDxkZWZzPgogICAgPG1hcmtlciBpZD0iZCIgdmlld0JveD0iMCAwIDEwIDEwIiByZWZYPSI5IiByZWZZPSI1IiBtYXJrZXJXaWR0aD0iNyIgbWFya2VySGVpZ2h0PSI3IiBvcmllbnQ9ImF1dG8iPjxwYXRoIGQ9Ik0wLDAgTDEwLDUgTDAsMTAgeiIgZmlsbD0iIzMzMyIvPjwvbWFya2VyPgogICAgPHN0eWxlPgogICAgICAuYntmaWxsOiNmZmY7c3Ryb2tlOiMzMzM7c3Ryb2tlLXdpZHRoOjEuNDtyeDo4fQogICAgICAud3tmaWxsOiNmZGVjZWE7c3Ryb2tlOiNiNzFjMWM7c3Ryb2tlLXdpZHRoOjEuNDtyeDo4fQogICAgICAuZ3tmaWxsOiNlOGY1ZTk7c3Ryb2tlOiMyZTdkMzI7c3Ryb2tlLXdpZHRoOjEuNDtyeDo4fQogICAgICAubntmb250LXdlaWdodDo2MDA7ZmlsbDojMjIyfS5ze2ZpbGw6IzU1NTtmb250LXNpemU6MTEuNXB4fQogICAgICAuYXtzdHJva2U6IzMzMztzdHJva2Utd2lkdGg6MS4zO2ZpbGw6bm9uZTttYXJrZXItZW5kOnVybCgjZCl9CiAgICA8L3N0eWxlPgogIDwvZGVmcz4KICA8dGV4dCB4PSIyMCIgeT0iMjYiIGZvbnQtc2l6ZT0iMTUiIGZvbnQtd2VpZ2h0PSI2MDAiIGZpbGw9IiMyMjIiPldoZW4gYSBjcmVkZW50aWFsIHJ1bnMgb3V0OiB5b3VyIG93biBhY2NvdW50cyBvbmx5PC90ZXh0PgogIDxyZWN0IGNsYXNzPSJiIiB4PSIyMCIgeT0iNjAiIHdpZHRoPSIyMDAiIGhlaWdodD0iNjQiLz48dGV4dCB4PSIzMCIgeT0iODIiIGNsYXNzPSJuIj5yZXF1ZXN0IGFycml2ZXM8L3RleHQ+PHRleHQgeD0iMzAiIHk9IjEwMCIgY2xhc3M9InMiPnBpY2sgZmlyc3QgZW5hYmxlZCBhY2NvdW50PC90ZXh0Pjx0ZXh0IHg9IjMwIiB5PSIxMTQiIGNsYXNzPSJzIj5ub3Qgb24gY29vbGRvd24sIG5vdCBleGNsdWRlZDwvdGV4dD4KICA8cmVjdCBjbGFzcz0iZyIgeD0iMjYwIiB5PSI2MCIgd2lkdGg9IjIwMCIgaGVpZ2h0PSI2NCIvPjx0ZXh0IHg9IjI3MCIgeT0iODIiIGNsYXNzPSJuIj5hY2NvdW50cy9kZWZhdWx0PC90ZXh0Pjx0ZXh0IHg9IjI3MCIgeT0iMTAwIiBjbGFzcz0icyI+c3Vic2NyaXB0aW9uIHRva2VuIChzZXR1cC10b2tlbik8L3RleHQ+PHRleHQgeD0iMjcwIiB5PSIxMTQiIGNsYXNzPSJzIj50cmllZCBmaXJzdDwvdGV4dD4KICA8cmVjdCBjbGFzcz0idyIgeD0iMjYwIiB5PSIxNzAiIHdpZHRoPSIyMDAiIGhlaWdodD0iNjQiLz48dGV4dCB4PSIyNzAiIHk9IjE5MiIgY2xhc3M9Im4iPnJlc3VsdCBzYXlzIGxpbWl0IGhpdDwvdGV4dD48dGV4dCB4PSIyNzAiIHk9IjIxMCIgY2xhc3M9InMiPiJoaXQgeW91ciBsaW1pdCIsIDQyOSwgcmF0ZV9saW1pdDwvdGV4dD48dGV4dCB4PSIyNzAiIHk9IjIyNCIgY2xhc3M9InMiPmNvb2xkb3duX3VudGlsID0gcmVzZXQgdGltZSBvciArNjAgbWluPC90ZXh0PgogIDxyZWN0IGNsYXNzPSJnIiB4PSI1MjAiIHk9IjYwIiB3aWR0aD0iMjAwIiBoZWlnaHQ9IjY0Ii8+PHRleHQgeD0iNTMwIiB5PSI4MiIgY2xhc3M9Im4iPmFjY291bnRzL2FwaWtleTwvdGV4dD48dGV4dCB4PSI1MzAiIHk9IjEwMCIgY2xhc3M9InMiPnlvdXIgb3duIEFQSSBrZXksIHNwZW5kIGNhcDwvdGV4dD48dGV4dCB4PSI1MzAiIHk9IjExNCIgY2xhc3M9InMiPnRyaWVkIG9ubHkgYWZ0ZXIgc3Vic2NyaXB0aW9uczwvdGV4dD4KICA8cmVjdCBjbGFzcz0iYiIgeD0iNzYwIiB5PSI2MCIgd2lkdGg9IjIwMCIgaGVpZ2h0PSI2NCIvPjx0ZXh0IHg9Ijc3MCIgeT0iODIiIGNsYXNzPSJuIj5hbnN3ZXIgd3JpdHRlbjwvdGV4dD48dGV4dCB4PSI3NzAiIHk9IjEwMCIgY2xhc3M9InMiPnN0YXR1cyBvaywgYWNjb3VudCBuYW1lZDwvdGV4dD4KICA8cmVjdCBjbGFzcz0idyIgeD0iNTIwIiB5PSIxNzAiIHdpZHRoPSI0NDAiIGhlaWdodD0iNjQiLz48dGV4dCB4PSI1MzAiIHk9IjE5MiIgY2xhc3M9Im4iPmV2ZXJ5IGFjY291bnQgY29vbGluZzwvdGV4dD48dGV4dCB4PSI1MzAiIHk9IjIxMCIgY2xhc3M9InMiPnN0YXR1cyByYXRlX2xpbWl0ZWQsIHJldHJ5X2FmdGVyID0gc29vbmVzdCByZXNldDsgd29ya2VyIGhlYXJ0YmVhdCA9IGJsb2NrZWQ8L3RleHQ+PHRleHQgeD0iNTMwIiB5PSIyMjQiIGNsYXNzPSJzIj50aGUgbGFwdG9wIHNob3dzICJyZXNldHMgYXQgLi4uIiBhbmQgdGhlIHJlcXVlc3Qgc3RheXMgYW5zd2VyYWJsZSBsYXRlcjwvdGV4dD4KICA8cGF0aCBjbGFzcz0iYSIgZD0iTTIyMCA5MiBMMjYwIDkyIi8+CiAgPHBhdGggY2xhc3M9ImEiIGQ9Ik0zNjAgMTI0IEwzNjAgMTcwIi8+CiAgPHBhdGggY2xhc3M9ImEiIGQ9Ik00NjAgOTIgTDc2MCA5MiIvPgogIDxwYXRoIGNsYXNzPSJhIiBkPSJNNDYwIDIwMiBMNTIwIDIwMiIvPgogIDxwYXRoIGNsYXNzPSJhIiBkPSJNNDYwIDE5MCBDIDQ5MCAxNTAsIDUwMCAxMjAsIDUyMCAxMDAiLz4KICA8dGV4dCB4PSI0NzAiIHk9IjE1MCIgY2xhc3M9InMiPnJlLXF1ZXVlPC90ZXh0PgogIDxwYXRoIGNsYXNzPSJhIiBkPSJNNzIwIDkyIEw3NjAgOTIiLz4KICA8dGV4dCB4PSIyMCIgeT0iMjc1IiBjbGFzcz0icyI+TmV2ZXIgYW5vdGhlciBzdHVkZW50J3MgYWNjb3VudDogdGhlIENvbnN1bWVyIFRlcm1zIGJpbmQgYW4gYWNjb3VudCB0byB0aGUgcGVyc29uIHdobyBob2xkcyBpdC4gT25lIHdvcmtlciBwZXIgYWNjb3VudC48L3RleHQ+Cjwvc3ZnPgo=" alt="Rotation among a student’s own credentials; a limit becomes a cooldown, not a failure." />
+<figcaption aria-hidden="true">Rotation among a student’s own
+credentials; a limit becomes a cooldown, not a failure.</figcaption>
+</figure>
+<p>Each <code>~/.ashley/accounts/&lt;name&gt;/</code> is both a
+credential and a <code>CLAUDE_CONFIG_DIR</code>, so accounts never share
+sessions, settings or caches:</p>
+<ul>
+<li><code>token</code>: a long-lived subscription token from
+<code>claude setup-token</code> (the normal case). Exported to Claude
+Code as <code>CLAUDE_CODE_OAUTH_TOKEN</code>.</li>
+<li><code>apikey</code>: an Anthropic API key (pay-per-use overflow).
+Exported as <code>ANTHROPIC_API_KEY</code>.</li>
+<li><code>.credentials.json</code>: a copied interactive login. Works
+until its refresh token dies; not recommended (the probe on 2026-09-28
+showed a copy rejected after eight idle days).</li>
+</ul>
+<p>Order of use: subscriptions before API keys, <code>default</code>
+first. When a run ends with an error that matches the limit patterns in
+<code>protocol.ts</code> (“hit your limit”, “rate_limit”, “429”, …), the
+account gets <code>state.json</code> with <code>cooldown_until</code>
+(the reset time Claude printed, else one hour), the request is re-queued
+for the next enabled account, and if none is left the result is written
+with <code>status: rate_limited</code> and <code>retry_after</code>. The
+worker’s heartbeat reports <code>blocked</code> with
+<code>blocked_until</code> so the laptop can say “your window resets at
+3 pm” instead of failing.</p>
+<p>One person, one token. Pooling several people’s subscriptions into
+one worker would breach the Consumer Terms (each account is for the
+person who holds it); the rotation exists for a student’s own second
+credential, typically an API key with a spending cap.</p>
+<h3 id="secrets-where-they-are-and-where-they-are-not">Secrets: where
+they are and where they are not</h3>
+<table>
+<colgroup>
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+</colgroup>
+<thead>
+<tr>
+<th>Secret</th>
+<th>Laptop</th>
+<th>Grid</th>
+<th>Never</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>GitHub, Hugging Face tokens</td>
+<td>VS Code SecretStorage (OS keychain); injected into integrated
+terminals</td>
+<td><code>~/.ashley/secrets.env</code> (mode 600), read by the daemon
+into the worker’s environment</td>
+<td>job logs, <code>sbatch --export</code>, command lines</td>
+</tr>
+<tr>
+<td>Claude subscription token</td>
+<td>SecretStorage</td>
+<td><code>~/.ashley/accounts/default/token</code> (600)</td>
+<td>laptop terminals</td>
+</tr>
+<tr>
+<td>Anthropic API key</td>
+<td>SecretStorage</td>
+<td><code>~/.ashley/accounts/apikey/apikey</code> (600)</td>
+<td>laptop terminals (it would silently switch the local Claude Code to
+pay-per-use)</td>
+</tr>
+<tr>
+<td>Grid password / OTP</td>
+<td>nowhere</td>
+<td>nowhere</td>
+<td>typed once, in a terminal, to install the SSH key</td>
+</tr>
+</tbody>
+</table>
+<p>Files travel over ssh <strong>stdin</strong>
+(<code>cat &gt; file</code> with <code>umask 077</code>), never as
+arguments.</p>
+<h3 id="the-container">The container</h3>
+<p><code>bootstrap.sbatch</code> (one job per user, 7 minutes measured)
+builds an unprivileged Apptainer <strong>sandbox directory</strong> from
+<code>docker://node:22-bookworm</code> on the student’s CephFS space and
+installs <code>@anthropic-ai/claude-code@2.1.283</code> into a
+persistent npm prefix there. A sandbox rather than a <code>.sif</code>:
+SIF-to-sandbox conversion at exec time is what failed on this grid
+before, and several nodes lack <code>unsquashfs</code>. The host is
+CentOS 7 (glibc 2.17); Claude Code needs Node 22, which needs a newer
+glibc, hence the container (glibc 2.36 inside). Runtime order tried:
+<code>module load apptainer/1.2.2</code> (worked on <code>asx1</code>),
+the conda <code>singularity</code> 3.8.6,
+<code>module load singularity/3.5.2</code>,
+<code>/usr/bin/apptainer</code>. <code>~/.local/bin/singularity</code>
+is skipped on purpose.</p>
+<p>The worker job (<code>worker.sbatch.tpl</code>) execs the daemon
+inside the sandbox with <code>$HOME</code>, the CephFS tree and a
+<code>/dev/shm</code> scratch bound to <code>/tmp</code>
+(<code>/tmp</code> on nodes is swept by a cleaner while jobs run).
+<code>--signal=B:TERM@120</code> gives the daemon two minutes to finish
+a turn at the wall limit; <code>--dependency=singleton</code> keeps one
+job per worker name; on the <code>requeue</code> QoS the job is
+<code>--requeue --open-mode=append</code> because the daemon is
+re-entrant.</p>
+<h3 id="the-laptop-side">The laptop side</h3>
+<ul>
+<li><strong>Wizard</strong> (<code>core/wizard.ts</code>): nine steps,
+each with <code>check()</code> and <code>run()</code>, over an abstract
+<code>WizardEnv</code> (settings, secrets, UI). The VS Code extension
+and the terminal CLI plug in their own UI. Rerunning does only what is
+missing.</li>
+<li><strong>SSH config</strong> (<code>core/sshConfig.ts</code>): one
+managed block between markers, inserted first so it wins over any
+<code>Host *</code>. <code>MACs +hmac-sha1</code> because the grid’s
+sshd offers nothing newer to Windows OpenSSH 9.5;
+<code>AddressFamily inet</code> because on Windows the IPv6 attempt to
+the login node times out first (13 s per connection measured, 2 s with
+IPv4 only); <code>IdentitiesOnly</code> so the agent’s other keys are
+not tried; a wildcard <code>Host *.nas.grid.wayne.edu</code> with
+<code>ProxyJump</code> so no per-node edit is ever needed. On Windows
+the same block and key are mirrored into WSL.</li>
+<li><strong>Interactive steps</strong> open a VS Code terminal whose
+<em>process</em> is <code>ssh</code> or <code>claude</code> (no shell,
+no quoting) and read its exit status.</li>
+<li><strong>Environment</strong>:
+<code>environmentVariableCollection</code> (persistent) rather than
+editing <code>terminal.integrated.env</code> settings, so it can be
+cleared and does not leak into settings sync.</li>
+<li><strong>MCP</strong>: <code>claude mcp add-json --scope user</code>
+with the server run by system <code>node</code> (&gt;= 20) or by VS
+Code’s own Electron with <code>ELECTRON_RUN_AS_NODE=1</code>, so
+students need not install Node. Fallback: <code>.mcp.json</code> in the
+workspace.</li>
+</ul>
+<h3 id="xcode-and-other-editors">Xcode and other editors</h3>
+<p><code>core/</code> never imports <code>vscode</code>.
+<code>dist/ashley-cli.js</code> runs the same wizard and the same grid
+calls from a terminal; <code>cli/ashley</code> is a ten-line ssh
+forwarder for machines without Node. The MCP server is editor-agnostic:
+any client that speaks MCP over stdio (Claude Code in Xcode’s terminal,
+Claude Desktop, an Agent SDK script) can register it. A native Xcode
+extension is the wrong layer: Xcode Source Editor Extensions cannot open
+terminals, store secrets or run processes; the CLI plus MCP is the
+port.</p>
+<h3 id="what-is-deliberately-not-here">What is deliberately not
+here</h3>
+<ul>
+<li>No Nextflow yet. The queue and the worker are the substrate a
+pipeline can call (<code>ashley send</code> from a Nextflow process,
+<code>ashley result</code> in the next); the recipe’s Nextflow section
+stays the plan.</li>
+<li>No shared lab account, no cross-student pooling.</li>
+<li>No X11. Remote-SSH renders images; <code>srun --x11</code> remains
+available for the rare tool that needs a display.</li>
+</ul>
+<h1 id="what-you-can-ask-and-what-you-cannot">What you can ask, and what
+you cannot</h1>
+<p>Written for students. “The grid Claude” is the Claude Code worker
+running in your Slurm job with your subscription; “the laptop Claude” is
+the Claude Code extension in your VS Code.</p>
+<h3 id="things-that-work-well">Things that work well</h3>
+<p><strong>Ask the grid Claude to do work where the data is.</strong> It
+runs in your grid home with your environment: read a dataset’s manifest,
+write a measurement script, run it on ten records, look at the numbers,
+fix the script, run it on all 802, write the results file, draft the
+JOURNAL line. Say which folder (a session is bound to one), which files,
+and what “done” looks like.</p>
+<p><strong>Ask for a Slurm job, not a long foreground run.</strong>
+“Write <code>slurm/measure.sh</code> from the lab template, show it to
+me, and after I say submit, submit it and record the job id.” The worker
+can submit and poll jobs; it should not itself run a two-hour
+computation in one turn.</p>
+<p><strong>Ask it to continue.</strong> Sessions are named. “In session
+<code>thesis</code>, what did we decide about the exclusion list?” picks
+up where it stopped, days later, on any node.</p>
+<p><strong>Ask the laptop Claude to delegate.</strong> “Check the grid
+status, then ask the grid Claude to run the pelvic width demo on ten
+records and tell me the mean.” The laptop Claude uses the
+<code>ashley_*</code> tools; the heavy part happens on the grid; the
+answer returns to your panel.</p>
+<p><strong>Long tasks.</strong> <code>ashley_send</code> queues;
+<code>ashley_result</code> collects later. Close the laptop. The job
+runs until its wall time (24 h by default, 30 days maximum on the
+<code>primary</code> QoS).</p>
+<p><strong>Images.</strong> Open your grid files with <strong>Ashley:
+Open my grid files on a compute node</strong>; click a PNG. No X
+server.</p>
+<p><strong>GPUs.</strong> Start a worker with one GPU when the task
+trains or infers; the grid has H200, L40S, A30 and V100-class nodes. Ask
+for a GPU only for that worker; CPU workers start sooner.</p>
+<h3 id="things-that-do-not-work-and-why">Things that do not work, and
+why</h3>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>You cannot</th>
+<th>Because</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Run the worker or VS Code’s server on the login node</td>
+<td>C&amp;IT kills processes on <code>warrior</code>; Ashley only ever
+connects VS Code to a compute node and runs a half-second file poll on
+the login node</td>
+</tr>
+<tr>
+<td>Use someone else’s Claude account, or pool accounts across
+students</td>
+<td>Anthropic’s consumer terms: an account is for the person who holds
+it. Ashley rotates only <em>your</em> credentials (your subscription,
+then your own API key)</td>
+</tr>
+<tr>
+<td>Get more than your plan’s window</td>
+<td>A Pro/Max window is per account. When it is exhausted the worker
+reports <code>rate_limited</code> with the reset time and waits; an API
+key with a spending cap is the only overflow</td>
+</tr>
+<tr>
+<td>Put patient data, PHI, survey CSVs or contact lists on the grid</td>
+<td>The lab’s IRB umbrella (HPR 2026-269) covers public, de-identified
+datasets only; anything else needs its own filing first (RECIPE.md, data
+rules)</td>
+</tr>
+<tr>
+<td>Push the grid Claude to <code>--dangerously-skip-permissions</code>
+for everything</td>
+<td>It is available (<code>mode: bypassPermissions</code>) but the
+default <code>acceptEdits</code> lets it edit files and run tools while
+refusing destructive commands; use bypass only inside a project folder
+you can <code>git checkout</code> back</td>
+</tr>
+<tr>
+<td>Ask for interactive programs (ITK-SNAP, a GUI) through the
+worker</td>
+<td>The worker is headless. Run GUI tools locally on rsynced results, or
+with <code>srun --x11</code> in your own shell</td>
+</tr>
+<tr>
+<td>Expect a reply in under a few seconds</td>
+<td>One ssh connection (2 s), the poll (1 s) and Claude Code’s start (5
+s) come before the first token; a real task takes minutes</td>
+</tr>
+<tr>
+<td>Keep a worker forever</td>
+<td>Jobs have wall limits; the <code>requeue</code> QoS may requeue the
+job (it resumes). Start another; queued requests wait</td>
+</tr>
+<tr>
+<td>Store 200 GB in your home</td>
+<td>Home is a 4 TB soft quota shared with everything else; Ashley’s
+container and workspaces live on the lab’s CephFS volume when you have
+access, and the doctor shows the quota</td>
+</tr>
+</tbody>
+</table>
+<h3 id="what-the-worker-claude-can-and-cannot-see">What the worker
+Claude can and cannot see</h3>
+<p>Can: your grid home and CephFS space, the internet (PubMed, Hugging
+Face, GitHub, Zenodo, pip), your GitHub and Hugging Face tokens (as
+environment variables, for <code>git push</code> and
+<code>hf download</code>), the Slurm commands, the lab’s Python
+environments.</p>
+<p>Cannot: your laptop’s files (it is on the grid), your Claude password
+(it holds a token you can revoke), other students’ homes, the login
+node’s CPUs for anything heavy.</p>
+<h3 id="good-prompts">Good prompts</h3>
+<ul>
+<li>“In session <code>pelvis</code>, working in
+<code>~/Student_Projects/projects/lee_pelvic_width</code>, read
+<code>proposal.md</code>, then write <code>code/measure_width.py</code>
+that measures the bi-iliac width on the label volumes listed in
+<code>lists/dev10.txt</code>, run it, and show me the ten numbers with
+units.”</li>
+<li>“Write the Slurm script for the full 802 from the lab template. Do
+not submit; show it.”</li>
+<li>“Compare the distribution in <code>results/widths.json</code> with
+the published values in <code>docs/normative.md</code>; flag anything
+outside the widest published SD.”</li>
+<li>“Append today’s entry to JOURNAL.md: what ran, job ids, what came
+out, what is next.”</li>
+</ul>
+<h3 id="prompts-that-will-disappoint">Prompts that will disappoint</h3>
+<ul>
+<li>“Do my whole project.” (No question, no data, no bar for failure.
+Start with PREREG.md.)</li>
+<li>“Make the number come out significant.” (The recipe forbids editing
+results by hand and so does the worker’s default mode; fix the script,
+rerun, report what you get.)</li>
+<li>“Download the CTs.” (195 GB into a shared quota, on a request that
+may be repeated. Ask your lead for the shared path first.)</li>
+</ul>
+<h1 id="installing-and-building">Installing and building</h1>
+<h3 id="for-a-student-two-minutes">For a student (two minutes)</h3>
+<ol type="1">
+<li>Install <a href="https://code.visualstudio.com/">VS Code</a> and,
+from the Extensions view, <strong>Claude Code</strong>
+(<code>anthropic.claude-code</code>) and <strong>Remote - SSH</strong>
+(<code>ms-vscode-remote.remote-ssh</code>). Sign in to Claude Code with
+your Claude Pro or Max account.</li>
+<li>Get the file <code>ashley-wsu-1.0.0.vsix</code> from your lead (or
+the repository’s <code>dist/</code> folder).</li>
+<li>In VS Code: Extensions view, the <code>...</code> menu at the top
+right, <strong>Install from VSIX…</strong>, pick the file. Or from a
+terminal:
+<code>code --install-extension ashley-wsu-1.0.0.vsix</code>.</li>
+<li>Command Palette (Ctrl/Cmd+Shift+P): <strong>Ashley: Set up my
+research environment (wizard)</strong>.</li>
+</ol>
+<p>Before the wizard you need, once: a grid account (request it at
+tech.wayne.edu/kb/high-performance-computing naming your sponsor), and
+Google Authenticator set up through ondemand.grid.wayne.edu, Interactive
+Apps, 2FA Setup (VPN required for OnDemand).</p>
+<h3 id="what-the-wizard-writes-on-your-laptop">What the wizard writes on
+your laptop</h3>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>Where</th>
+<th>What</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>~/.ssh/id_ed25519_wsu</code>, <code>.pub</code></td>
+<td>a key pair without passphrase</td>
+</tr>
+<tr>
+<td><code>~/.ssh/config</code></td>
+<td>one block between <code># &gt;&gt;&gt; ashley</code> and
+<code># &lt;&lt;&lt; ashley</code> (a backup
+<code>config.ashley.bak</code> is kept)</td>
+</tr>
+<tr>
+<td>OS keychain (Windows Credential Manager / macOS Keychain /
+libsecret)</td>
+<td>GitHub, Hugging Face, Claude tokens</td>
+</tr>
+<tr>
+<td>VS Code user settings <code>ashley.*</code></td>
+<td>your AccessID and preferences</td>
+</tr>
+<tr>
+<td>WSL (Windows only, optional)</td>
+<td>the same key and block in the WSL home</td>
+</tr>
+</tbody>
+</table>
+<p>On the grid it writes <code>~/.ashley/</code> (scripts, tokens with
+mode 600, workers, sessions), a block in <code>~/.bashrc</code>, and
+large files under
+<code>/rs/rs_grp_oschome/&lt;AccessID&gt;/ashley</code> or
+<code>~/ashley</code>.</p>
+<p>To undo: remove the block from <code>~/.ssh/config</code>, delete the
+key, run <strong>Ashley: Manage stored tokens</strong> to delete tokens,
+uninstall the extension; on the grid, <code>rm -rf ~/.ashley</code> and
+the block in <code>~/.bashrc</code>.</p>
+<h3 id="building-from-source">Building from source</h3>
+<p>Requirements: Node.js 22 (the packaging tool refuses older), Git.</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="fu">git</span> clone <span class="op">&lt;</span>this repository<span class="op">&gt;</span> ashley</span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="bu">cd</span> ashley/extension</span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="ex">npm</span> install</span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="ex">npm</span> run build          <span class="co"># bundles dist/extension.js, dist/mcp-server.js, dist/ashley-cli.js, copies ../grid into dist/grid</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a><span class="ex">npm</span> run test:unit      <span class="co"># 22 tests: ssh config, protocol, slurm parsing, and the daemon with a fake claude</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a><span class="ex">npm</span> run test:vscode    <span class="co"># downloads a VS Code build once, runs the integration suite</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a><span class="ex">npm</span> run package        <span class="co"># writes ../dist/ashley-wsu-&lt;version&gt;.vsix</span></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a><span class="ex">code</span> <span class="at">--install-extension</span> ../dist/ashley-wsu-1.0.0.vsix</span></code></pre></div>
+<p>On a Windows machine without Node on <code>PATH</code>, the portable
+build works: download <code>node-v22.x-win-x64.zip</code> from
+nodejs.org, unzip, and prefix <code>PATH</code> with that folder for the
+commands above.</p>
+<p>The extension bundles everything it needs
+(<code>vsce package --no-dependencies</code> plus esbuild), so the
+<code>.vsix</code> has no <code>node_modules</code>; students never run
+<code>npm</code>.</p>
+<h3 id="the-terminal-cli-macos-linux-xcode-users">The terminal CLI
+(macOS, Linux, Xcode users)</h3>
+<p><code>extension/dist/ashley-cli.js</code> is the wizard and the grid
+calls without VS Code:</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="ex">node</span> dist/ashley-cli.js setup            <span class="co"># the same nine steps, in the terminal</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="ex">node</span> dist/ashley-cli.js doctor</span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="ex">node</span> dist/ashley-cli.js worker start <span class="at">--name</span> default <span class="at">--hours</span> 24</span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="ex">node</span> dist/ashley-cli.js ask <span class="at">--session</span> thesis <span class="st">&quot;read PREREG.md and list its hypotheses&quot;</span></span></code></pre></div>
+<p><code>cli/ashley</code> (bash) and <code>cli/ashley.ps1</code>
+forward any command to the grid over ssh and need only an ssh client and
+the config block (<code>node dist/ashley-cli.js ssh-config</code> prints
+it).</p>
+<h3 id="updating">Updating</h3>
+<p>Install the new <code>.vsix</code> the same way; run <strong>Ashley:
+Install or update Ashley on the grid</strong> to push new grid scripts
+(a job rebuilds the container only if the pinned Claude Code version
+changed).</p>
+<h1 id="troubleshooting">Troubleshooting</h1>
+<p>Run <strong>Ashley: Check everything (doctor)</strong> first. It
+prints one line per check on the laptop and, when the connection works,
+the grid’s own checks.</p>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th>Symptom</th>
+<th>Cause</th>
+<th>Fix</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>no matching MAC found. Their offer: hmac-sha1</code></td>
+<td>your <code>ssh</code> config lacks the Ashley block</td>
+<td>rerun the wizard (step 3 rewrites the block with
+<code>MACs +hmac-sha1</code>)</td>
+</tr>
+<tr>
+<td>Every grid action takes 13 s</td>
+<td>IPv6 attempt on Windows</td>
+<td>the block sets <code>AddressFamily inet</code>; rerun the wizard if
+you edited the file</td>
+</tr>
+<tr>
+<td>Wizard step 4 loops on the password</td>
+<td>wrong password/code, or the account is not yet created</td>
+<td>try in a terminal:
+<code>ssh ab1234@warrior.grid.wayne.edu</code></td>
+</tr>
+<tr>
+<td><code>Permission denied (publickey...)</code> after step 4</td>
+<td>the key was not appended to <code>authorized_keys</code></td>
+<td>rerun step 4; on the grid, <code>cat ~/.ssh/authorized_keys</code>
+should contain “ashley”</td>
+</tr>
+<tr>
+<td>Ashley view: <em>Grid installing</em> for more than 30 min</td>
+<td>the bootstrap job is queued</td>
+<td><code>ssh wsu-grid squeue -u $USER</code>; if it pends for long,
+<code>ssh wsu-grid &quot;~/.ashley/bin/ashley bootstrap --resubmit --partition secp --qos secondary&quot;</code></td>
+</tr>
+<tr>
+<td>Worker shows PENDING for long</td>
+<td>the <code>requeue</code> QoS pool is busy</td>
+<td>start it with the <code>secp</code>/<code>secondary</code> settings
+(<code>ashley.worker.partition</code>,
+<code>ashley.worker.qos</code>)</td>
+</tr>
+<tr>
+<td>Ask returns <code>no enabled Claude account</code></td>
+<td>step 7 was skipped</td>
+<td><strong>Ashley: Store or replace my Claude token for the
+grid</strong></td>
+</tr>
+<tr>
+<td>Ask returns <code>Failed to authenticate</code></td>
+<td>the token expired or was revoked</td>
+<td>run <code>claude setup-token</code> again and store the new
+token</td>
+</tr>
+<tr>
+<td>Ask returns <code>rate_limited</code> with a time</td>
+<td>your subscription window is exhausted</td>
+<td>wait for the time shown, or add an API key (step 8)</td>
+</tr>
+<tr>
+<td>Remote-SSH: <em>Connecting with SSH timed out</em></td>
+<td>the compute node’s sshd needs about 25 s per session; the first
+connection also downloads the server</td>
+<td>Ashley sets <code>remote.SSH.connectTimeout</code> to 60; raise it
+to 300 in Settings, connect again</td>
+</tr>
+<tr>
+<td>Remote-SSH: <em>glibc</em> or <em>exit code 207</em></td>
+<td>the C&amp;IT sysroot variables are not in <code>~/.bashrc</code>, or
+a <code>return</code> guard precedes them</td>
+<td><code>ssh wsu-grid &quot;~/.ashley/bin/ashley install&quot;</code> rewrites
+the block; move it above any
+<code>[ -z &quot;$PS1&quot; ] &amp;&amp; return</code></td>
+</tr>
+<tr>
+<td>VS Code connects to <code>warrior</code> instead of a node</td>
+<td>a job was not running</td>
+<td>start a worker; Ashley connects only to nodes where you hold a
+job</td>
+</tr>
+<tr>
+<td><code>home quota</code> above 90 %</td>
+<td>your home is full</td>
+<td>large files belong on the lab volume; ask your lead for the path;
+<code>ashley.gridRoot</code></td>
+</tr>
+<tr>
+<td>The MCP tools do not appear in Claude Code</td>
+<td>the bridge was not registered, or Claude Code was open before
+registration</td>
+<td><strong>Ashley: Connect the Claude Code extension to the
+grid</strong>, then start a new conversation</td>
+</tr>
+</tbody>
+</table>
+<h3 id="logs">Logs</h3>
+<ul>
+<li>Laptop: <em>View, Output, Ashley</em> (every command and its exit
+code).</li>
+<li>Grid: <code>~/.ashley/log/bootstrap_&lt;job&gt;.out</code>,
+<code>~/.ashley/workers/&lt;name&gt;/log/ashleyd.log</code>,
+<code>~/.ashley/workers/&lt;name&gt;/log/slurm_&lt;job&gt;.out</code>,
+and every request’s <code>outbox/&lt;id&gt;.events.jsonl</code>.</li>
+<li>Remote-SSH: <em>View, Output, Remote - SSH</em>.</li>
+</ul>
+<h3 id="undo">Undo</h3>
+<p>Laptop: remove the block from <code>~/.ssh/config</code> (a
+<code>config.ashley.bak</code> is kept), delete
+<code>~/.ssh/id_ed25519_wsu*</code>, <strong>Ashley: Manage stored
+tokens</strong> to delete tokens, uninstall the extension. Grid:
+<code>ashley worker stop</code>, <code>rm -rf ~/.ashley</code>, remove
+the block from <code>~/.bashrc</code>, delete the container folder under
+your storage root.</p>
+<h1 id="appendix">Appendix</h1>
+<ul>
+<li><code>docs/RESEARCH.md</code>: the research behind the design
+(Claude Code headless mode, subscription limits and terms, containers on
+this grid, multi-account tools, orchestration patterns, VS Code
+Remote-SSH on old glibc, Xcode, literature APIs), with sources and which
+findings were independently verified.</li>
+<li><code>docs/CHECKPOINT_2026-09-28.md</code>: the state of the project
+on the day this manual was built, including what was tested and what was
+not.</li>
+<li><code>Student_Projects/RECIPE.md</code>: the lab’s method; Ashley is
+the on-ramp to it.</li>
+<li>C&amp;IT: “How to SSH to the Grid in Visual Studio Code” and “How do
+I set up and use Google Authenticator for the Grid” (services.wayne.edu
+knowledge base).</li>
+</ul>
+</body>
+</html>

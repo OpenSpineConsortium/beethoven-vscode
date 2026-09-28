@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 360" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="13">
+  <defs>
+    <marker id="b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#333"/></marker>
+    <style>
+      .lane{stroke:#bbb;stroke-width:1}
+      .h{font-weight:600;font-size:14px;fill:#222}
+      .m{stroke:#333;stroke-width:1.5;fill:none;marker-end:url(#b)}
+      .d{stroke:#333;stroke-width:1.5;fill:none;stroke-dasharray:5 4;marker-end:url(#b)}
+      .l{fill:#333}.s{fill:#666;font-size:11.5px}
+      .f{fill:#fff8e1;stroke:#b8860b;stroke-width:1;rx:3}
+    </style>
+  </defs>
+  <g>
+    <text x="60" y="24" class="h" text-anchor="middle">laptop</text>
+    <text x="330" y="24" class="h" text-anchor="middle">login node</text>
+    <text x="620" y="24" class="h" text-anchor="middle">ashleyd (compute node)</text>
+    <text x="880" y="24" class="h" text-anchor="middle">claude -p</text>
+    <line class="lane" x1="60" y1="34" x2="60" y2="340"/>
+    <line class="lane" x1="330" y1="34" x2="330" y2="340"/>
+    <line class="lane" x1="620" y1="34" x2="620" y2="340"/>
+    <line class="lane" x1="880" y1="34" x2="880" y2="340"/>
+  </g>
+  <path class="m" d="M60 60 L330 60"/>
+  <text x="70" y="54" class="l">ssh wsu-grid ashley ask (request JSON on stdin)</text>
+  <rect class="f" x="336" y="72" width="200" height="20"/>
+  <text x="342" y="86" class="s">inbox/&lt;id&gt;.json (.part, then rename)</text>
+  <path class="d" d="M330 110 L620 110"/>
+  <text x="340" y="104" class="l">poll (1 s), rename to .claimed</text>
+  <path class="m" d="M620 140 L880 140"/>
+  <text x="630" y="134" class="l">spawn with CLAUDE_CONFIG_DIR=accounts/&lt;a&gt;, --resume or --session-id</text>
+  <path class="m" d="M880 170 L620 170"/>
+  <text x="630" y="164" class="l">stream-json lines (init, assistant, tool_use, result)</text>
+  <rect class="f" x="336" y="182" width="230" height="20"/>
+  <text x="342" y="196" class="s">outbox/&lt;id&gt;.events.jsonl (appended live)</text>
+  <path class="d" d="M330 222 L60 222"/>
+  <text x="70" y="216" class="l">EVENT lines over the same ssh (ashley wait --stream)</text>
+  <path class="m" d="M880 252 L620 252"/>
+  <text x="630" y="246" class="l">exit; result event has is_error, session_id, cost, turns</text>
+  <rect class="f" x="336" y="264" width="230" height="20"/>
+  <text x="342" y="278" class="s">outbox/&lt;id&gt;.json  +  sessions/&lt;name&gt;.json</text>
+  <path class="m" d="M330 306 L60 306"/>
+  <text x="70" y="300" class="l">RESULT {status, result, account, retry_after?}</text>
+  <text x="60" y="336" class="s">2 s ssh + &lt;=1 s poll + ~5 s Claude start, then the task itself</text>
+</svg>

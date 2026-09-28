@@ -23,7 +23,7 @@ dist/        the built .vsix
 3. `Ashley: Start a Claude worker on the grid`, then `Ashley: Ask the grid Claude`, or open the
    Claude Code panel and say "check the grid status".
 
-Everything else: [docs/manual.html](docs/manual.html) (also `docs/manual.pdf`),
+Everything else: [docs/manual.html](docs/manual.html) (also `docs/manual.pdf`, 21 pages, built by `docs/manual/build_manual.py`),
 [docs/INSTALL.md](docs/INSTALL.md), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md),
 [docs/LIMITS.md](docs/LIMITS.md), [docs/PITCH.md](docs/PITCH.md), [docs/RESEARCH.md](docs/RESEARCH.md).
 
@@ -35,7 +35,7 @@ jump host, `MACs +hmac-sha1`, `AddressFamily inet`), container build on a comput
 request round trip laptop -> login node -> worker -> laptop, MCP bridge called by the real Claude
 Code, 22 unit tests including the daemon with a fake Claude, VS Code integration suite.
 
-Not yet exercised with a live subscription token on the grid: that needs the student's one-time
+Remote-SSH from VS Code to the node needs `remote.SSH.connectTimeout` of 300 s (the node's sshd takes about 25 s per session); the extension sets it when it opens a node. Not yet exercised with a live subscription token on the grid: that needs the student's one-time
 `claude setup-token` approval in a browser (wizard step 7). A copied interactive login was
 rejected after eight idle days, which is why the token flow is the supported one.
 

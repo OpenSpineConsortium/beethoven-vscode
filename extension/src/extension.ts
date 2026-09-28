@@ -195,7 +195,9 @@ async function commandConnect(grid: GridApi, workerName?: string): Promise<void>
     platforms[host] = 'linux';
     await sshCfg.update('remotePlatform', platforms, vscode.ConfigurationTarget.Global);
   }
-  if ((sshCfg.get<number>('connectTimeout') ?? 15) < 60) await sshCfg.update('connectTimeout', 60, vscode.ConfigurationTarget.Global);
+  // The compute nodes' sshd takes ~25 s before it runs anything (measured 2026-09-28), and the
+  // first connection also downloads the server on the node; 60 s was not enough.
+  if ((sshCfg.get<number>('connectTimeout') ?? 15) < 300) await sshCfg.update('connectTimeout', 300, vscode.ConfigurationTarget.Global);
   const uri = vscode.Uri.parse(remoteUri(node, s.nodeDomain, folder));
   output.appendLine(`opening ${uri.toString()}`);
   await vscode.commands.executeCommand('vscode.openFolder', uri, { forceNewWindow: true });
