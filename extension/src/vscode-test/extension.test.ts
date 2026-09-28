@@ -36,7 +36,7 @@ suite('Ashley extension', () => {
   test('the wizard exports its steps in order', () => {
     const ext = vscode.extensions.getExtension(EXT_ID)!;
     const steps = (ext.exports as any)._internal.STEPS.map((s: any) => s.id);
-    assert.deepEqual(steps, ['accessId', 'sshKey', 'sshConfig', 'installKey', 'github', 'huggingface', 'claudeOauth', 'anthropicApiKey', 'gridInstall']);
+    assert.deepEqual(steps, ['accessId', 'gridTwoFactor', 'sshKey', 'sshConfig', 'installKey', 'github', 'huggingface', 'claudeOauth', 'anthropicApiKey', 'gridInstall']);
   });
 
   test('refresh and openManual run without throwing', async () => {

@@ -29,6 +29,8 @@ export interface StepReport {
 
 export interface WizardSettings {
   accessId: string;
+  /** The student confirmed a grid account with Google Authenticator set up (or the key already works). */
+  twoFactorDone: boolean;
   loginHost: string;
   sshAlias: string;
   nodeDomain: string;
@@ -62,6 +64,36 @@ export interface WizardUI {
   progress(message: string): void;
   /** A token field that also watches the clipboard; falls back to ask() when not implemented. */
   askToken?(prompt: string, opts: TokenAskOptions): Promise<string | undefined>;
+  /** A menu of buttons; resolves with the index, or undefined on cancel. Falls back to confirm() pairs. */
+  choose?(message: string, buttons: string[]): Promise<number | undefined>;
+}
+
+async function choose(ui: WizardUI, message: string, buttons: string[]): Promise<number | undefined> {
+  if (ui.choose) return ui.choose(message, buttons);
+  for (let i = 0; i < buttons.length - 1; i++) {
+    if (await ui.confirm(message, buttons[i], i === buttons.length - 2 ? buttons[i + 1] : 'Next option')) return i;
+    if (i === buttons.length - 2) return buttons.length - 1;
+  }
+  return buttons.length - 1;
+}
+
+export const ONDEMAND_URL = 'https://ondemand.grid.wayne.edu/';
+export const GRID_ACCOUNT_URL = 'https://tech.wayne.edu/kb/high-performance-computing';
+export const AUTHENTICATOR_KB_URL = 'https://services.wayne.edu/TDClient/277/Portal/KB/Article/20242';
+export const AUTHENTICATOR_IOS_URL = 'https://apps.apple.com/us/app/google-authenticator/id388497605';
+export const AUTHENTICATOR_ANDROID_URL = 'https://play.google.com/store/apps/details?id=com.google.android.apps.authenticator2';
+
+/** OnDemand answers only from the campus network or the WSU VPN, so reaching it is a VPN test. */
+export async function onDemandReachable(timeoutMs = 8000): Promise<{ ok: boolean; detail: string }> {
+  try {
+    const ctl = new AbortController();
+    const t = setTimeout(() => ctl.abort(), timeoutMs);
+    const res = await fetch(ONDEMAND_URL, { method: 'GET', redirect: 'manual', signal: ctl.signal });
+    clearTimeout(t);
+    return { ok: true, detail: `ondemand.grid.wayne.edu answered (HTTP ${res.status})` };
+  } catch (e) {
+    return { ok: false, detail: (e as Error).message };
+  }
 }
 
 export interface WizardEnv {
@@ -140,6 +172,63 @@ export const stepAccessId: WizardStep = {
   },
 };
 
+export const stepTwoFactor: WizardStep = {
+  id: 'gridTwoFactor',
+  title: 'Grid account and Authenticator',
+  blurb: 'A grid account, and Google Authenticator set up once on OnDemand (needs the WSU VPN).',
+  async check(env) {
+    if (env.settings.twoFactorDone) return report(this.id, this.title, 'done', 'confirmed');
+    const t = await testConnection(env.settings.sshAlias);
+    if (t.ok) {
+      await env.saveSetting('twoFactorDone', true);
+      env.settings.twoFactorDone = true;
+      return report(this.id, this.title, 'done', 'the grid already accepts this laptop');
+    }
+    return report(this.id, this.title, 'todo', 'not confirmed yet');
+  },
+  async run(env) {
+    const ui = env.ui;
+    const first = await choose(ui, 'Do you already have a Wayne State grid account with Google Authenticator set up for it?', ['Yes, both', 'Not yet, walk me through it']);
+    if (first === undefined) return report(this.id, this.title, 'skipped', 'cancelled');
+    if (first !== 0) {
+      for (;;) {
+        const vpn = await onDemandReachable();
+        const menu = [
+          'Open the grid account request page',
+          vpn.ok ? 'Open OnDemand (VPN is on) for 2FA Setup' : 'Check the VPN again (OnDemand not reachable: connect the WSU VPN)',
+          'Open the C&IT guide with screenshots',
+          'Google Authenticator for iPhone',
+          'Google Authenticator for Android',
+          'I have scanned the code and the app shows six digits: continue',
+          'Skip for now',
+        ];
+        const pick = await choose(
+          ui,
+          [
+            'Three things only you can do, in order:',
+            '1. A grid account: apply with your AccessID, naming your lead as sponsor (about two business days; hpc@wayne.edu, 313-577-4743).',
+            `2. The WSU VPN: OnDemand only answers through it. Right now: ${vpn.ok ? 'reachable, VPN is on' : 'NOT reachable, connect the VPN (GlobalProtect) first'}.`,
+            '3. On OnDemand: sign in with your AccessID and password, open Interactive Apps, choose 2FA Setup, press Launch, then Launch 2FA Setup; a QR code appears. In Google Authenticator press + and Scan a QR code. The app now shows a six-digit code that changes every 30 seconds.',
+            'The grid asks for that code and your password exactly once more, in the next steps; after that this laptop is trusted and nothing prompts again.',
+          ].join('\n'),
+          menu,
+        );
+        if (pick === undefined || pick === 6) return report(this.id, this.title, 'skipped', 'not confirmed yet');
+        if (pick === 0) await ui.openUrl(GRID_ACCOUNT_URL);
+        else if (pick === 1) {
+          if (vpn.ok) await ui.openUrl(ONDEMAND_URL);
+        } else if (pick === 2) await ui.openUrl(AUTHENTICATOR_KB_URL);
+        else if (pick === 3) await ui.openUrl(AUTHENTICATOR_IOS_URL);
+        else if (pick === 4) await ui.openUrl(AUTHENTICATOR_ANDROID_URL);
+        else if (pick === 5) break;
+      }
+    }
+    await env.saveSetting('twoFactorDone', true);
+    env.settings.twoFactorDone = true;
+    return report(this.id, this.title, 'done', 'confirmed; the next login step proves it');
+  },
+};
+
 export const stepSshKey: WizardStep = {
   id: 'sshKey',
   title: 'SSH key',
@@ -200,6 +289,11 @@ export const stepInstallKey: WizardStep = {
         if (r.authFailure && attempt < 3) {
           await env.ui.warn(`The grid rejected that password or code (attempt ${attempt} of 3). Try again.`);
           continue;
+        }
+        if (r.authFailure) {
+          await env.saveSetting('twoFactorDone', false);
+          env.settings.twoFactorDone = false;
+          return report(this.id, this.title, 'failed', 'three rejected logins: check the account exists and redo the Authenticator setup (the previous step opens OnDemand), then run the wizard again');
         }
         if (!r.authFailure) {
           env.ui.progress(`In-panel login did not work (${r.detail}); falling back to a terminal.`);
@@ -363,7 +457,7 @@ export const stepGridInstall: WizardStep = {
   },
 };
 
-export const STEPS: WizardStep[] = [stepAccessId, stepSshKey, stepSshConfig, stepInstallKey, stepGithub, stepHuggingFace, stepClaudeToken, stepAnthropicKey, stepGridInstall];
+export const STEPS: WizardStep[] = [stepAccessId, stepTwoFactor, stepSshKey, stepSshConfig, stepInstallKey, stepGithub, stepHuggingFace, stepClaudeToken, stepAnthropicKey, stepGridInstall];
 
 export interface RunOptions {
   force?: boolean;

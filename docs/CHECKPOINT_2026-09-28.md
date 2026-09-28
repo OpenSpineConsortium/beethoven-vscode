@@ -1,4 +1,24 @@
-# CHECKPOINT 2026-09-28 (updated 03:20 UTC, fourth pass: the shared container library) — Ashley, the WSU grid + Claude Code extension
+# CHECKPOINT 2026-09-28 (updated 03:50 UTC, fifth pass: the Authenticator step) — Ashley, the WSU grid + Claude Code extension
+
+## Fifth pass: 2FA setup inside the wizard (Greg's question at 23:40 local)
+
+The QR code has to be scanned from OnDemand in a browser with the phone, so the wizard cannot do
+it for the student, but it now owns the path. New step 2 `gridTwoFactor` ("Grid account and
+Authenticator"): first question "already have both?"; otherwise a menu that opens the grid account
+request page, tests whether OnDemand answers (it only does through the WSU VPN, so that is the VPN
+check, `onDemandReachable()`), opens OnDemand for Interactive Apps > 2FA Setup, the C&IT guide with
+screenshots, and the Authenticator app for iPhone or Android; "continue" records
+`ashley.twoFactorDone`. The check passes automatically when the grid already accepts the key. Step 5
+(login in the panel) proves the setup; three rejected logins reset `twoFactorDone` and point back to
+step 2. `WizardUI.choose()` (N-button menu) added to the panel and the terminal UI. Docs, figure
+(`wizard.svg`, ten steps), walkthrough and the STEPS test updated. Not testable end to end by me
+(needs a fresh account and a phone); the menu/VPN logic is unit-free but the extension builds and the
+suites pass.
+
+The fourth pass follows.
+
+---
+
 
 ## Fourth pass: the lab's shared container library (Greg's request at 23:00 local)
 

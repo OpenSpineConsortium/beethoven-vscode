@@ -2,12 +2,11 @@
 
 ## Before you open VS Code
 
-1. **A grid account.** Apply with your AccessID at tech.wayne.edu/kb/high-performance-computing
-   ("Grid account request"), naming your project's lead as sponsor. Two business days.
-2. **Google Authenticator** for the grid (not Microsoft Authenticator): connect to the WSU VPN,
-   log in to ondemand.grid.wayne.edu, Interactive Apps, 2FA Setup, scan the QR code.
-3. **A Claude Pro or Max subscription**, and the Claude Code extension signed in.
-4. **GitHub and Hugging Face accounts.** Create them with your WSU email if you do not have
+1. **A grid account** (two business days) and **Google Authenticator** for it. The wizard's second
+   step walks you through both: it opens the request page, tells you whether the WSU VPN is on,
+   opens OnDemand's 2FA Setup and the C&IT guide. If you already have them, you say so and move on.
+2. **A Claude Pro or Max subscription**, and the Claude Code extension signed in.
+3. **GitHub and Hugging Face accounts.** Create them with your WSU email if you do not have
    them; the lab adds you to its GitHub organisation by that address.
 
 ## Install
@@ -18,7 +17,7 @@ Ctrl/Cmd+Shift+P and type **Ashley: Set up my research environment**.
 
 ## The setup panel
 
-Everything happens in one panel: the nine steps on the left with their state, the current
+Everything happens in one panel: the ten steps on the left with their state, the current
 question on the right, a progress bar on top, the log one click away. Finished steps are skipped,
 so the wizard can be rerun at any time. Nothing is typed into a terminal.
 
@@ -27,14 +26,15 @@ so the wizard can be rerun at any time. Nothing is typed into a terminal.
 | Step | What you see in the panel | What you do |
 |---|---|---|
 | 1 AccessID | a text field | type it (`ab1234`) |
-| 2 SSH key | a spinner for a second | nothing |
-| 3 SSH configuration | a spinner for a second | nothing |
-| 4 Log in to the grid once | a password field, then a code field | type your grid password, then the six-digit Authenticator code. Once. Ashley installs its key and the grid never asks again. |
-| 5 GitHub | your browser opens on GitHub's sign-in | sign in and approve; the token arrives in the panel by itself |
-| 6 Hugging Face | a button *Open the page in my browser*; the token page opens pre-filled (name `wsu-grid`, type Write) | press *Create token*, then *Copy*; the panel notices the copied token and offers *Use it* |
-| 7 Claude token | a terminal titled *claude setup-token* opens below; the browser asks you to approve | approve, copy the printed `sk-ant-oat...` token; the panel notices it and offers *Use it* |
-| 8 API key | a field | leave it empty and press *Skip* unless your lead gave you a key |
-| 9 Install on the grid | a progress line; then either "adopted shared container" (a second, when your lead has given you the `oschome` group) or "bootstrap job N submitted" | nothing, or wait 5 to 15 minutes; the Ashley view turns to *Grid ready* |
+| 2 Grid account and Authenticator | a menu: the account request page, OnDemand (the panel says whether the WSU VPN is on), the C&IT guide, the Authenticator app for iPhone or Android, and *continue* | apply for the account if you have none; connect the VPN; on OnDemand open Interactive Apps, 2FA Setup, Launch, Launch 2FA Setup, and scan the QR code with Google Authenticator; then *continue* |
+| 3 SSH key | a spinner for a second | nothing |
+| 4 SSH configuration | a spinner for a second | nothing |
+| 5 Log in to the grid once | a password field, then a code field | type your grid password, then the six-digit Authenticator code. Once. Ashley installs its key and the grid never asks again. |
+| 6 GitHub | your browser opens on GitHub's sign-in | sign in and approve; the token arrives in the panel by itself |
+| 7 Hugging Face | a button *Open the page in my browser*; the token page opens pre-filled (name `wsu-grid`, type Write) | press *Create token*, then *Copy*; the panel notices the copied token and offers *Use it* |
+| 8 Claude token | a terminal titled *claude setup-token* opens below; the browser asks you to approve | approve, copy the printed `sk-ant-oat...` token; the panel notices it and offers *Use it* |
+| 9 API key | a field | leave it empty and press *Skip* unless your lead gave you a key |
+| 10 Install on the grid | a progress line; then either "adopted shared container" (a second, when your lead has given you the `oschome` group) or "bootstrap job N submitted" | nothing, or wait 5 to 15 minutes; the Ashley view turns to *Grid ready* |
 
 If a token cannot be checked from your laptop's network (some campus Wi-Fi blocks it), the
 panel keeps it and the grid verifies it a moment later; a token the service actually rejects

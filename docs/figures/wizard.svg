@@ -9,22 +9,23 @@
       .legend{fill:#555;font-size:12px}
     </style>
   </defs>
-  <text x="20" y="26" font-size="15" font-weight="600" fill="#222">The wizard: nine steps, each skipped when already done</text>
-  <text x="20" y="46" class="legend">white = automatic; gold = you do one thing</text>
+  <text x="20" y="26" font-size="15" font-weight="600" fill="#222">The wizard: ten steps in one panel, each skipped when already done</text>
+  <text x="20" y="46" class="legend">white = automatic; gold = you do one thing (never in a terminal)</text>
   <g transform="translate(20,70)">
-    <rect class="you" x="0" y="0" width="150" height="70"/><text x="10" y="22" class="n">1 AccessID</text><text x="10" y="40" class="s">type ab1234</text>
-    <rect class="st" x="170" y="0" width="150" height="70"/><text x="180" y="22" class="n">2 SSH key</text><text x="180" y="40" class="s">ed25519, no passphrase</text>
-    <rect class="st" x="340" y="0" width="150" height="70"/><text x="350" y="22" class="n">3 SSH config</text><text x="350" y="40" class="s">jump host block,</text><text x="350" y="55" class="s">mirrored into WSL</text>
-    <rect class="you" x="510" y="0" width="150" height="70"/><text x="520" y="22" class="n">4 Install key</text><text x="520" y="40" class="s">password + code, once</text>
-    <rect class="you" x="680" y="0" width="130" height="70"/><text x="690" y="22" class="n">5 GitHub</text><text x="690" y="40" class="s">paste token</text>
-    <path class="a" d="M150 35 L170 35"/><path class="a" d="M320 35 L340 35"/><path class="a" d="M490 35 L510 35"/><path class="a" d="M660 35 L680 35"/>
+    <rect class="you" x="0" y="0" width="140" height="70"/><text x="10" y="22" class="n">1 AccessID</text><text x="10" y="40" class="s">type ab1234</text>
+    <rect class="you" x="160" y="0" width="200" height="70"/><text x="170" y="22" class="n">2 Grid account, Authenticator</text><text x="170" y="40" class="s">VPN check, OnDemand 2FA Setup,</text><text x="170" y="55" class="s">scan one QR code</text>
+    <rect class="st" x="380" y="0" width="130" height="70"/><text x="390" y="22" class="n">3 SSH key</text><text x="390" y="40" class="s">ed25519, no passphrase</text>
+    <rect class="st" x="530" y="0" width="140" height="70"/><text x="540" y="22" class="n">4 SSH config</text><text x="540" y="40" class="s">jump host block</text>
+    <rect class="you" x="690" y="0" width="150" height="70"/><text x="700" y="22" class="n">5 Log in once</text><text x="700" y="40" class="s">password + code,</text><text x="700" y="55" class="s">in the panel</text>
+    <path class="a" d="M140 35 L160 35"/><path class="a" d="M360 35 L380 35"/><path class="a" d="M510 35 L530 35"/><path class="a" d="M670 35 L690 35"/>
   </g>
   <g transform="translate(20,170)">
-    <rect class="you" x="0" y="0" width="150" height="70"/><text x="10" y="22" class="n">6 Hugging Face</text><text x="10" y="40" class="s">paste token</text>
-    <rect class="you" x="170" y="0" width="170" height="70"/><text x="180" y="22" class="n">7 Claude token</text><text x="180" y="40" class="s">claude setup-token opens</text><text x="180" y="55" class="s">the browser; paste it</text>
-    <rect class="st" x="360" y="0" width="150" height="70"/><text x="370" y="22" class="n">8 API key</text><text x="370" y="40" class="s">optional overflow</text>
-    <rect class="st" x="530" y="0" width="280" height="70"/><text x="540" y="22" class="n">9 Grid install (a job)</text><text x="540" y="40" class="s">upload scripts, tokens to files (600), bashrc block,</text><text x="540" y="55" class="s">build the container: 5 to 15 minutes</text>
-    <path class="a" d="M150 35 L170 35"/><path class="a" d="M340 35 L360 35"/><path class="a" d="M510 35 L530 35"/>
+    <rect class="you" x="0" y="0" width="140" height="70"/><text x="10" y="22" class="n">6 GitHub</text><text x="10" y="40" class="s">browser sign-in;</text><text x="10" y="55" class="s">token arrives itself</text>
+    <rect class="you" x="160" y="0" width="150" height="70"/><text x="170" y="22" class="n">7 Hugging Face</text><text x="170" y="40" class="s">create, copy; the panel</text><text x="170" y="55" class="s">picks it up</text>
+    <rect class="you" x="330" y="0" width="170" height="70"/><text x="340" y="22" class="n">8 Claude token</text><text x="340" y="40" class="s">claude setup-token; approve;</text><text x="340" y="55" class="s">copy; the panel picks it up</text>
+    <rect class="st" x="520" y="0" width="130" height="70"/><text x="530" y="22" class="n">9 API key</text><text x="530" y="40" class="s">optional overflow</text>
+    <rect class="st" x="670" y="0" width="170" height="70"/><text x="680" y="22" class="n">10 Grid install</text><text x="680" y="40" class="s">adopt the shared container,</text><text x="680" y="55" class="s">or build (5 to 15 min)</text>
+    <path class="a" d="M140 35 L160 35"/><path class="a" d="M310 35 L330 35"/><path class="a" d="M500 35 L520 35"/><path class="a" d="M650 35 L670 35"/>
   </g>
-  <path class="a" d="M830 105 C 900 105, 900 205, 830 205"/>
+  <path class="a" d="M860 105 C 930 105, 930 205, 860 205"/>
 </svg>

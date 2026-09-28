@@ -446,7 +446,7 @@ async function commandReset(context: vscode.ExtensionContext): Promise<void> {
     done.push('ssh block and key removed (the grid still lists the old public key; harmless)');
   }
   if (ids.has('settings')) {
-    for (const k of ['accessId', 'gridRoot']) await store.config.update(k, undefined, vscode.ConfigurationTarget.Global);
+    for (const k of ['accessId', 'gridRoot', 'twoFactorDone']) await store.config.update(k, undefined, vscode.ConfigurationTarget.Global);
     await context.globalState.update('ashley.offered', undefined);
     await context.globalState.update('ashley.osBannerExplained', undefined);
     done.push('settings cleared');

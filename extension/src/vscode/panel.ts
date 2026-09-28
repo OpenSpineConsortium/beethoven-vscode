@@ -1,4 +1,4 @@
-// The Ashley setup panel: a webview that shows the nine steps with their state, asks its
+// The Ashley setup panel: a webview that shows the ten steps with their state, asks its
 // questions inline (text, password, buttons), watches the clipboard for a token the student
 // just copied, and keeps the log one click away. It implements the wizard's UI contract, so
 // the step logic in core/wizard.ts does not know it is talking to a webview.
@@ -68,6 +68,9 @@ export class SetupPanel implements WizardUI, vscode.Disposable {
   async confirm(message: string, yes: string, no: string): Promise<boolean> {
     const r = (await this.prompt({ kind: 'choice', message, buttons: [yes, no] })) as number | undefined;
     return r === 0;
+  }
+  async choose(message: string, buttons: string[]): Promise<number | undefined> {
+    return (await this.prompt({ kind: 'choice', message, buttons })) as number | undefined;
   }
   async openUrl(url: string): Promise<void> {
     await vscode.env.openExternal(vscode.Uri.parse(url));
@@ -227,7 +230,7 @@ export class SetupPanel implements WizardUI, vscode.Disposable {
   .finish.ok { display: block; background: rgba(46,125,50,.15); border: 1px solid #2e7d32; }
   .finish.bad { display: block; background: rgba(183,28,28,.12); border: 1px solid #b71c1c; }
 </style></head><body><div class="wrap">
-<header><h1>Ashley setup</h1><span class="sub">Nine steps. Finished ones are skipped; rerun any time.</span></header>
+<header><h1>Ashley setup</h1><span class="sub">Ten steps. Finished ones are skipped; rerun any time.</span></header>
 <div class="bar" id="bar"></div>
 <div class="grid">
   <ol class="steps" id="steps"></ol>

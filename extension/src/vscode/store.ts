@@ -21,6 +21,7 @@ export class AshleyStore {
     const c = this.config;
     return {
       accessId: c.get<string>('accessId', ''),
+      twoFactorDone: c.get<boolean>('twoFactorDone', false),
       loginHost: c.get<string>('loginHost', 'warrior.grid.wayne.edu'),
       sshAlias: c.get<string>('sshAlias', 'wsu-grid'),
       nodeDomain: c.get<string>('nodeDomain', 'nas.grid.wayne.edu'),

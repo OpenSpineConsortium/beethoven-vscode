@@ -196,7 +196,7 @@
       {
         "id": "ashley.gettingStarted",
         "title": "Ashley: research on the Wayne State grid",
-        "description": "Ten minutes from a fresh laptop to a Claude worker on the grid.",
+        "description": "Ten steps from a fresh laptop to a Claude worker on the grid.",
         "steps": [
           {
             "id": "setup",
@@ -334,6 +334,11 @@
           "type": "string",
           "default": "auto",
           "description": "Which container a new worker runs: 'auto' = the lab's shared default when readable (no build, consistent across students), 'own' = the container built in your storage, or the name of a shared-library entry (Ashley: Start a Claude worker lets you pick)."
+        },
+        "ashley.twoFactorDone": {
+          "type": "boolean",
+          "default": false,
+          "description": "Set by the wizard once you confirmed a grid account with Google Authenticator (or once the grid accepted this laptop's key)."
         }
       }
     }

@@ -35,6 +35,7 @@ function settings(): WizardSettings {
   const gridScripts = [path.join(__dirname, 'grid'), path.join(__dirname, '..', 'grid'), path.join(__dirname, '..', '..', 'grid')].find((d) => fs.existsSync(d)) ?? path.join(__dirname, 'grid');
   return loadJson<WizardSettings>(SETTINGS, {
     accessId: '',
+    twoFactorDone: false,
     loginHost: 'warrior.grid.wayne.edu',
     sshAlias: 'wsu-grid',
     nodeDomain: 'nas.grid.wayne.edu',

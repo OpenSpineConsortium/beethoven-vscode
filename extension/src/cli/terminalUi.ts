@@ -51,6 +51,11 @@ export class TerminalUI implements WizardUI {
     const a = await this.ask(`${message}\n  1) ${yes}\n  2) ${no}\nChoose`, { value: '1' });
     return a === '1' || a?.toLowerCase() === yes.toLowerCase() || a?.toLowerCase() === 'y';
   }
+  async choose(message: string, buttons: string[]): Promise<number | undefined> {
+    const a = await this.ask(`${message}\n${buttons.map((b, i) => `  ${i + 1}) ${b}`).join('\n')}\nChoose`, { value: '1' });
+    const n = parseInt(a ?? '', 10);
+    return n >= 1 && n <= buttons.length ? n - 1 : undefined;
+  }
   async openUrl(url: string): Promise<void> {
     console.log(`Open this page: ${url}`);
     const cmd = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'cmd' : 'xdg-open';
