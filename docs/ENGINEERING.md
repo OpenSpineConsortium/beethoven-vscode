@@ -53,6 +53,18 @@ has cost time when it was broken.
 - The VS Code suite exports the graph (`docs/diagnostics_graph.json`); `python tools/diag_doc.py`
   regenerates `docs/DIAGNOSTICS.md`.
 
+## Testing on a virgin Windows
+
+The tests above run on machines that have Node, Git and an ssh key; a student's new laptop has
+none of them, and every "command not found" the wizard meets there is a message we have to have
+written. `tools/sandbox/` starts a throwaway Windows (Windows Sandbox) with nothing installed,
+puts VS Code and the packaged VSIX (or the Marketplace build) on it, writes a report of what the
+clean machine had and what happened, and leaves you in VS Code to walk the first-run path by hand:
+the signing dialog, the license, the sign-ins, the grid steps. `python tools/sandbox/make_wsb.py`,
+then double-click the `.wsb`; `tools/sandbox/README.md` has the one-time setup and what to look
+for. Do this before a release that changes the wizard, a first-run dialog or anything that looks
+for a tool on the laptop.
+
 ## Pull request text
 
 What changed and why; what was tested and how; what was checked against something outside the
