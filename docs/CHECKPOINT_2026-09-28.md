@@ -10,6 +10,36 @@ SHA256SUMS signed by k1). Committed and pushed as this checkpoint says below.
 
 ### What version 3 changed (pass 18)
 
+- **Pass 27 (2026-09-29 night): Ashley Bridge 5.0.0, the lab's shared copy of the tool; PATH block; repos and
+  releases.** (a) OnDemand's terminal could not find `hpcworker` (the login shell `/wsu/bin/wsush` reads `.bashrc`;
+  the install only printed a hint): framework 4 writes one managed PATH block into `~/.bashrc` on install
+  (default location only; `--no-shell-path`), tested; Greg's account refreshed and a fresh login shell finds it.
+  (b) Greg's design ("Claude Code is the gas, the Ashley code is the car"): **framework 5** adds a shared mode:
+  the lab keeps one read-only copy at `/rs/rs_grp_oschome/shared/ashley/hpcworker/current` -> `v<N>/`
+  (published with `tools/deploy_shared.sh`: LF/version checks, SHA-256 manifest, ACLs, atomic `current` flip,
+  never deletes); `hpcworker install --shared DIR` writes only a launcher (`~/.hpcworker/bin/hpcworker`, tag on
+  line 2), a marker (`~/.hpcworker/shared`), the profile and the PATH block; conversion moves an own copy to
+  `~/.hpcworker/replaced/<time>/`, refuses while a worker or probe runs; `HPCW_CODE` pins a running chain to its
+  `v<N>`; `version` says "5 (shared copy at DIR)". Live at Wayne State: v5 published, `current -> v5`, Greg's
+  account converted (profile kept). The **extension 5.0.0** reads `shared_install` from the bundled site profile,
+  runs `bash <shared>/bin/hpcworker install --shared <shared> --profile wayne` through the portal shell (no
+  upload), treats marker+launcher as the lab's copy (never outdated), falls back to the per-user upload when the
+  shared root is unusable (exit 3 / 126 / 127), Details shows "tool: shared copy, version 5 at ..."; e2e on the
+  mock: shared mode to online with 17 OK, upload mode to the install result. Agreement **v5** (the Framework may
+  be the lab's shared copy; section 17 says how each is updated; TERMS_VERSION 5), privacy statement **v6**;
+  `.gitattributes` keeps LF (deploy_shared.sh and the tests refuse CR). 153 extension tests, 120 framework tests;
+  AMO rebuild from the sources zip: 30/30 files identical. (c) **Repos**: the organisation's private copy
+  https://github.com/OpenSpineConsortium/ashley-bridge (created by API with WSL's stored GitHub credential; the grid
+  token has no org rights; `tools/push_org.sh`) mirrors GregorySchwing/ashley-bridge; releases v4.0.0 and v5.0.0
+  on both with chrome/edge/firefox/safari/sources zips + SHA256SUMS (also `release/<version>/`); README has the
+  developer build and release steps (`npm run zip:all`); `docs/store/TEST_BEFORE_UPLOAD.md` per browser. Edge takes
+  the Chromium zip (edge.zip == chrome.zip); safari.zip is converter input only. (d) **Facts for Greg**: students
+  must be in group `oschome` (members today: ab5188, go2432) before either mode works at Wayne State, and the image
+  folder `containers/claude-node22` carries group `wsu`; `shared/ashley` is group-writable; an unpacked 4.0.0 on a
+  converted account would upload its own copy over the launcher (use 5.0.0); the worker showed "stopped by request"
+  at 20:21Z (not by the tooling; unexplained). Open: a browser run of 5.0.0 against the live portal (does the Files
+  app read `current/VERSION` through the link?), a real job from the shared copy, Firefox e2e, the seen: records'
+  TTL, `/allowlist` still public for Ashley VS Code 3.0.0, k1.pem unencrypted, Safari, store accounts.
 - **Pass 26 (2026-09-29 evening): Ashley Bridge 4.0.0, no licence keys; the worker needs nothing on the laptop.**
   Greg's decision: "the user name to key complexity should be completely removed"; the portal sign-in identifies
   the person and the approved-AccessID list authorises. Built and proven: (a) **access service** `POST /access_check`
