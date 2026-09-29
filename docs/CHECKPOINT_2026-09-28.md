@@ -10,6 +10,40 @@ SHA256SUMS signed by k1). Committed and pushed as this checkpoint says below.
 
 ### What version 3 changed (pass 18)
 
+- **Pass 26 (2026-09-29 evening): Ashley Bridge 4.0.0, no licence keys; the worker needs nothing on the laptop.**
+  Greg's decision: "the user name to key complexity should be completely removed"; the portal sign-in identifies
+  the person and the approved-AccessID list authorises. Built and proven: (a) **access service** `POST /access_check`
+  (worker.js; text/plain or JSON body `{v,access_id,portal,product,version}`; CORS `*` + OPTIONS; records
+  `seen:<product>:<account>` with a salted IP hash; 120 checks/account/day; the list itself never returned; Ashley
+  VS Code 3.0.0 routes untouched; deployed; `services.json` gained `access_check`; `request.html` prefills
+  `?access_id=`); (b) **extension 4.0.0** (`src/licensing/access.ts`: services.json cached 24 h, approval cached
+  24 h with 7-day grace, a no kept 10 min, request only after the acceptance record; identity only from the
+  dashboard, `document.cookie` nowhere, a hygiene test greps for both; Access card, "Ask for access" button; check 1
+  "Access approved for <account> at <portal>"; the reviewer key, paste box, site keys, `identity.ts`, `license.ts`
+  removed; 133 tests; both manifests: storage/alarms/scripting/activeTab(+sidePanel), optional `https://*/*`,
+  Firefox `data_collection_permissions {required:["personallyIdentifyingInfo"]}`; AMO rebuild of the sources zip is
+  SHA-256 identical); an agent's end-to-end against the mock portal and the REAL service: st1234 (approved) reached
+  online with 17/17 checks, zz9999 (not approved) stopped at "Ask for access" with the request page prefilled and no
+  job; e2e logs in `extension/store-assets/e2e/`; three defects fixed on the way (a missing dashboard name fell back
+  to the home directory's owner as identity; a `<details>` render loop made ~10 portal requests/s; a 10 s fetch
+  limit tripped on cold DNS, now 30 s). (c) **Texts**: LICENSE v4 (section 3 approval and withdrawal, section 10
+  what Licensor receives), PRIVACY v5, TERMS_VERSION 4; store kit and landing page for 4.0.0; `docs/TESTERS.md`
+  (no key; ask for access; after it connects nothing on the laptop is needed). (d) **Framework 3**: seven-day
+  resume window (was 4 h), stable session name `<site>-<run>` (was `<site>-<job>`), `email_domain` dropped with a
+  tolerant loader; installed on the grid (profile kept). (e) **Revocations**: L-kBUmEepmm5D8 (tester site key),
+  L-Dw8z5-3R4RAK (store-reviewer key), L-GarA16i3MWkb (3-day mock key) revoked and published (`/revoked` lists 6);
+  vendor tool lost the site edition and `--domain`; `grid/license.js` refuses domain keys (reaches installs with
+  the next Ashley VSIX). (f) **Laptop-off property, observed**: `hpcworker worker start` over ssh with no browser
+  started job 40504883 on mdt7, registered `wayne-40504883`, environment
+  `https://claude.ai/code?environment=env_01CgWERV6rm8gb61NvaBcn9s`, successor 40504887 queued (afterany); earlier
+  today the chain 40501099 -> 40501175 rolled over with `--continue` and kept its session name. Nothing on the
+  laptop is part of the running worker; the portal is needed only to start, stop or restart the chain. Not yet
+  observed: a reopen from claude.ai after the successor takes over (8 h wall time), and a Firefox end-to-end run.
+  Live: pages (privacy v5, agreement v4, "After it connects"), `services.json` with `access_check`, the prefill.
+  Tester package 4.0.0 on the Desktop (no key). Open: the walk-through recordings (optional); `/allowlist` still
+  returns the whole approved list to anyone (Ashley VS Code 3.0.0 depends on it); `request.html` is Wayne-shaped;
+  the `seen:` records have no TTL; k1.pem unencrypted; Safari deferred; a human run of 4.0.0 against
+  ondemand.grid.wayne.edu before the first store submission.
 - **Pass 25 (2026-09-29 afternoon): Ashley Bridge 3.0.0 store kit; pages and kill-list live.** A two-stream
   workflow (site pages + signed kill-list; store listing kit + screenshots), each stream reviewed, found three
   defects in what would have been published, all fixed the same afternoon: (1) the privacy and licence texts said
