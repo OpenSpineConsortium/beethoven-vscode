@@ -1,10 +1,11 @@
 # The access, licence and report service
 
 One Cloudflare Worker (`worker.js`) gives Ashley five things without a server to keep: the list of
-approved AccessIDs (asked for from the website, managed from an admin page), keys issued in the
-student's own name to approved people (Ashley in VS Code), a yes-or-no approval check for one account
-(Ashley Bridge, which has no keys), error reports filed as issues in the private repository, and the
-published list of withdrawn keys. It runs on the maintainer's own accounts (Cloudflare, GitHub); no
+approved AccessIDs (asked for from the website, e-mailed to the maintainer with Approve and Deny links,
+managed from an admin page), keys issued in the student's own name to approved people (Ashley in VS
+Code), a yes-or-no approval check for one account (Ashley Bridge, which has no keys), error reports
+filed as issues in the private repository, and the published list of withdrawn keys. It runs on the
+maintainer's own accounts (Cloudflare, GitHub, Resend for the e-mail); no
 student credential other than the Microsoft sign-in token for a key ever reaches it, and that token
 is used once, to ask Microsoft who the person is. Nothing here logs a token, an e-mail or an IP
 address.
@@ -14,12 +15,13 @@ address.
 | Route | Who calls it | What it does |
 |---|---|---|
 | `GET /allowlist` | the extension (`ashley.allowlistUrl`) | the approved AccessIDs, in the shape of `extension/media/allowlist.json`; cached one minute |
-| `POST /request` | `docs/site/request.html` | a student asks for access: stored as pending, filed as an issue labelled `access-request`; answers pending, approved or denied |
+| `POST /request` | `docs/site/request.html` | a student asks for access: stored as pending, e-mailed to the maintainer with Approve and Deny links (see [Requests by e-mail](#requests-by-e-mail)), filed as an issue labelled `access-request` when `GITHUB_TOKEN` is set; answers pending, approved or denied |
+| `GET` and `POST /decide?t=<token>` | the links in that e-mail | GET shows one question and one button; the button POSTs the decision |
 | `POST /trial` | the extension (`ashley.licenseServiceUrl`) | a key for a signed-in, approved person; three a day at most; the key's id is written to the approved record |
 | `POST /access_check` | Ashley Bridge (`services.json` key `access_check`) | is this one account approved? Yes or no, from the same list; contract in [ACCESS_CHECK.md](ACCESS_CHECK.md) |
 | `GET /revoked` | every installation, daily | the signed revocation list |
 | `POST /report` | installations that allow error reports | an issue labelled `diagnostic-report`; repeats add a count |
-| `/admin/*` | `docs/site/admin.html`, `publish.sh` | `list`, `approve`, `deny`, `add`, `remove`, `revoke-lid`, behind the bearer token `ADMIN_TOKEN` |
+| `/admin/*` | `docs/site/admin.html`, `publish.sh`, `admin.mjs` | `list`, `approve`, `deny`, `add`, `remove`, `revoke-lid`, `notify-test`, behind the bearer token `ADMIN_TOKEN` |
 | `GET /health` | you | `{"ok":true}` |
 
 ## Deploy (once, from the maintainer's machine)
@@ -100,10 +102,12 @@ machine's address. The free plan covers a lab.
 ## The approved list, day to day
 
 - A student fills in `request.html`: AccessID, name, `AccessID@wayne.edu`, what they will use Ashley
-  for. The Worker checks the four fields, stores a pending record, and opens an issue titled
-  `Access request: <AccessID>` labelled `access-request` so you see it in the repository.
-- You open `admin.html` and click Approve (or Deny, with a reason the student does not see). Add puts
-  someone on the list without a request. Every click confirms first.
+  for. The Worker checks the four fields, stores a pending record and e-mails you about it (next
+  section); with `GITHUB_TOKEN` set it also opens an issue titled `Access request: <AccessID>` labelled
+  `access-request`.
+- You press Approve or Deny in that e-mail, or open `admin.html` and click Approve (or Deny, with a
+  reason the student does not see). Add puts someone on the list without a request. Every click
+  confirms first.
 - The student runs the wizard: the Wayne State sign-in step fetches `/allowlist`, finds them, and the
   trial button asks `/trial` for a key. The Worker asks Microsoft who they are, requires the approved
   record, and signs a key for `TRIAL_DAYS` days (365) with the trial key; a person can be issued three
@@ -121,6 +125,66 @@ machine's address. The free plan covers a lab.
   `GET /admin/list`. [ACCESS_CHECK.md](ACCESS_CHECK.md) is the contract.
 - The mock portal the store reviewers run signs in as `st1234`; that name is on the approved list
   (note "store-reviewer mock username") so the reviewers' copy is approved by the real service.
+
+## Requests by e-mail
+
+Every request the form stores is e-mailed to you, one e-mail per AccessID a day at most: pressing the
+button again the same day adds nothing to your inbox, and a repeat after 24 hours sends one reminder.
+The e-mail, subject `Ashley access request: <AccessID> (<name>)`, says who asked (name, AccessID,
+e-mail, what for, when, and which product sent them when the form says so) and carries an Approve link,
+a Deny link and the admin page's address. A link opens a page with one question and one button; nothing
+is decided until the button is pressed. Approve writes the same approved record the admin page writes,
+with `by: "e-mail link"` in place of `"admin"`; Deny writes the same denied record, with no reason. The
+audit line says the same. The student is not e-mailed either way; tell them. Sending is best effort: if
+the mail provider fails, the request is still stored and answered pending, the Worker logs the
+provider's status (never the key or an address), and the admin page lists the request as before.
+
+The mail goes through Resend's HTTP API (the domain's DNS is at Spaceship, not Cloudflare, so
+Cloudflare's own mail sending is not available). Until the key exists, nothing is sent, the Worker logs
+`mail: no provider configured` for each request, and everything else works as before. Setting it up,
+once:
+
+1. Sign up at https://resend.com with go2432@wayne.edu and confirm the address from Resend's e-mail.
+2. In Resend, open API Keys, press Create API Key (Sending access is enough), and copy the key; it is shown once.
+3. Save it as one line, nothing else, in `C:/Users/grego/.ashley-vendor/resend_api_key`.
+4. From WSL: `cd /mnt/c/Users/grego/OneDrive/Desktop/ashley && ASHLEY_VENDOR_DIR=/mnt/c/Users/grego/.ashley-vendor PATH=$HOME/node22/bin:$PATH bash tools/intake/deploy.sh`
+5. Then `ASHLEY_VENDOR_DIR=/mnt/c/Users/grego/.ashley-vendor PATH=$HOME/node22/bin:$PATH node tools/intake/admin.mjs notify-test`: it prints `sent: the provider answered 200` and the test arrives (the first one may land in junk).
+
+Until the domain is verified at Resend, Resend sends only from `onboarding@resend.dev` and only to the
+address that owns the Resend account, which is why that account is yours. Later, to send from the
+domain or to e-mail students too: in Resend, Domains, add `openspineconsortium.com`; add the DNS
+records Resend lists at Spaceship; once Resend says Verified, write a sender such as
+`Ashley access <access@openspineconsortium.com>` into `mail_from` and run `deploy.sh` again.
+
+| File in the vendor folder | Secret | When absent |
+|---|---|---|
+| `resend_api_key` | `RESEND_API_KEY` | nothing is sent; `deploy.sh` says so and leaves any key already in the Worker in place |
+| `decide_key` | `DECIDE_KEY` | `deploy.sh` makes it: 32 random bytes, base64. A new key makes every link already sent answer "not valid" |
+| `notify_to` | `NOTIFY_TO` | `deploy.sh` writes `go2432@wayne.edu`; several addresses may be given, separated by commas |
+| `mail_from` | `MAIL_FROM` | `deploy.sh` writes `Ashley access <onboarding@resend.dev>` |
+
+`deploy.sh` pipes each file into `wrangler secret put`; no value is on a command line or in its output.
+`wrangler.toml` needs no binding for these.
+
+**The link.** `https://<worker>/decide?t=<payload>.<signature>`, where `payload` is the base64url of
+the JSON `{"v":1,"access_id":"ab1234","decision":"approve","nonce":"<22 characters>","exp":<seconds>}`
+and `signature` is the base64url of HMAC-SHA256 over `payload` with `DECIDE_KEY`. `exp` is 14 days
+after the e-mail was sent. The two links in one e-mail share the nonce, so once either is used, both
+are spent. The link carries the AccessID and the decision only; the person's name is read from the
+record when the page opens. The pages have no scripts, are not cached (`Cache-Control: no-store`), and
+send no Referer, so following the admin-page link from them does not pass the token on.
+
+**What a link scanner can and cannot do.** Mail programs and scanners (Microsoft's Safe Links at
+Wayne State, for one) often open links before you do. Opening a link (GET) only shows the question: it
+writes nothing, and the tests hold it to that. Only the button (a POST with `confirm=1`) decides. A
+scanner that also pressed buttons on the pages it opened would decide; such scanners are rare, and the
+record would say `by: "e-mail link"` with the time; if that ever happens, undo it on the admin page.
+Nobody can change a link into another one: a different AccessID or decision breaks the signature and
+the page says "not valid". A used link says "already used", a link older than 14 days says "expired",
+and both point at the admin page. Anyone who has the e-mail can use its links, so the links are as
+private as your inbox: do not forward the e-mail. KV takes up to a minute to reach every Cloudflare
+location, so two presses from far-apart places within that minute could both get through; for the same
+decision that changes nothing.
 
 ## Publishing your own revocation list
 
@@ -151,6 +215,8 @@ withdrew reach installations through `/revoked`.
 | ACCESS | `revoked`, `revoked_signed` | the withdrawn key ids; the signed list | until replaced |
 | ACCESS | `audit:<time>` | action, AccessID, by | for the record |
 | ACCESS | `req:<hash>:<day>` | requests from one connection (a salted hash; the address itself is never stored) | 2 days |
+| ACCESS | `notified:<AccessID>` | when the last e-mail about this person's request was sent | 24 hours |
+| ACCESS | `decide:<nonce>` | a used e-mail link: AccessID, decision, when | 30 days (a link lives 14) |
 | ACCESS | `seen:<product>:<AccessID>` | the last access check for that product and account: portal, version, time of the first and the last check, how many, the salted hash of the address, the decision, when the decision last changed | until the maintainer deletes it |
 | ACCESS | `chk:<AccessID>:<day>`, `chkip:<hash>:<day>` | access checks that day per account (120 at most) and per connection (2000 at most) | 2 days |
 | TRIALS | `<AccessID>` | the last key issued: time, key id, e-mail, end date | for the record |
@@ -158,8 +224,9 @@ withdrew reach installations through `/revoked`.
 | REPORTS | `rate:<install id>:<day>` | count | 2 days |
 | REPORTS | `sig:<signature>` | issue number, count | 365 days |
 
-The reports and the access requests themselves live in the GitHub issues, where the triage workflow
-reads them.
+The reports live in the GitHub issues, where the triage workflow reads them. The access requests live
+in KV (above) and in the maintainer's e-mail; they are filed as issues too only when `GITHUB_TOKEN` is
+set, which it is not today.
 
 ## Limits and checks
 

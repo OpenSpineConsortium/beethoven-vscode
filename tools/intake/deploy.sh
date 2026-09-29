@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
 # Deploy the access service end to end, after `wrangler login` has been done once on this machine:
-# KV namespaces (created if missing, ids written into wrangler.toml), the secrets (piped, never on a
-# command line), the Worker itself, then docs/site/services.json (the five service addresses, access_check
-# among them) and the support-site copy.
+# KV namespaces (created if missing, ids written into wrangler.toml), the secrets (piped from files in the
+# vendor folder, never on a command line), the Worker itself, then docs/site/services.json (the five service
+# addresses, access_check among them) and the support-site copy.
+# Files read from the vendor folder: admin_token, decide_key (both made here when absent), notify_to
+# (default go2432@wayne.edu), mail_from (default "Ashley access <onboarding@resend.dev>"), and
+# resend_api_key (optional: without it no e-mail is sent).
 #   bash tools/intake/deploy.sh            (Git Bash on Windows or any shell; needs node 22 and the vendor folder)
 #   From WSL on the maintainer's machine (the Windows network path times out against Cloudflare):
 #   ASHLEY_VENDOR_DIR=/mnt/c/Users/<you>/.ashley-vendor PATH=$HOME/node22/bin:$PATH bash tools/intake/deploy.sh
@@ -45,6 +48,20 @@ printf 'trial' | W secret put TRIAL_KID >/dev/null
 strip < "$VENDOR/admin_token" | W secret put ADMIN_TOKEN >/dev/null
 openssl rand -base64 32 | strip | W secret put IP_SALT >/dev/null
 echo "  TRIAL_KEY_PKCS8_B64, TRIAL_KID, ADMIN_TOKEN, IP_SALT set (GITHUB_TOKEN/GITHUB_REPO not set: requests are stored, no issue is opened)"
+# requests by e-mail (README.md, "Requests by e-mail"): the key that signs the Approve and Deny links is made
+# once and kept; the recipient and the sender have defaults; the Resend key is the maintainer's to add
+[ -s "$VENDOR/decide_key" ] || { umask 077; openssl rand -base64 32 | strip > "$VENDOR/decide_key"; echo "  made $VENDOR/decide_key"; }
+[ -s "$VENDOR/notify_to" ] || { printf 'go2432@wayne.edu' > "$VENDOR/notify_to"; echo "  made $VENDOR/notify_to (the default recipient)"; }
+[ -s "$VENDOR/mail_from" ] || { printf 'Ashley access <onboarding@resend.dev>' > "$VENDOR/mail_from"; echo "  made $VENDOR/mail_from (the default sender)"; }
+strip < "$VENDOR/decide_key" | W secret put DECIDE_KEY >/dev/null
+strip < "$VENDOR/notify_to" | W secret put NOTIFY_TO >/dev/null
+strip < "$VENDOR/mail_from" | W secret put MAIL_FROM >/dev/null
+if [ -s "$VENDOR/resend_api_key" ]; then
+  strip < "$VENDOR/resend_api_key" | W secret put RESEND_API_KEY >/dev/null
+  echo "  DECIDE_KEY, NOTIFY_TO, MAIL_FROM, RESEND_API_KEY set: each request is e-mailed to the address in notify_to"
+else
+  echo "  DECIDE_KEY, NOTIFY_TO, MAIL_FROM set; no $VENDOR/resend_api_key, so no e-mail is sent (README.md, Requests by e-mail)"
+fi
 
 echo "== deploy"
 OUT=$(W deploy 2>&1) || { echo "$OUT" | tail -20; exit 5; }

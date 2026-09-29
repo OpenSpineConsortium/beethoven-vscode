@@ -21,21 +21,25 @@ const KEYS = { test: L.rawFromPublicKey(crypto.createPublicKey(priv)) };
 const SITE = 'https://openspineconsortium.com';
 const ADMIN = { authorization: 'Bearer secret-admin-token' };
 
-// Cloudflare KV, in memory: get/put/delete and a paged list (two keys a page, to exercise the cursor)
+// Cloudflare KV, in memory: get/put/delete and a paged list (two keys a page, to exercise the cursor);
+// the expirationTtl of each put is kept in ttl so a test can read it (nothing expires on its own)
 class FakeKV {
   constructor() {
     this.m = new Map();
+    this.ttl = new Map();
   }
   async get(k, type) {
     const v = this.m.get(k);
     if (v === undefined) return null;
     return type === 'json' ? JSON.parse(v) : v;
   }
-  async put(k, v) {
+  async put(k, v, opts) {
     this.m.set(k, String(v));
+    this.ttl.set(k, opts && opts.expirationTtl);
   }
   async delete(k) {
     this.m.delete(k);
+    this.ttl.delete(k);
   }
   async list({ prefix = '', cursor } = {}) {
     const all = [...this.m.keys()].filter((k) => k.startsWith(prefix)).sort();
@@ -57,8 +61,20 @@ const people = {
   'tok-outsider': { id: '3', userPrincipalName: 'someone@example.com', mail: 'someone@example.com', displayName: 'Someone' },
 };
 const issues = [];
+// Resend, stubbed: every e-mail is kept; resend.status sets the answer (200, an error status, or 0 for
+// "cannot be reached"). fetched is every address the Worker called, to prove when it calls nothing.
+const mails = [];
+const resend = { status: 200 };
+const fetched = [];
 globalThis.fetch = async (url, init = {}) => {
   const u = String(url);
+  fetched.push(u);
+  if (u === 'https://api.resend.com/emails') {
+    mails.push({ headers: init.headers, body: JSON.parse(init.body) });
+    if (resend.status === 0) throw new TypeError('fetch failed');
+    if (resend.status === 200) return Response.json({ id: `email-${mails.length}` });
+    return Response.json({ statusCode: resend.status, name: 'validation_error', message: 'You can only send testing emails to your own email address' }, { status: resend.status });
+  }
   if (u.startsWith('https://graph.microsoft.com/')) {
     const me = people[String(init.headers.authorization || '').replace(/^Bearer /, '')];
     return me ? Response.json(me) : new Response('', { status: 401 });
@@ -69,6 +85,17 @@ globalThis.fetch = async (url, init = {}) => {
   }
   throw new Error(`unexpected fetch ${u}`);
 };
+
+// the Worker's "mail: ..." lines are kept here instead of printed, so a test can read them
+const logs = [];
+for (const level of ['log', 'error']) {
+  const real = console[level].bind(console);
+  console[level] = (...a) => {
+    const line = a.map(String).join(' ');
+    if (line.startsWith('mail:')) logs.push({ level, line });
+    else real(...a);
+  };
+}
 
 function call(env, method, pathname, { body, headers = {}, origin = SITE, ip = '203.0.113.7' } = {}) {
   const h = { ...(origin ? { origin } : {}), 'cf-connecting-ip': ip, ...headers };
@@ -497,4 +524,322 @@ test('/health and /report still answer', async () => {
   assert.ok(!issues[0].body.includes('hidden'));
   assert.equal((await call(env, 'POST', '/report', { origin: null, body: rep }).then(asJson)).body.issue, 1);
   assert.equal((await call(env, 'GET', '/nowhere', { origin: null }).then(asJson)).status, 404);
+});
+
+// Requests by e-mail (README.md): the maintainer's e-mail through Resend, and the /decide links in it.
+// No GitHub token here, as in the deployed Worker.
+const MAIL = { RESEND_API_KEY: 're_test_key_never_logged', DECIDE_KEY: 'decide-test-key', NOTIFY_TO: 'maintainer@example.edu', MAIL_FROM: 'Ashley access <onboarding@resend.dev>' };
+const mailEnv = (over = {}) => makeEnv({ ...MAIL, GITHUB_TOKEN: undefined, GITHUB_REPO: undefined, ...over });
+const ADMIN_PAGE = `${SITE}/ashley/admin.html`;
+const linksIn = (text) => ({ approve: /^Approve: (\S+)$/m.exec(text)[1], deny: /^Deny: (\S+)$/m.exec(text)[1] });
+const tokenOf = (link) => new URL(link).searchParams.get('t');
+const claimOf = (t) => JSON.parse(Buffer.from(t.split('.')[0], 'base64url').toString('utf8'));
+// the link's signature computed with node:crypto, apart from the Worker's WebCrypto code
+const sign = (payload, key = MAIL.DECIDE_KEY) => crypto.createHmac('sha256', key).update(payload).digest('base64url');
+const mint = (claim, key) => {
+  const p = Buffer.from(JSON.stringify(claim)).toString('base64url');
+  return `${p}.${sign(p, key)}`;
+};
+const asPage = async (res) => ({ status: res.status, headers: res.headers, text: await res.text() });
+const open = (env, t, method = 'GET') => call(env, method, `/decide?t=${t}`, { origin: null }).then(asPage);
+const press = (env, t, form = 'confirm=1') => call(env, 'POST', `/decide?t=${t}`, { origin: null, headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: form }).then(asPage);
+const snapshot = (env) => JSON.stringify([...env.ACCESS.m.entries()].sort());
+function plainPage(p, why) {
+  assert.match(p.headers.get('content-type'), /^text\/html/, why);
+  assert.equal(p.headers.get('cache-control'), 'no-store', why);
+  assert.equal(p.headers.get('referrer-policy'), 'no-referrer', why);
+  assert.match(p.headers.get('content-security-policy'), /default-src 'none'/, why);
+  assert.ok(!/<script/i.test(p.text), `${why}: no script`);
+}
+
+test('/request e-mails the maintainer once, with an Approve and a Deny link that verify', async () => {
+  const env = mailEnv();
+  mails.length = 0;
+  const r = await request(env);
+  assert.equal(r.status, 202);
+  assert.deepEqual(r.body, { status: 'pending' });
+  assert.equal(mails.length, 1);
+  const m = mails[0];
+  assert.equal(m.headers.authorization, `Bearer ${MAIL.RESEND_API_KEY}`);
+  assert.deepEqual(m.body.to, ['maintainer@example.edu']);
+  assert.equal(m.body.from, 'Ashley access <onboarding@resend.dev>');
+  assert.equal(m.body.subject, 'Ashley access request: ab1234 (A. Student)');
+  for (const s of ['A. Student asked for access to Ashley.', 'Name: A. Student', 'AccessID: ab1234', 'E-mail: ab1234@wayne.edu', 'What for: spine segmentation project', 'Asked: ', `The admin page lists every request: ${ADMIN_PAGE}`]) assert.ok(m.body.text.includes(s), s);
+  assert.ok(!m.body.text.includes('Asked from'), 'the form did not say which product');
+  assert.ok(!m.body.text.includes('Asked again'), 'a first request');
+  assert.ok(!JSON.stringify(m.body).includes(MAIL.RESEND_API_KEY), 'the key is only in the header');
+  const links = linksIn(m.body.text);
+  assert.ok(links.approve.startsWith('https://service.example/decide?t='));
+  assert.ok(links.deny.startsWith('https://service.example/decide?t='));
+  assert.ok(m.body.html.includes(`href="${links.approve}"`) && m.body.html.includes(`href="${links.deny}"`));
+  // the format README.md gives: base64url(JSON) "." base64url(HMAC-SHA256 of the first part with DECIDE_KEY)
+  const ta = tokenOf(links.approve);
+  const td = tokenOf(links.deny);
+  for (const t of [ta, td]) assert.equal(t.split('.')[1], sign(t.split('.')[0]));
+  const ca = claimOf(ta);
+  const cd = claimOf(td);
+  assert.deepEqual(Object.keys(ca), ['v', 'access_id', 'decision', 'nonce', 'exp']);
+  assert.deepEqual([ca.v, ca.access_id, ca.decision, cd.decision], [1, 'ab1234', 'approve', 'deny']);
+  assert.equal(ca.nonce, cd.nonce, 'one e-mail, one nonce: using either link spends both');
+  assert.match(ca.nonce, /^[A-Za-z0-9_-]{22}$/);
+  const days = (ca.exp - Date.now() / 1000) / 86400;
+  assert.ok(days > 13.99 && days <= 14, `exp is 14 days out, not ${days}`);
+  // each link opens its question, with the one button that POSTs back to the same address
+  let p = await open(env, ta);
+  assert.equal(p.status, 200);
+  plainPage(p, 'approve question');
+  assert.ok(p.text.includes('Approve access for A. Student (ab1234)?'));
+  assert.ok(p.text.includes(`<form method="post" action="/decide?t=${ta}"><input type="hidden" name="confirm" value="1"><button type="submit">Approve</button></form>`));
+  assert.ok(p.text.includes('Nothing has changed yet.'));
+  p = await open(env, td);
+  assert.equal(p.status, 200);
+  assert.ok(p.text.includes('Deny access for A. Student (ab1234)?'));
+  assert.ok(p.text.includes('<button type="submit">Deny</button>'));
+  // the product, when the form names it; what the person typed is shown as text, never as markup
+  const env2 = mailEnv();
+  mails.length = 0;
+  await request(env2, { accessId: 'cd5678', email: 'cd5678@wayne.edu', name: '<b>Eve</b> & co', note: '<img src=x onerror=alert(1)> research', product: 'bridge' });
+  assert.ok(mails[0].body.text.includes('Asked from: Ashley Bridge'));
+  // a product named like an Object property is shown as typed, not as Object's own members
+  const env4 = mailEnv();
+  await request(env4, { accessId: 'ef9012', email: 'ef9012@wayne.edu', product: 'constructor' });
+  assert.match(mails[1].body.text, /^Asked from: constructor$/m);
+  assert.ok(!mails[1].body.text.includes('native code'));
+  assert.ok(!mails[0].body.html.includes('<b>Eve') && !mails[0].body.html.includes('<img'));
+  assert.ok(mails[0].body.html.includes('&lt;b&gt;Eve&lt;/b&gt; &amp; co'));
+  const q = await open(env2, tokenOf(linksIn(mails[0].body.text).approve));
+  assert.ok(q.text.includes('Approve access for &lt;b&gt;Eve&lt;/b&gt; &amp; co (cd5678)?'));
+  assert.ok(q.text.includes('What for: &lt;img src=x onerror=alert(1)&gt; research'));
+  assert.ok(!q.text.includes('<b>Eve') && !q.text.includes('<img'));
+  const done = await press(env2, tokenOf(linksIn(mails[0].body.text).approve));
+  assert.ok(done.text.includes('&lt;b&gt;Eve&lt;/b&gt; &amp; co can click the Ashley Bridge icon now'));
+  assert.ok(!done.text.includes('<b>Eve'));
+});
+
+test('one e-mail per AccessID a day; a failed send is logged with its status only and tried again', async () => {
+  const env = mailEnv();
+  mails.length = 0;
+  await request(env);
+  await request(env, { note: 'again' });
+  await request(env);
+  assert.equal(mails.length, 1, 'repeats within the day send nothing');
+  assert.ok(env.ACCESS.m.has('notified:ab1234'));
+  assert.equal(env.ACCESS.ttl.get('notified:ab1234'), 86400);
+  await request(env, { accessId: 'cd5678', email: 'cd5678@wayne.edu' });
+  assert.equal(mails.length, 2, 'another person is their own e-mail');
+  // a day later KV has dropped the key: a repeat sends one reminder, which says so
+  env.ACCESS.m.delete('notified:ab1234');
+  await request(env, { note: 'still waiting' });
+  assert.equal(mails.length, 3);
+  assert.match(mails[2].body.text, /^Asked again: /m);
+  assert.match(mails[2].body.text, /^What for: still waiting$/m);
+  await request(env);
+  assert.equal(mails.length, 3);
+  // the provider refuses, then cannot be reached: the request is still stored and answered pending, the
+  // log has the status and nothing else, and no day starts until an e-mail actually goes
+  const bad = mailEnv();
+  mails.length = 0;
+  logs.length = 0;
+  try {
+    resend.status = 403;
+    let r = await request(bad);
+    assert.equal(r.status, 202);
+    assert.deepEqual(r.body, { status: 'pending' });
+    assert.ok(await bad.ACCESS.get('pending:ab1234'));
+    assert.equal(bad.ACCESS.m.has('notified:ab1234'), false);
+    resend.status = 0;
+    r = await request(bad);
+    assert.equal(r.status, 202);
+    assert.equal(mails.length, 2, 'the repeat tried again');
+  } finally {
+    resend.status = 200;
+  }
+  assert.deepEqual(logs, [{ level: 'error', line: 'mail: the provider answered 403 (validation_error)' }, { level: 'error', line: 'mail: the provider could not be reached (TypeError)' }]);
+  assert.ok(logs.every((l) => !l.line.includes(MAIL.RESEND_API_KEY) && !l.line.includes('@')));
+  await request(bad);
+  await request(bad);
+  assert.equal(mails.length, 3, 'once one goes, the day starts');
+});
+
+test('GET /decide never changes anything, however often a scanner opens the links', async () => {
+  const env = mailEnv();
+  mails.length = 0;
+  await request(env);
+  const { approve, deny } = linksIn(mails[0].body.text);
+  const before = snapshot(env);
+  for (let i = 0; i < 3; i++) for (const l of [approve, deny]) assert.equal((await open(env, tokenOf(l))).status, 200);
+  // a POST without confirm=1 only asks again; other methods are refused
+  const bare = await press(env, tokenOf(approve), '');
+  assert.equal(bare.status, 200);
+  assert.ok(bare.text.includes('Approve access for A. Student (ab1234)?'));
+  assert.equal((await press(env, tokenOf(approve), 'confirm=yes')).status, 200);
+  for (const m of ['PUT', 'DELETE', 'HEAD']) assert.equal((await open(env, tokenOf(approve), m)).status, 405, m);
+  assert.equal(snapshot(env), before, 'KV is exactly as it was');
+  assert.equal((await adminList(env)).body.pending.length, 1);
+  assert.deepEqual((await adminList(env)).body.approved, []);
+});
+
+test('the button applies the decision once, through the admin code, and spends both links', async () => {
+  const env = mailEnv();
+  mails.length = 0;
+  await request(env);
+  const { approve, deny } = linksIn(mails[0].body.text);
+  const ta = tokenOf(approve);
+  const done = await press(env, ta);
+  assert.equal(done.status, 200);
+  plainPage(done, 'approved page');
+  assert.ok(done.text.includes('<h1>Approved.</h1>'));
+  assert.ok(done.text.includes('A. Student can click the Ashley Bridge icon now; the extension re-checks within ten minutes.'));
+  assert.ok(done.text.includes(ADMIN_PAGE));
+  const rec = await env.ACCESS.get('approved:ab1234', 'json');
+  assert.deepEqual({ ...rec, approved_at: 'x' }, { name: 'A. Student', email: 'ab1234@wayne.edu', note: 'spine segmentation project', approved_at: 'x', by: 'e-mail link', lids: [] });
+  assert.ok(Math.abs(Date.parse(rec.approved_at) - Date.now()) < 5000);
+  assert.equal(await env.ACCESS.get('pending:ab1234'), null);
+  const audits = [...env.ACCESS.m.entries()].filter(([k]) => k.startsWith('audit:')).map(([, v]) => JSON.parse(v));
+  assert.deepEqual(audits, [{ action: 'approve', accessId: 'ab1234', by: 'e-mail link' }]);
+  // the admin page writes the same fields, by "admin"
+  const viaAdmin = mailEnv();
+  await request(viaAdmin);
+  const ap = await adminPost(viaAdmin, 'approve', { accessId: 'ab1234' });
+  assert.deepEqual(Object.keys(ap.body.record), Object.keys(rec));
+  assert.equal(ap.body.record.by, 'admin');
+  // the nonce is spent, kept 30 days
+  const nonce = claimOf(ta).nonce;
+  const spent = await env.ACCESS.get(`decide:${nonce}`, 'json');
+  assert.deepEqual([spent.access_id, spent.decision], ['ab1234', 'approve']);
+  assert.equal(env.ACCESS.ttl.get(`decide:${nonce}`), 30 * 86400);
+  // Ashley Bridge and Ashley in VS Code see the approval
+  assert.equal((await check(env, { access_id: 'ab1234' })).body.approved, true);
+  assert.ok((await call(env, 'GET', '/allowlist', { origin: null }).then(asJson)).body.accessIds.includes('ab1234'));
+  // a second press, the other link, or opening either again: already used, and nothing changes
+  const after = snapshot(env);
+  for (const [why, p] of [['pressed again', await press(env, ta)], ['the deny link', await press(env, tokenOf(deny))], ['opened again', await open(env, ta)]]) {
+    assert.equal(p.status, 410, why);
+    plainPage(p, why);
+    assert.ok(p.text.includes('This link was already used'), why);
+    assert.ok(p.text.includes(ADMIN_PAGE), why);
+  }
+  assert.equal(snapshot(env), after);
+  // Deny: the same denied record the admin page writes, by "e-mail link", the request time kept
+  const env2 = mailEnv();
+  mails.length = 0;
+  await request(env2, { accessId: 'cd5678', email: 'cd5678@wayne.edu' });
+  const asked = await env2.ACCESS.get('pending:cd5678', 'json');
+  const dn = await press(env2, tokenOf(linksIn(mails[0].body.text).deny));
+  assert.equal(dn.status, 200);
+  assert.ok(dn.text.includes('<h1>Denied.</h1>'));
+  const drec = await env2.ACCESS.get('denied:cd5678', 'json');
+  assert.equal(drec.by, 'e-mail link');
+  assert.equal(drec.requested_at, asked.requested_at);
+  assert.equal(drec.reason, '');
+  assert.ok(drec.denied_at);
+  assert.equal(await env2.ACCESS.get('pending:cd5678'), null);
+  assert.deepEqual((await request(env2, { accessId: 'cd5678', email: 'cd5678@wayne.edu' })).body, { status: 'denied' });
+  await request(viaAdmin, { accessId: 'cd5678', email: 'cd5678@wayne.edu' });
+  await adminPost(viaAdmin, 'deny', { accessId: 'cd5678', reason: 'no' });
+  assert.deepEqual(Object.keys(await viaAdmin.ACCESS.get('denied:cd5678', 'json')), Object.keys(drec));
+  // a Deny link for someone approved in the meantime changes nothing and says so
+  const env3 = mailEnv();
+  mails.length = 0;
+  await request(env3);
+  await adminPost(env3, 'approve', { accessId: 'ab1234' });
+  const late = await press(env3, tokenOf(linksIn(mails[0].body.text).deny));
+  assert.equal(late.status, 409);
+  assert.ok(late.text.includes('Nothing changed'));
+  assert.ok(await env3.ACCESS.get('approved:ab1234'));
+});
+
+test('a changed, cut, foreign or expired link decides nothing', async () => {
+  const env = mailEnv();
+  mails.length = 0;
+  await request(env);
+  const ta = tokenOf(linksIn(mails[0].body.text).approve);
+  const [p, s] = ta.split('.');
+  const claim = claimOf(ta);
+  const b64 = (o) => Buffer.from(JSON.stringify(o)).toString('base64url');
+  const before = snapshot(env);
+  const invalid = {
+    garbage: 'garbage',
+    empty: '',
+    'cut short': ta.slice(0, -5),
+    'one character of the signature changed': `${p}.${s[0] === 'A' ? 'B' : 'A'}${s.slice(1)}`,
+    'the decision changed': `${b64({ ...claim, decision: 'deny' })}.${s}`,
+    'another AccessID': `${b64({ ...claim, access_id: 'zz9999' })}.${s}`,
+    'signed with another key': mint(claim, 'another-key'),
+    'v 2': mint({ ...claim, v: 2 }),
+    'no nonce': mint({ ...claim, nonce: '' }),
+    'a decision that is neither': mint({ ...claim, decision: 'add' }),
+  };
+  for (const [why, t] of Object.entries(invalid)) {
+    for (const res of [await open(env, t), await press(env, t)]) {
+      assert.equal(res.status, 400, why);
+      plainPage(res, why);
+      assert.ok(res.text.includes('This link is not valid'), why);
+      assert.ok(res.text.includes(ADMIN_PAGE), why);
+    }
+  }
+  // a link signed here with the right key opens: the format is exactly the one README.md gives
+  assert.equal((await open(env, mint({ v: 1, access_id: 'ab1234', decision: 'approve', nonce: 'n'.repeat(22), exp: Math.floor(Date.now() / 1000) + 60 }))).status, 200);
+  const old = mint({ ...claim, exp: Math.floor(Date.now() / 1000) - 1 });
+  for (const res of [await open(env, old), await press(env, old)]) {
+    assert.equal(res.status, 410);
+    plainPage(res, 'expired');
+    assert.ok(res.text.includes('This link has expired'));
+    assert.ok(res.text.includes(ADMIN_PAGE));
+  }
+  assert.equal(snapshot(env), before, 'nothing was written');
+  assert.deepEqual((await adminList(env)).body.approved, []);
+  // no DECIDE_KEY: the e-mail carries no links and says to use the admin page; /decide says links are off
+  const off = mailEnv({ DECIDE_KEY: undefined });
+  mails.length = 0;
+  await request(off);
+  assert.ok(!mails[0].body.text.includes('/decide'));
+  assert.ok(mails[0].body.text.includes('decide on the admin page'));
+  assert.equal((await open(off, ta)).status, 503);
+});
+
+test('with no mail provider configured nothing is fetched and the request is answered as before', async () => {
+  const env = mailEnv({ RESEND_API_KEY: undefined });
+  mails.length = 0;
+  logs.length = 0;
+  fetched.length = 0;
+  const r = await request(env);
+  assert.equal(r.status, 202);
+  assert.deepEqual(r.body, { status: 'pending' });
+  assert.equal((await request(env)).status, 202);
+  assert.deepEqual(fetched, [], 'no call to any address');
+  assert.deepEqual(logs, [{ level: 'log', line: 'mail: no provider configured' }, { level: 'log', line: 'mail: no provider configured' }]);
+  assert.equal(env.ACCESS.m.has('notified:ab1234'), false);
+  assert.equal((await adminList(env)).body.pending.length, 1);
+  // approved or denied people are answered before any e-mail step: no line at all
+  logs.length = 0;
+  await adminPost(env, 'approve', { accessId: 'ab1234' });
+  assert.deepEqual((await request(env)).body, { status: 'approved' });
+  assert.deepEqual(logs, []);
+});
+
+test('/admin/notify-test sends one test e-mail and answers the provider status', async () => {
+  const env = mailEnv();
+  mails.length = 0;
+  assert.equal((await call(env, 'POST', '/admin/notify-test', { body: {} }).then(asJson)).status, 401);
+  assert.equal(mails.length, 0);
+  const before = snapshot(env);
+  let r = await adminPost(env, 'notify-test', {});
+  assert.equal(r.status, 200);
+  assert.deepEqual(r.body, { sent: true, provider_status: 200 });
+  assert.equal(mails.length, 1);
+  assert.equal(mails[0].body.subject, 'Ashley access: test e-mail');
+  assert.deepEqual(mails[0].body.to, ['maintainer@example.edu']);
+  assert.ok(mails[0].body.text.includes(ADMIN_PAGE));
+  assert.ok(!mails[0].body.text.includes('/decide'), 'a test carries no working link');
+  try {
+    resend.status = 403;
+    r = await adminPost(env, 'notify-test', {});
+  } finally {
+    resend.status = 200;
+  }
+  assert.deepEqual(r.body, { sent: false, provider_status: 403, detail: 'You can only send testing emails to your own email address' });
+  r = await adminPost(mailEnv({ RESEND_API_KEY: undefined }), 'notify-test', {});
+  assert.deepEqual(r.body, { sent: false, provider_status: null, detail: 'no provider configured' });
+  assert.equal(snapshot(env), before, 'a test writes nothing');
 });

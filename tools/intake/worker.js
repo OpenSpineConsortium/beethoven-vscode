@@ -3,7 +3,12 @@
 //                    The extension fetches it; the bundled copy is the fallback when no service is set.
 //   POST /request    a student asks for access from the website (docs/site/request.html). Validated,
 //                    rate-limited per hashed IP, stored as pending (KV ACCESS), filed as a GitHub issue
-//                    labelled access-request so the maintainer sees it; answered pending, approved or denied.
+//                    labelled access-request when GITHUB_TOKEN is set, and e-mailed to the maintainer
+//                    (NOTIFY_TO, through Resend with RESEND_API_KEY) with an Approve and a Deny link, one
+//                    e-mail per AccessID a day at most; answered pending, approved or denied.
+//   GET|POST /decide the page those two links open. The link is a signed capability (DECIDE_KEY, HMAC-SHA256,
+//                    14 days, one use); GET only asks the question, the page's one button POSTs the decision,
+//                    which goes through the same code as /admin/approve and /admin/deny.
 //   POST /trial      a free key in the caller's own name. The extension sends the Microsoft access token
 //                    VS Code holds for the institutional sign-in; the Worker asks Microsoft Graph who that
 //                    is, checks the e-mail domain, requires the AccessID to be approved, issues at most three
@@ -24,11 +29,11 @@
 //                    the list itself is never returned here. Answers carry an open CORS header (the
 //                    caller is an extension's background page); the body may be text/plain or JSON.
 //   /admin/*         the maintainer's page (docs/site/admin.html): list, approve, deny, add, remove,
-//                    revoke-lid. Behind a bearer token (secret ADMIN_TOKEN); put Cloudflare Access in
-//                    front of it as a second wall. Every write leaves an audit line (KV ACCESS audit:<time>).
+//                    revoke-lid, notify-test. Behind a bearer token (secret ADMIN_TOKEN); put Cloudflare Access
+//                    in front of it as a second wall. Every write leaves an audit line (KV ACCESS audit:<time>).
 // Everything a student sends is treated as hostile input: sizes are capped, strings are cleaned,
-// nothing is interpolated into anything but JSON. Nothing here logs a token, an e-mail or an IP
-// address, and an IP is stored only as a salted hash (secret IP_SALT). Deploy: see README.md.
+// nothing is interpolated into anything but JSON or escaped HTML. Nothing here logs a token, an e-mail
+// or an IP address, and an IP is stored only as a salted hash (secret IP_SALT). Deploy: see README.md.
 const MAX_REPORT_BYTES = 64 * 1024;
 const MAX_BODY_BYTES = 8 * 1024;
 const REPORTS_PER_INSTALL_PER_DAY = 10;
@@ -45,6 +50,16 @@ const PORTAL_HOST = /^(?=.{1,253}(:|$))[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z
 const PRODUCT_NAME = /^[a-z][a-z0-9-]{0,31}$/;
 const VERSION_TEXT = /^[0-9A-Za-z.+-]{1,40}$/;
 const DEFAULT_SITE_ORIGIN = 'https://openspineconsortium.github.io';
+// the maintainer's e-mail about a request: sent through Resend's HTTP API (the domain's DNS is not on
+// Cloudflare, so Cloudflare's own mail binding is not available); one per AccessID a day at most
+const RESEND_URL = 'https://api.resend.com/emails';
+const DEFAULT_MAIL_FROM = 'Ashley access <onboarding@resend.dev>';
+const NOTIFY_EVERY_SECONDS = 86400;
+// the Approve and Deny links: good for 14 days and for one use; a used link's nonce is kept 30 days
+const DECIDE_DAYS = 14;
+const DECIDE_NONCE_TTL = 30 * 86400;
+const DECIDE_TOKEN = /^([A-Za-z0-9_-]{16,2048})\.([A-Za-z0-9_-]{43})$/;
+const PRODUCTS = { bridge: 'Ashley Bridge', ashley: 'Ashley in VS Code', vscode: 'Ashley in VS Code' };
 
 const json = (status, body, headers) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store', ...(headers || {}) } });
 const b64u = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
@@ -53,6 +68,22 @@ const hex = (bytes) => [...bytes].map((b) => b.toString(16).padStart(2, '0')).jo
 const today = () => new Date().toISOString().slice(0, 10);
 const siteOrigin = (env) => String(env.SITE_ORIGIN || DEFAULT_SITE_ORIGIN).replace(/\/$/, '');
 const requestPage = (env) => env.REQUEST_PAGE || `${siteOrigin(env)}/ashley/request.html`;
+const adminPage = (env) => `${siteOrigin(env)}/ashley/admin.html`;
+const fromB64u = (s) => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - (s.length % 4)) % 4)), (c) => c.charCodeAt(0));
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+const oneLine = (s) => String(s ?? '').replace(/\s+/g, ' ').trim();
+
+// a time as the maintainer reads it: Detroit time, with UTC beside it (UTC alone if the zone is unknown)
+function readableTime(iso) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return String(iso || '');
+  const utc = `${d.toISOString().slice(0, 16).replace('T', ' ')} UTC`;
+  try {
+    return `${new Intl.DateTimeFormat('en-US', { timeZone: 'America/Detroit', dateStyle: 'medium', timeStyle: 'short' }).format(d)} Detroit time (${utc})`;
+  } catch {
+    return utc;
+  }
+}
 
 function clean(s, max = 400) {
   return String(s ?? '')
@@ -190,7 +221,135 @@ async function fileRequestIssue(env, accessId, name, note) {
   await fetch(`https://api.github.com/repos/${env.GITHUB_REPO}/issues`, { method: 'POST', headers: github(env), body: JSON.stringify({ title: `Access request: ${accessId}`, body, labels: ['access-request'] }) });
 }
 
-async function accessRequest(request, env) {
+// One e-mail to the maintainer through Resend. Best effort: the answer says whether it went, and a
+// failure is logged with the provider's status only (never the key, never an address).
+async function sendMail(env, { subject, text, html }) {
+  if (!env.RESEND_API_KEY) {
+    console.log('mail: no provider configured');
+    return { sent: false, status: null, detail: 'no provider configured' };
+  }
+  const to = String(env.NOTIFY_TO || '').split(',').map((x) => x.trim()).filter(Boolean);
+  if (!to.length) {
+    console.log('mail: no recipient configured');
+    return { sent: false, status: null, detail: 'no recipient configured' };
+  }
+  try {
+    const res = await fetch(RESEND_URL, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${env.RESEND_API_KEY}`, 'content-type': 'application/json', 'user-agent': 'ashley-intake' },
+      body: JSON.stringify({ from: env.MAIL_FROM || DEFAULT_MAIL_FROM, to, subject, text, html }),
+      signal: AbortSignal.timeout(10000),
+    });
+    const answer = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      console.error(`mail: the provider answered ${res.status}${answer && answer.name ? ` (${oneLine(answer.name).slice(0, 60)})` : ''}`);
+      return { sent: false, status: res.status, detail: oneLine(answer && answer.message).slice(0, 300) };
+    }
+    return { sent: true, status: res.status, id: answer && answer.id };
+  } catch (e) {
+    console.error(`mail: the provider could not be reached (${(e && e.name) || 'error'})`);
+    return { sent: false, status: null, detail: 'the provider could not be reached' };
+  }
+}
+
+// The Approve and Deny links. token = base64url(JSON {v, access_id, decision, nonce, exp}) + "." +
+// base64url(HMAC-SHA256 of that first part, key DECIDE_KEY). exp is in seconds. The two links of one
+// e-mail share a nonce, so once either is used both are spent.
+const decideKey = (env) => crypto.subtle.importKey('raw', ascii(env.DECIDE_KEY), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign', 'verify']);
+
+async function decideToken(env, claim) {
+  const body = b64u(ascii(JSON.stringify({ v: 1, access_id: claim.access_id, decision: claim.decision, nonce: claim.nonce, exp: claim.exp })));
+  return `${body}.${b64u(await crypto.subtle.sign('HMAC', await decideKey(env), ascii(body)))}`;
+}
+
+// { ok: true, claim } for a good link; { ok: false, why: 'invalid' | 'expired' } otherwise. The signature
+// is checked before anything in the token is read.
+async function readDecideToken(env, t) {
+  const m = DECIDE_TOKEN.exec(String(t || ''));
+  if (!m) return { ok: false, why: 'invalid' };
+  let good = false;
+  try {
+    good = await crypto.subtle.verify('HMAC', await decideKey(env), fromB64u(m[2]), ascii(m[1]));
+  } catch {
+    good = false;
+  }
+  if (!good) return { ok: false, why: 'invalid' };
+  let c;
+  try {
+    c = JSON.parse(new TextDecoder().decode(fromB64u(m[1])));
+  } catch {
+    return { ok: false, why: 'invalid' };
+  }
+  if (!c || c.v !== 1 || !ACCESS_ID.test(String(c.access_id)) || (c.decision !== 'approve' && c.decision !== 'deny') || !/^[A-Za-z0-9_-]{16,64}$/.test(String(c.nonce)) || !Number.isFinite(c.exp)) return { ok: false, why: 'invalid' };
+  if (c.exp * 1000 <= Date.now()) return { ok: false, why: 'expired', claim: c };
+  return { ok: true, claim: c };
+}
+
+// the maintainer's e-mail about one request, in plain text and the same in simple HTML
+async function requestMail(env, base, accessId, rec, { product, askedAgain } = {}) {
+  const name = oneLine(rec.name);
+  const facts = [
+    ['Name', name],
+    ['AccessID', accessId],
+    ['E-mail', rec.email],
+    ['What for', oneLine(rec.note) || '(no note)'],
+    ['Asked', readableTime(rec.requested_at)],
+    ...(askedAgain ? [['Asked again', readableTime(askedAgain)]] : []),
+    ...(product ? [['Asked from', product]] : []),
+  ];
+  let links = null;
+  if (env.DECIDE_KEY) {
+    const exp = Math.floor(Date.now() / 1000) + DECIDE_DAYS * 86400;
+    const nonce = b64u(crypto.getRandomValues(new Uint8Array(16)));
+    const link = async (decision) => `${base}/decide?t=${await decideToken(env, { access_id: accessId, decision, nonce, exp })}`;
+    links = { approve: await link('approve'), deny: await link('deny'), until: new Date(exp * 1000).toISOString().slice(0, 10) };
+  }
+  const how = links
+    ? `Each link opens a page with one button; nothing is decided until you press it. Use one of the two, once: after that both stop working. They work until ${links.until}.`
+    : 'The Approve and Deny links are off because the service has no DECIDE_KEY; decide on the admin page.';
+  const typed = 'The name and the note were typed by the person asking.';
+  const footer = 'Sent by the Ashley access service because someone filled in the request form. You get one e-mail per person a day at most. The person is not told when you decide; let them know.';
+  const text = [
+    `${name} asked for access to Ashley.`,
+    '',
+    ...facts.map(([k, v]) => `${k}: ${v}`),
+    '',
+    ...(links ? [`Approve: ${links.approve}`, '', `Deny: ${links.deny}`, ''] : []),
+    how,
+    '',
+    `The admin page lists every request: ${adminPage(env)}`,
+    '',
+    typed,
+    footer,
+  ].join('\n');
+  const a = (href, label) => `<a href="${esc(href)}">${esc(label)}</a>`;
+  const html = [
+    '<div style="font-family:system-ui,Segoe UI,Helvetica,Arial,sans-serif;font-size:15px;line-height:1.5">',
+    `<p>${esc(name)} asked for access to Ashley.</p>`,
+    `<table style="border-collapse:collapse">${facts.map(([k, v]) => `<tr><td style="padding:2px 12px 2px 0;color:#555">${esc(k)}</td><td style="padding:2px 0">${esc(v)}</td></tr>`).join('')}</table>`,
+    ...(links ? [`<p><strong>${a(links.approve, 'Approve')}</strong> &nbsp; &nbsp; ${a(links.deny, 'Deny')}</p>`] : []),
+    `<p>${esc(how)}</p>`,
+    `<p>The admin page lists every request: ${a(adminPage(env), adminPage(env))}</p>`,
+    `<p style="color:#555">${esc(typed)} ${esc(footer)}</p>`,
+    '</div>',
+  ].join('\n');
+  return { subject: `Ashley access request: ${accessId} (${name})`, text, html };
+}
+
+// after a request is stored: one e-mail, unless this AccessID already had a pending request and was
+// e-mailed about in the last 24 hours. Only a sent e-mail starts the 24 hours.
+async function notifyRequest(env, base, accessId, rec, { product, repeat }) {
+  if (!env.RESEND_API_KEY) {
+    console.log('mail: no provider configured');
+    return;
+  }
+  const flag = `notified:${accessId}`;
+  if (repeat && (await env.ACCESS.get(flag))) return;
+  const r = await sendMail(env, await requestMail(env, base, accessId, rec, { product, askedAgain: repeat ? new Date().toISOString() : null }));
+  if (r.sent) await env.ACCESS.put(flag, new Date().toISOString(), { expirationTtl: NOTIFY_EVERY_SECONDS });
+}
+
+async function accessRequest(request, env, ctx) {
   const cors = siteCors(request, env);
   if (!cors) return json(403, { error: 'requests are taken from the Ashley website only' });
   if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
@@ -216,9 +375,18 @@ async function accessRequest(request, env) {
   if (await env.ACCESS.get(`approved:${accessId}`)) return reply(200, { status: 'approved' });
   if (await env.ACCESS.get(`denied:${accessId}`)) return reply(200, { status: 'denied' });
   const prior = await env.ACCESS.get(`pending:${accessId}`, 'json');
-  await env.ACCESS.put(`pending:${accessId}`, JSON.stringify({ name, email, note, requested_at: prior ? prior.requested_at : new Date().toISOString() }));
+  const rec = { name, email, note, requested_at: prior ? prior.requested_at : new Date().toISOString() };
+  await env.ACCESS.put(`pending:${accessId}`, JSON.stringify(rec));
   // one issue per request, not per retry; a failure to file is not the student's problem (the admin page lists it anyway)
   if (!prior && env.GITHUB_TOKEN && env.GITHUB_REPO) await fileRequestIssue(env, accessId, name, note).catch(() => {});
+  // the maintainer's e-mail, best effort: it never changes the answer. The form may say which product
+  // sent the person (product: "bridge"); it is only shown in the e-mail.
+  const asked = String(r.body.product ?? '').trim().toLowerCase();
+  // own keys only: a plain lookup would turn "constructor" into Object's source text
+  const product = PRODUCT_NAME.test(asked) ? (Object.hasOwn(PRODUCTS, asked) ? PRODUCTS[asked] : asked) : '';
+  const mail = notifyRequest(env, new URL(request.url).origin, accessId, rec, { product, repeat: !!prior }).catch((e) => console.error(`mail: not sent (${(e && e.name) || 'error'})`));
+  if (ctx && typeof ctx.waitUntil === 'function') ctx.waitUntil(mail);
+  else await mail;
   return reply(202, { status: 'pending' });
 }
 
@@ -300,6 +468,117 @@ async function trial(request, env) {
   return json(200, { key, detail: `trial license ${payload.lid} for ${accessId}, until ${new Date(payload.exp * 1000).toISOString().slice(0, 10)}` });
 }
 
+async function personRecords(env, accessId) {
+  const [pending, approved, denied] = await Promise.all([env.ACCESS.get(`pending:${accessId}`, 'json'), env.ACCESS.get(`approved:${accessId}`, 'json'), env.ACCESS.get(`denied:${accessId}`, 'json')]);
+  return { pending, approved, denied };
+}
+
+// Approve and deny, shared by the admin page (/admin/approve, /admin/deny; by "admin") and the e-mail
+// links (/decide; by "e-mail link"), so the records and the audit lines come out the same either way.
+// The answer is { status, body } as the admin route returns it.
+async function applyApprove(env, accessId, { note, by }) {
+  const { pending, approved, denied } = await personRecords(env, accessId);
+  const now = new Date().toISOString();
+  // a pending or a denied request becomes approved; the student's note is kept unless the admin writes one
+  const from = pending || denied;
+  if (!from && !approved) return { status: 404, body: { error: `no request from ${accessId}; use add` } };
+  const rec = approved || { name: from.name || '', email: from.email || `${accessId}@wayne.edu`, note: from.note || '', approved_at: now, by, lids: [] };
+  if (note !== undefined) rec.note = clean(note, 500).trim();
+  await env.ACCESS.put(`approved:${accessId}`, JSON.stringify(rec));
+  await Promise.all([env.ACCESS.delete(`pending:${accessId}`), env.ACCESS.delete(`denied:${accessId}`)]);
+  await audit(env, 'approve', accessId, { by });
+  return { status: 200, body: { status: 'approved', accessId, record: rec } };
+}
+
+async function applyDeny(env, accessId, { reason, by }) {
+  const { pending, approved, denied } = await personRecords(env, accessId);
+  if (approved) return { status: 409, body: { error: `${accessId} is approved; use remove` } };
+  const from = pending || denied || {};
+  const rec = { name: from.name || '', email: from.email || `${accessId}@wayne.edu`, note: from.note || '', requested_at: from.requested_at, denied_at: new Date().toISOString(), by, reason: clean(reason, 200).trim() };
+  await env.ACCESS.put(`denied:${accessId}`, JSON.stringify(rec));
+  await env.ACCESS.delete(`pending:${accessId}`);
+  await audit(env, 'deny', accessId, { by });
+  return { status: 200, body: { status: 'denied', accessId } };
+}
+
+// the small pages /decide answers with: no scripts (the CSP forbids them), not cached, not indexed, and
+// no Referer, so the link's token never leaves in a header when the admin-page link is followed
+const PAGE_HEADERS = {
+  'content-type': 'text/html; charset=utf-8',
+  'cache-control': 'no-store',
+  'content-security-policy': "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
+  'referrer-policy': 'no-referrer',
+  'x-content-type-options': 'nosniff',
+  'x-robots-tag': 'noindex',
+};
+
+// title and paragraphs are plain text (escaped here); form, when given, is the one button
+function decidePage(status, title, paragraphs, form) {
+  const html = `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>${esc(title)}</title>
+<style>
+  :root { color-scheme: light dark; --ink: #1c1c1c; --muted: #555; --line: #ddd; --accent: #1f3b2e; --bg: #fff; }
+  @media (prefers-color-scheme: dark) { :root { --ink: #e8e8e8; --muted: #b0b0b0; --line: #333; --accent: #8fd3b0; --bg: #121212; } }
+  body { margin: 0 auto; padding: 32px 16px 48px; max-width: 640px; background: var(--bg); color: var(--ink); font: 16px/1.5 system-ui, "Segoe UI", Helvetica, Arial, sans-serif; }
+  h1 { font-size: 1.5em; margin: 0 0 12px; } a { color: var(--accent); } p.muted { color: var(--muted); }
+  button { margin-top: 8px; padding: 10px 22px; font: inherit; font-weight: 600; color: var(--bg); background: var(--accent); border: 0; border-radius: 6px; cursor: pointer; }
+</style>
+</head>
+<body>
+<h1>${esc(title)}</h1>
+${paragraphs.map((p) => (typeof p === 'string' ? `<p>${esc(p)}</p>` : `<p class="muted">${esc(p.muted)}${p.href ? ` <a href="${esc(p.href)}">${esc(p.link || p.href)}</a>.` : ''}</p>`)).join('\n')}
+${form ? `<form method="post" action="${esc(form.action)}"><input type="hidden" name="confirm" value="1"><button type="submit">${esc(form.button)}</button></form>` : ''}
+</body>
+</html>
+`;
+  return new Response(html, { status, headers: PAGE_HEADERS });
+}
+
+// GET /decide?t=<token> asks; POST /decide?t=<token> with confirm=1 decides. A GET never writes
+// anything, so a mail client or a link scanner that fetches the link decides nothing.
+async function decide(request, env, url) {
+  const toAdmin = (text) => ({ muted: text, href: adminPage(env), link: 'the admin page' });
+  if (request.method !== 'GET' && request.method !== 'POST') return decidePage(405, 'Open the link from the e-mail', [toAdmin('This address answers the links in the access e-mails. Decide on')]);
+  if (!env.DECIDE_KEY) return decidePage(503, 'E-mail links are off', ['The access service has no DECIDE_KEY, so it cannot check this link.', toAdmin('Decide on')]);
+  let t = url.searchParams.get('t') || '';
+  let confirmed = false;
+  if (request.method === 'POST') {
+    const len = Number(request.headers.get('content-length') || 0);
+    const form = new URLSearchParams(len > 4096 ? '' : (await request.text()).slice(0, 4096));
+    confirmed = form.get('confirm') === '1';
+    if (!t) t = form.get('t') || '';
+  }
+  const tok = await readDecideToken(env, t);
+  if (!tok.ok && tok.why === 'expired') return decidePage(410, 'This link has expired', [`The links in an access e-mail work for ${DECIDE_DAYS} days. Nothing was changed.`, toAdmin('Decide on')]);
+  if (!tok.ok) return decidePage(400, 'This link is not valid', ['It may have been cut short or changed on the way. Nothing was changed.', toAdmin('Decide on')]);
+  const c = tok.claim;
+  const approve = c.decision === 'approve';
+  const usedKey = `decide:${c.nonce}`;
+  const used = await env.ACCESS.get(usedKey, 'json');
+  if (used) return decidePage(410, 'This link was already used', [`A link from this e-mail was used on ${readableTime(used.used_at)}: ${used.access_id} was ${used.decision === 'approve' ? 'approved' : 'denied'} then. Nothing was changed now.`, toAdmin('To change the decision, use')]);
+  const { pending, approved, denied } = await personRecords(env, c.access_id);
+  const who = oneLine((pending || denied || approved || {}).name);
+  const label = who ? `${who} (${c.access_id})` : c.access_id;
+  if (!confirmed) {
+    const now = approved ? `${c.access_id} is approved already.` : denied ? `${c.access_id} was denied before.` : pending ? `Asked ${readableTime(pending.requested_at)}.${pending.note ? ` What for: ${oneLine(pending.note)}` : ''}` : `There is no request from ${c.access_id} on record any more.`;
+    const effect = approve ? 'Pressing the button puts them on the approved list: Ashley Bridge works at their next click on its icon, and Ashley in VS Code lets them through at the Wayne State sign-in step.' : 'Pressing the button marks the request not approved; they are not told the reason, and the request page will say not approved.';
+    return decidePage(200, `${approve ? 'Approve' : 'Deny'} access for ${label}?`, [now, effect, { muted: 'Nothing has changed yet. Closing this page does nothing.' }], { action: `/decide?t=${t}`, button: approve ? 'Approve' : 'Deny' });
+  }
+  // the nonce is spent before the decision is applied, so a second press (or the other link) is refused
+  await env.ACCESS.put(usedKey, JSON.stringify({ access_id: c.access_id, decision: c.decision, used_at: new Date().toISOString() }), { expirationTtl: DECIDE_NONCE_TTL });
+  const r = approve ? await applyApprove(env, c.access_id, { by: 'e-mail link' }) : await applyDeny(env, c.access_id, { reason: '', by: 'e-mail link' });
+  if (r.status === 404) return decidePage(409, 'Nothing changed', [`There is no request from ${c.access_id} on record any more; it may have been cleared on the admin page.`, toAdmin('To approve them anyway, use Add on')]);
+  if (r.status === 409) return decidePage(409, 'Nothing changed', [`${label} is approved already, so the request cannot be denied.`, toAdmin('To take the approval away, use Remove on')]);
+  if (r.status !== 200) return decidePage(500, 'Nothing changed', [`The service answered ${r.status}.`, toAdmin('Decide on')]);
+  if (approve) return decidePage(200, 'Approved.', [`${who || c.access_id} can click the Ashley Bridge icon now; the extension re-checks within ten minutes.`, 'In VS Code, Ashley lets them through at the Wayne State sign-in step. They are not told automatically; let them know.', toAdmin('Every request and approval is on')]);
+  return decidePage(200, 'Denied.', [`${label} is not approved. They are not told automatically, and the request page will say not approved if they ask again.`, toAdmin('To change this, use')]);
+}
+
 async function admin(request, env, url) {
   const cors = siteCors(request, env);
   if (!cors) return json(403, { error: 'origin not allowed' });
@@ -318,6 +597,19 @@ async function admin(request, env, url) {
   const body = r.body;
   const accessId = String(body.accessId ?? '').trim().toLowerCase();
   const now = new Date().toISOString();
+  if (route === 'notify-test') {
+    // one test e-mail to the maintainer; the answer is the provider's status (null when nothing was sent)
+    const text = [
+      'This is a test from the Ashley access service, sent with admin.mjs notify-test. Nothing needs doing.',
+      '',
+      'E-mail works. When someone asks for access, a message arrives with their name, AccessID, e-mail and note, and an Approve and a Deny link.',
+      '',
+      `The admin page: ${adminPage(env)}`,
+    ].join('\n');
+    const html = `<div style="font-family:system-ui,Segoe UI,Helvetica,Arial,sans-serif;font-size:15px;line-height:1.5">${text.split('\n\n').map((p) => `<p>${esc(p)}</p>`).join('')}</div>`;
+    const m = await sendMail(env, { subject: 'Ashley access: test e-mail', text, html });
+    return reply(200, { sent: m.sent, provider_status: m.status, ...(m.detail ? { detail: m.detail } : {}) });
+  }
   if (route === 'revoke-lid') {
     // one lid, or several in one call: KV is eventually consistent, so several quick calls that each
     // read the list, add one id and write it back can lose the earlier ids; publish.sh sends them all at once
@@ -328,27 +620,16 @@ async function admin(request, env, url) {
     return reply(200, { status: 'revoked', ...(lids.length === 1 ? { lid: lids[0] } : { lids }), revoked });
   }
   if (!ACCESS_ID.test(accessId)) return reply(400, { error: 'accessId looks like ab1234' });
-  const [pending, approved, denied] = await Promise.all([env.ACCESS.get(`pending:${accessId}`, 'json'), env.ACCESS.get(`approved:${accessId}`, 'json'), env.ACCESS.get(`denied:${accessId}`, 'json')]);
+  if (route === 'approve') {
+    const r = await applyApprove(env, accessId, { note: body.note, by: 'admin' });
+    return reply(r.status, r.body);
+  }
+  if (route === 'deny') {
+    const r = await applyDeny(env, accessId, { reason: body.reason, by: 'admin' });
+    return reply(r.status, r.body);
+  }
+  const { pending, approved, denied } = await personRecords(env, accessId);
   switch (route) {
-    case 'approve': {
-      // a pending or a denied request becomes approved; the student's note is kept unless the admin writes one
-      const from = pending || denied;
-      if (!from && !approved) return reply(404, { error: `no request from ${accessId}; use add` });
-      const rec = approved || { name: from.name || '', email: from.email || `${accessId}@wayne.edu`, note: from.note || '', approved_at: now, by: 'admin', lids: [] };
-      if (body.note !== undefined) rec.note = clean(body.note, 500).trim();
-      await env.ACCESS.put(`approved:${accessId}`, JSON.stringify(rec));
-      await Promise.all([env.ACCESS.delete(`pending:${accessId}`), env.ACCESS.delete(`denied:${accessId}`)]);
-      await audit(env, 'approve', accessId);
-      return reply(200, { status: 'approved', accessId, record: rec });
-    }
-    case 'deny': {
-      if (approved) return reply(409, { error: `${accessId} is approved; use remove` });
-      const rec = { name: (pending || denied || {}).name || '', email: (pending || denied || {}).email || `${accessId}@wayne.edu`, note: (pending || denied || {}).note || '', requested_at: (pending || denied || {}).requested_at, denied_at: now, reason: clean(body.reason, 200).trim() };
-      await env.ACCESS.put(`denied:${accessId}`, JSON.stringify(rec));
-      await env.ACCESS.delete(`pending:${accessId}`);
-      await audit(env, 'deny', accessId);
-      return reply(200, { status: 'denied', accessId });
-    }
     case 'add': {
       // approved without a request; an existing approval keeps its keys and its date
       const email = String(body.email || `${accessId}@wayne.edu`).trim().toLowerCase();
@@ -434,14 +715,15 @@ async function report(request, env) {
 }
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const p = url.pathname;
     if (request.method === 'GET' && p === '/health') return json(200, { ok: true });
     if (request.method === 'GET' && p === '/allowlist') return allowlist(env);
     if (request.method === 'GET' && p === '/revoked') return new Response((await env.ACCESS.get('revoked_signed')) || '', { headers: { 'content-type': 'text/plain', 'cache-control': 'max-age=300' } });
-    if (p === '/request') return accessRequest(request, env);
+    if (p === '/request') return accessRequest(request, env, ctx);
     if (p === '/access_check') return accessCheck(request, env);
+    if (p === '/decide') return decide(request, env, url);
     if (p.startsWith('/admin/')) return admin(request, env, url);
     if (request.method === 'POST' && p === '/trial') return trial(request, env);
     if (request.method === 'POST' && p === '/report') return report(request, env);

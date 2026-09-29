@@ -5,6 +5,7 @@
 //   node tools/intake/admin.mjs approve <accessId> ["<note>"]
 //   node tools/intake/admin.mjs deny <accessId> ["<reason>"]
 //   node tools/intake/admin.mjs remove <accessId>                                 withdraws approval and revokes the person's keys
+//   node tools/intake/admin.mjs notify-test                                       sends the maintainer a test e-mail; prints the provider's answer
 // The service address comes from docs/site/services.json (license_service minus /trial, or
 // ASHLEY_SERVICE_URL); the admin token from $ASHLEY_VENDOR_DIR/admin_token (default ~/.ashley-vendor),
 // read from the file and sent in a header, never taken from an argument.
@@ -43,5 +44,13 @@ switch (cmd) {
   case 'approve': console.log(JSON.stringify(await call('approve', { accessId: id, note: a2 || '' }))); break;
   case 'deny': console.log(JSON.stringify(await call('deny', { accessId: id, reason: a2 || '' }))); break;
   case 'remove': console.log(JSON.stringify(await call('remove', { accessId: id }))); break;
-  default: console.error('usage: admin.mjs list | add <id> "<name>" [<email>] ["<note>"] | approve <id> ["<note>"] | deny <id> ["<reason>"] | remove <id>'); process.exit(2);
+  case 'notify-test': {
+    const j = await call('notify-test', {});
+    if (j.sent) console.log(`sent: the provider answered ${j.provider_status}. Look in the inbox named in notify_to (and its junk folder).`);
+    else if (j.provider_status == null) console.log(`not sent: ${j.detail || 'unknown reason'}${j.detail === 'no provider configured' ? ' (put the Resend key in resend_api_key in the vendor folder and run deploy.sh)' : ''}`);
+    else console.log(`not sent: the provider answered ${j.provider_status}${j.detail ? `: ${j.detail}` : ''}`);
+    if (!j.sent) process.exit(1);
+    break;
+  }
+  default: console.error('usage: admin.mjs list | add <id> "<name>" [<email>] ["<note>"] | approve <id> ["<note>"] | deny <id> ["<reason>"] | remove <id> | notify-test'); process.exit(2);
 }

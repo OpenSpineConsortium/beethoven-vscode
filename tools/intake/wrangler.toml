@@ -10,7 +10,8 @@ SITE_ORIGIN = "https://openspineconsortium.com"
 # where /trial sends a person who is not approved yet
 REQUEST_PAGE = "https://openspineconsortium.com/ashley/request.html"
 
-# secrets, never here: TRIAL_KEY_PKCS8_B64, TRIAL_KID, ADMIN_TOKEN, IP_SALT, GITHUB_TOKEN, GITHUB_REPO
+# secrets, never here: TRIAL_KEY_PKCS8_B64, TRIAL_KID, ADMIN_TOKEN, IP_SALT, GITHUB_TOKEN, GITHUB_REPO,
+# DECIDE_KEY, NOTIFY_TO, MAIL_FROM, RESEND_API_KEY (the e-mail about each request; no binding needed)
 # (wrangler secret put, see README.md)
 
 # paste the ids that `wrangler kv namespace create` prints
