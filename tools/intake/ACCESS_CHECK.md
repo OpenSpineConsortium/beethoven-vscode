@@ -79,7 +79,7 @@ record; only the per-connection counter is touched. The records are listed, newe
 
 Approved: works; the answer is cached for 24 hours and kept up to 7 days when the service cannot be
 reached. Not approved: the strip's one button reads "Ask for access"; the answer is cached for 10
-minutes. Re-checked on every click of the icon and about once a day, and only after the agreement
+minutes. Re-checked on a click once the last answer is a day old or was no of the icon and about once a day, and only after the agreement
 is accepted, the portal is connected and the dashboard identity is known. Approval withdrawn (Remove
 on the admin page or `admin.mjs remove`) means the next check answers no and the extension stops
 starting workers and says so.
