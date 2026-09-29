@@ -4,15 +4,15 @@
 //
 //   node tools/license/ashley-license.mjs init [--kid k1] [--encrypt]      make a signing key (once)
 //   node tools/license/ashley-license.mjs issue --access-id ab1234 --name "A. Student" [--email ...]
-//        [--edition student|lab|trial|site] [--domain wayne.edu] [--days 365 | --until 2027-09-30]
+//        [--edition student|lab|trial] [--days 365 | --until 2027-09-30]        (one person per key; no site keys)
 //        [--grace 14] [--features a,b] [--kid k1] [--note "..."]              print a license key
 //   node tools/license/ashley-license.mjs verify <key | --file path> [--access-id ab1234]
 //   node tools/license/ashley-license.mjs list
 //   node tools/license/ashley-license.mjs revoke --lid L-... [--reason "..."]
 //   node tools/license/ashley-license.mjs sign-release <dir>              SHA256SUMS + SHA256SUMS.sig
 //   node tools/license/ashley-license.mjs verify-release <dir>
-//   node tools/license/ashley-license.mjs sign-killlist [--kid k1] [--revoked-lids L-a,L-b] [--revoked-versions 1.0.0,2.0.0]
-//        [--message "..."] [--out path]                            Ashley Bridge's signed kill-list (JSON)
+//   node tools/license/ashley-license.mjs sign-killlist [--kid k1] [--revoked-versions 1.0.0,2.0.0] [--revoked-lids L-a,L-b]
+//        [--message "..."] [--out path]      Ashley Bridge's signed withdrawn-versions list (JSON; lids kept for older readers)
 //   node tools/license/ashley-license.mjs verify-killlist <path>
 //
 // The private signing keys and the ledger of issued licenses (names, e-mails) live in the vendor
@@ -34,6 +34,7 @@ const KEYS_FILE = path.join(REPO, 'grid', 'license_keys.json');
 const BUNDLED_REVOKED = path.join(REPO, 'extension', 'media', 'revoked.txt');
 const VENDOR = path.resolve(process.env.ASHLEY_VENDOR_DIR || path.join(os.homedir(), '.ashley-vendor'));
 const RELEASE_DOMAIN = 'ASHLEY-RELEASE1\n';
+const EDITIONS = ['student', 'lab', 'trial'];
 
 function die(msg) {
   process.stderr.write(`ashley-license: ${msg}\n`);
@@ -181,14 +182,17 @@ switch (cmd) {
     break;
   }
   case 'issue': {
+    // a key names one person: an AccessID, an e-mail, or both. Keys for a whole domain are not issued
+    // (and verify refuses one), so no single key can stand in for the approved list.
+    if (has(args, '--domain')) die('--domain is gone: a key names one person (--access-id and/or --email); there are no site keys');
     const sub = flag(args, '--access-id');
     const email = flag(args, '--email');
-    const domain = flag(args, '--domain');
-    const edition = flag(args, '--edition', domain ? 'site' : 'student');
+    const edition = flag(args, '--edition', 'student');
+    if (!EDITIONS.includes(edition)) die(`--edition is one of ${EDITIONS.join(', ')}`);
     // trials are signed with the trial key when there is one, so paid keys and trials are told apart by signer
     const kid = flag(args, '--kid', edition === 'trial' ? trialKid() || newestKid() : newestKid());
     if (!kid) die('no signing key: run init first');
-    if (!sub && !email && !domain) die('say who it is for: --access-id (and --email), or --domain for a site license');
+    if (!sub && !email) die('say who it is for: --access-id (and --email)');
     if (sub && !/^[a-z]{2}\d{4}$/i.test(sub)) die('--access-id looks like ab1234');
     const now = Math.floor(Date.now() / 1000);
     const until = flag(args, '--until');
@@ -198,16 +202,17 @@ switch (cmd) {
     const features = (flag(args, '--features', '') || '').split(',').map((s) => s.trim()).filter(Boolean);
     const graceRaw = flag(args, '--grace');
     const key = L.signLicense(
-      { kid, sub, email, domain, edition, name: flag(args, '--name'), org: flag(args, '--org', ''), iat: now, nbf: now, exp, ...(graceRaw != null ? { grace_days: Number(graceRaw) } : {}), features },
+      { kid, sub, email, edition, name: flag(args, '--name'), org: flag(args, '--org', ''), iat: now, nbf: now, exp, ...(graceRaw != null ? { grace_days: Number(graceRaw) } : {}), features },
       privateKey(kid),
     );
     const check = L.verifyLicense(key, { keys: readKeys(), now });
     if (!check.ok) die(`the new key does not verify: ${check.detail}`);
     const p = check.payload;
+    if (p.domain) die('refusing to issue a key that names a domain');
     const rows = readLedger();
     rows.push({ lid: p.lid, issued_at: new Date().toISOString(), payload: p, note: flag(args, '--note', ''), key });
     writeLedger(rows);
-    const who = (sub || email || domain).replace(/[^A-Za-z0-9@._-]/g, '_');
+    const who = (sub || email).replace(/[^A-Za-z0-9@._-]/g, '_');
     const out = path.join(vendorDir('licenses'), `${who}-${p.lid}.key`);
     fs.writeFileSync(out, key + '\n', { mode: 0o600 });
     console.log(key);
@@ -218,10 +223,17 @@ switch (cmd) {
     const file = flag(args, '--file');
     const key = file ? L.findKey(fs.readFileSync(file, 'utf8')) : args.find((a) => a.startsWith('ASHLEY1.'));
     if (!key) die('give a key or --file');
+    // a key that names a domain is refused before anything else: such keys are no longer issued, and one
+    // that is still around belongs on the revocation list
+    const peeked = L.peek(key);
+    if (peeked && peeked.domain) {
+      console.log(JSON.stringify({ ok: false, status: 'refused', detail: `this key names a domain (${peeked.domain}) instead of a person; domain keys are not accepted any more. If it was issued, revoke it: revoke --lid ${peeked.lid || '?'}`, payload: peeked }, null, 1));
+      process.exit(2);
+    }
     const revoked = L.verifyRevocationList(fs.existsSync(BUNDLED_REVOKED) ? fs.readFileSync(BUNDLED_REVOKED, 'utf8') : '', readKeys());
     const accessId = flag(args, '--access-id');
     const r = L.verifyLicense(key, { keys: readKeys(), revoked: revoked.revoked, identity: accessId ? { accessId } : undefined });
-    console.log(JSON.stringify({ ok: r.ok, status: r.status, detail: r.detail, payload: r.payload || L.peek(key) }, null, 1));
+    console.log(JSON.stringify({ ok: r.ok, status: r.status, detail: r.detail, payload: r.payload || peeked }, null, 1));
     process.exit(r.ok ? 0 : 2);
     break;
   }
@@ -231,7 +243,7 @@ switch (cmd) {
     for (const r of rows) {
       const p = r.payload;
       const st = r.revoked ? `REVOKED ${r.revoked.at.slice(0, 10)}` : new Date(p.exp * 1000) < new Date() ? 'ended' : 'active';
-      console.log(`${p.lid}  ${st.padEnd(18)} ${p.edition.padEnd(8)} ${(p.sub || p.domain || '').padEnd(10)} ${(p.name || '').padEnd(24)} until ${new Date(p.exp * 1000).toISOString().slice(0, 10)}  ${r.note || ''}`);
+      console.log(`${p.lid}  ${st.padEnd(18)} ${p.edition.padEnd(8)} ${(p.sub || p.email || '').padEnd(10)} ${(p.name || '').padEnd(24)} until ${new Date(p.exp * 1000).toISOString().slice(0, 10)}  ${r.note || ''}`);
     }
     break;
   }

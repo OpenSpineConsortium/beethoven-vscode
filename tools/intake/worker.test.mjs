@@ -75,7 +75,7 @@ function call(env, method, pathname, { body, headers = {}, origin = SITE, ip = '
   const init = { method, headers: h };
   if (body !== undefined) {
     init.body = typeof body === 'string' ? body : JSON.stringify(body);
-    h['content-type'] = 'application/json';
+    if (!h['content-type']) h['content-type'] = 'application/json';
   }
   return worker.fetch(new Request(`https://service.example${pathname}`, init), env);
 }
@@ -251,7 +251,7 @@ test('/admin answers 401 without the token, with a wrong one, and when none is c
   assert.equal((await call(env, 'GET', '/admin/list', { headers: ADMIN, origin: 'https://evil.example' }).then(asJson)).status, 403);
   const ok = await adminList(env);
   assert.equal(ok.status, 200);
-  assert.deepEqual(ok.body, { pending: [], approved: [], denied: [], revoked: [] });
+  assert.deepEqual(ok.body, { pending: [], approved: [], denied: [], revoked: [], checks: [] });
   assert.equal(ok.headers.get('access-control-allow-origin'), SITE);
   assert.equal((await call(env, 'OPTIONS', '/admin/approve')).status, 204);
   assert.equal((await adminPost(env, 'nothing', { accessId: 'ab1234' })).status, 404);
@@ -308,6 +308,15 @@ test('revoke-lid withdraws one key and keeps the earlier ones on the list', asyn
   assert.equal((await trial(env, 'tok-ab1234')).status, 200);
   await adminPost(env, 'revoke-lid', { lid: 'L-3qou7DI5toan' });
   assert.equal((await env.ACCESS.get('revoked', 'json')).length, 2);
+  // several at once (what publish.sh sends), in one read-and-write of the list
+  const many = await adminPost(env, 'revoke-lid', { lids: ['L-kBUmEepmm5D8', 'L-Dw8z5-3R4RAK', 'L-kBUmEepmm5D8'] });
+  assert.equal(many.status, 200);
+  assert.deepEqual(many.body.lids, ['L-kBUmEepmm5D8', 'L-Dw8z5-3R4RAK']);
+  assert.deepEqual(many.body.revoked, ['L-3qou7DI5toan', 'L-Dw8z5-3R4RAK', 'L-kBUmEepmm5D8', L.peek(key).lid].sort());
+  assert.deepEqual(L.verifyRevocationList(await call(env, 'GET', '/revoked', { origin: null }).then((x) => x.text()), KEYS).revoked, many.body.revoked);
+  assert.equal((await adminPost(env, 'revoke-lid', { lids: ['L-kBUmEepmm5D8', 'nonsense'] })).status, 400);
+  assert.equal((await adminPost(env, 'revoke-lid', { lids: [] })).status, 400);
+  assert.equal((await adminPost(env, 'revoke-lid', {})).status, 400);
 });
 
 test('deny, then approve and add: the records move and an approved person cannot be denied', async () => {
@@ -328,6 +337,152 @@ test('deny, then approve and add: the records move and an approved person cannot
   assert.equal(add.body.record.name, 'A. Student');
   assert.equal(add.body.record.note, 'renewed');
   assert.equal(add.body.record.approved_at, ap.body.record.approved_at);
+});
+
+// Ashley Bridge's approval check, sent the way an extension's background page sends it: an extension
+// origin, a text/plain body (no preflight), no credentials
+const EXT = 'chrome-extension://abcdefghijklmnopabcdefghijklmnop';
+const CHECK = { v: 1, access_id: 'st1234', portal: 'ondemand.grid.wayne.edu', product: 'bridge', version: '4.0.0' };
+const check = (env, over = {}, opts = {}) => call(env, 'POST', '/access_check', { origin: EXT, headers: { 'content-type': 'text/plain;charset=UTF-8' }, body: { ...CHECK, ...over }, ...opts }).then(asJson);
+
+test('POST /access_check: open CORS on every answer, one account looked up, the exact answer shapes', async () => {
+  const env = makeEnv();
+  const pre = await call(env, 'OPTIONS', '/access_check', { origin: EXT });
+  assert.equal(pre.status, 204);
+  assert.equal(pre.headers.get('access-control-allow-origin'), '*');
+  assert.match(pre.headers.get('access-control-allow-methods'), /POST/);
+  assert.match(pre.headers.get('access-control-allow-headers'), /content-type/);
+  assert.equal(pre.headers.get('access-control-allow-credentials'), null);
+  assert.equal(pre.headers.get('cache-control'), 'no-store');
+  let r = await check(env);
+  assert.equal(r.status, 200);
+  assert.deepEqual(r.body, { approved: false, access_id: 'st1234', requestPage: `${SITE}/ashley/request.html` });
+  assert.equal(r.headers.get('access-control-allow-origin'), '*');
+  assert.equal(r.headers.get('cache-control'), 'no-store');
+  assert.equal(r.headers.get('access-control-allow-credentials'), null);
+  // Firefox may send a null origin, a Windows curl none, a page an application/json body: all the same answer
+  assert.deepEqual((await check(env, {}, { origin: 'null' })).body.approved, false);
+  assert.equal((await check(env, {}, { origin: null })).status, 200);
+  assert.equal((await call(env, 'POST', '/access_check', { origin: EXT, body: CHECK }).then(asJson)).body.approved, false);
+  await adminPost(env, 'add', { accessId: 'st1234', name: 'Store reviewer (mock portal)', note: 'store-reviewer mock username' });
+  r = await check(env);
+  assert.equal(r.status, 200);
+  assert.deepEqual(Object.keys(r.body), ['approved', 'access_id', 'checked', 'until']);
+  assert.equal(r.body.approved, true);
+  assert.equal(r.body.access_id, 'st1234');
+  assert.ok(Math.abs(Date.parse(r.body.checked) - Date.now()) < 5000, r.body.checked);
+  assert.equal(r.body.until, null);
+  assert.equal(r.headers.get('access-control-allow-origin'), '*');
+  assert.equal(r.headers.get('cache-control'), 'no-store');
+  assert.ok(!JSON.stringify(r.body).includes('Store reviewer'), 'the approved record itself is not in the answer');
+  // the same account in another spelling; a name that is not Wayne-shaped is simply not approved
+  assert.equal((await check(env, { access_id: ' ST1234 ' })).body.approved, true);
+  assert.equal((await check(env, { access_id: 'john.doe' })).body.approved, false);
+  assert.equal((await check(env, { access_id: 'student' })).body.approved, false);
+  // an approval with an end date: honoured while it lasts, refused after
+  const rec = await env.ACCESS.get('approved:st1234', 'json');
+  await env.ACCESS.put('approved:st1234', JSON.stringify({ ...rec, until: '2099-01-01T00:00:00.000Z' }));
+  r = await check(env);
+  assert.equal(r.body.approved, true);
+  assert.equal(r.body.until, '2099-01-01T00:00:00.000Z');
+  await env.ACCESS.put('approved:st1234', JSON.stringify({ ...rec, until: '2020-01-01T00:00:00.000Z' }));
+  assert.equal((await check(env)).body.approved, false);
+  await env.ACCESS.put('approved:st1234', JSON.stringify(rec));
+  assert.equal((await check(env)).body.approved, true);
+  // withdrawal: removed from the list, and the next check says no and points at the request page
+  await adminPost(env, 'remove', { accessId: 'st1234' });
+  r = await check(env);
+  assert.deepEqual(r.body, { approved: false, access_id: 'st1234', requestPage: `${SITE}/ashley/request.html` });
+  // the public allowlist route is what it was
+  const al = await call(env, 'GET', '/allowlist', { origin: null }).then(asJson);
+  assert.deepEqual(al.body, { about: 'AccessIDs approved to use Ashley', accessIds: [] });
+  assert.equal(al.headers.get('cache-control'), 'max-age=60');
+});
+
+test('POST /access_check refuses a malformed body with 400 and other methods with 405, CORS on each', async () => {
+  const env = makeEnv();
+  const cases = [
+    [{ v: 2 }, 'v'], [{ v: undefined }, 'no v'], [{ access_id: '' }, 'no account'], [{ access_id: 'a b' }, 'a space'], [{ access_id: 'x'.repeat(65) }, 'too long'], [{ access_id: '-x' }, 'leading dash'],
+    [{ portal: '' }, 'no portal'], [{ portal: 'not a host' }, 'not a host'], [{ portal: 'https://ondemand.grid.wayne.edu' }, 'a url, not a host'],
+    [{ product: '' }, 'no product'], [{ product: 'Bridge!' }, 'bad product'], [{ version: '' }, 'no version'], [{ version: 'v 4' }, 'bad version'],
+  ];
+  for (const [over, why] of cases) {
+    const r = await check(env, over);
+    assert.equal(r.status, 400, why);
+    assert.equal(r.headers.get('access-control-allow-origin'), '*', why);
+    assert.ok(r.body.error, why);
+  }
+  let r = await call(env, 'POST', '/access_check', { origin: EXT, headers: { 'content-type': 'text/plain;charset=UTF-8' }, body: 'not json' }).then(asJson);
+  assert.equal(r.status, 400);
+  assert.equal(r.body.error, 'not JSON');
+  assert.equal(r.headers.get('access-control-allow-origin'), '*');
+  assert.equal((await call(env, 'POST', '/access_check', { origin: EXT, body: [1, 2] }).then(asJson)).status, 400);
+  assert.equal((await call(env, 'POST', '/access_check', { origin: EXT, body: 'x'.repeat(9000) }).then(asJson)).status, 413);
+  for (const m of ['GET', 'PUT', 'DELETE']) {
+    r = await call(env, m, '/access_check', { origin: EXT }).then(asJson);
+    assert.equal(r.status, 405, m);
+    assert.equal(r.headers.get('access-control-allow-origin'), '*', m);
+  }
+  // a mock portal on a local port and a hostname in capitals are fine
+  assert.equal((await check(env, { portal: 'localhost:8080' })).status, 200);
+  assert.equal((await check(env, { portal: 'OnDemand.Grid.Wayne.EDU' })).status, 200);
+  // nothing but the day's counter for the connection is stored for a refused body
+  assert.ok([...env.ACCESS.m.keys()].every((k) => k.startsWith('chkip:') || k.startsWith('chk:') || k.startsWith('seen:')));
+  // no salt configured: the service is not open, with the CORS header so the caller can read that
+  const closed = makeEnv({ IP_SALT: '' });
+  const c = await check(closed);
+  assert.equal(c.status, 503);
+  assert.equal(c.headers.get('access-control-allow-origin'), '*');
+  assert.equal(closed.ACCESS.m.size, 0);
+});
+
+test('POST /access_check keeps one record per product and account, counts the day, never the address', async () => {
+  const env = makeEnv();
+  await adminPost(env, 'add', { accessId: 'st1234', name: 'Store reviewer (mock portal)' });
+  await check(env, { version: '4.0.0' });
+  await check(env, { version: '4.0.1' }, { ip: '198.51.100.9' });
+  const seen = await env.ACCESS.get('seen:bridge:st1234', 'json');
+  assert.equal(seen.access_id, 'st1234');
+  assert.equal(seen.portal, 'ondemand.grid.wayne.edu');
+  assert.equal(seen.product, 'bridge');
+  assert.equal(seen.version, '4.0.1', 'the last check wins');
+  assert.equal(seen.checks, 2);
+  assert.equal(seen.approved, true);
+  assert.ok(seen.first_seen && seen.last_seen && seen.first_seen <= seen.last_seen);
+  assert.match(seen.ip_hash, /^[0-9a-f]{32}$/);
+  assert.equal(seen.changed_at, undefined);
+  const stored = [...env.ACCESS.m.keys()].join('\n') + [...env.ACCESS.m.values()].join('\n');
+  assert.ok(!stored.includes('203.0.113.7') && !stored.includes('198.51.100.9'), 'the IP address is not in KV');
+  // the admin sees the checks; the other kinds are untouched by them
+  const list = await adminList(env);
+  assert.equal(list.body.checks.length, 1);
+  assert.equal(list.body.checks[0].access_id, 'st1234');
+  assert.equal(list.body.checks[0].product, 'bridge');
+  assert.deepEqual(list.body.pending, []);
+  assert.deepEqual(list.body.denied, []);
+  assert.equal(list.body.approved.length, 1);
+  // a withdrawal is recorded with the time the decision changed
+  await adminPost(env, 'remove', { accessId: 'st1234' });
+  await check(env);
+  const after = await env.ACCESS.get('seen:bridge:st1234', 'json');
+  assert.equal(after.approved, false);
+  assert.equal(after.checks, 3);
+  assert.ok(after.changed_at >= after.first_seen);
+  // another product is its own record
+  await check(env, { product: 'ashley', version: '3.0.0' });
+  assert.equal((await env.ACCESS.get('seen:ashley:st1234', 'json')).checks, 1);
+  assert.equal((await adminList(env)).body.checks.length, 2);
+  // the day's limit is per account: 120 checks pass, the 121st is 429, another account from the same address still passes
+  const many = makeEnv();
+  let last;
+  for (let i = 0; i < 120; i++) last = await check(many, { access_id: 'zz0001' });
+  assert.equal(last.status, 200);
+  const over = await check(many, { access_id: 'zz0001' });
+  assert.equal(over.status, 429);
+  assert.equal(over.headers.get('access-control-allow-origin'), '*');
+  assert.equal(over.headers.get('cache-control'), 'no-store');
+  assert.equal((await check(many, { access_id: 'zz0002' })).status, 200);
+  assert.equal((await many.ACCESS.get('seen:bridge:zz0001', 'json')).checks, 120, 'a refused check is not recorded as a check');
 });
 
 test('/health and /report still answer', async () => {

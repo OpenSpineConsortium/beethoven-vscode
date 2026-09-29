@@ -38,7 +38,7 @@ test('the affirmations say what the button does, name the dispute terms and are 
   assert.equal(editionForKey('trial'), 'trial');
   assert.equal(editionForKey(undefined), 'trial');
   assert.equal(editionForKey('student'), 'full');
-  assert.equal(editionForKey('site'), 'full');
+  assert.equal(editionForKey('lab'), 'full');
 });
 
 test('the record is written with the texts beside it and read back only for the version in force', () => {

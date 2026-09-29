@@ -1,12 +1,13 @@
 # The access, licence and report service
 
-One Cloudflare Worker (`worker.js`) gives Ashley four things without a server to keep: the list of
+One Cloudflare Worker (`worker.js`) gives Ashley five things without a server to keep: the list of
 approved AccessIDs (asked for from the website, managed from an admin page), keys issued in the
-student's own name to approved people, error reports filed as issues in the private repository, and
-the published list of withdrawn keys. It runs on the maintainer's own accounts (Cloudflare, GitHub);
-no student credential other than the Microsoft sign-in token for a key ever reaches it, and that
-token is used once, to ask Microsoft who the person is. Nothing here logs a token, an e-mail or an
-IP address.
+student's own name to approved people (Ashley in VS Code), a yes-or-no approval check for one account
+(Ashley Bridge, which has no keys), error reports filed as issues in the private repository, and the
+published list of withdrawn keys. It runs on the maintainer's own accounts (Cloudflare, GitHub); no
+student credential other than the Microsoft sign-in token for a key ever reaches it, and that token
+is used once, to ask Microsoft who the person is. Nothing here logs a token, an e-mail or an IP
+address.
 
 ## Routes
 
@@ -15,6 +16,7 @@ IP address.
 | `GET /allowlist` | the extension (`ashley.allowlistUrl`) | the approved AccessIDs, in the shape of `extension/media/allowlist.json`; cached one minute |
 | `POST /request` | `docs/site/request.html` | a student asks for access: stored as pending, filed as an issue labelled `access-request`; answers pending, approved or denied |
 | `POST /trial` | the extension (`ashley.licenseServiceUrl`) | a key for a signed-in, approved person; three a day at most; the key's id is written to the approved record |
+| `POST /access_check` | Ashley Bridge (`services.json` key `access_check`) | is this one account approved? Yes or no, from the same list; contract in [ACCESS_CHECK.md](ACCESS_CHECK.md) |
 | `GET /revoked` | every installation, daily | the signed revocation list |
 | `POST /report` | installations that allow error reports | an issue labelled `diagnostic-report`; repeats add a count |
 | `/admin/*` | `docs/site/admin.html`, `publish.sh` | `list`, `approve`, `deny`, `add`, `remove`, `revoke-lid`, behind the bearer token `ADMIN_TOKEN` |
@@ -67,15 +69,17 @@ then copy `docs/site/` into the site repository's `ashley/` folder):
   "revocation": "https://<worker>/revoked",
   "report": "https://<worker>/report",
   "request_page": "https://openspineconsortium.com/ashley/request.html",
-  "support_page": "https://openspineconsortium.com/ashley/support.html"
+  "support_page": "https://openspineconsortium.com/ashley/support.html",
+  "access_check": "https://<worker>/access_check"
 }
 ```
 
-The extension reads this file to find the service, and `request.html` and `admin.html` read it too, so
-the Worker's address lives in one place. While the four service values are empty the extension uses
-the allowlist bundled in the VSIX and the trial button says to ask the lead. The settings
-`ashley.licenseServiceUrl`, `ashley.allowlistUrl`, `ashley.licenseRevocationUrl` and
-`ashley.diagnostics.endpoint` still override the file for one installation.
+`deploy.sh` writes the five service addresses itself. The extension reads this file to find the
+service, Ashley Bridge reads `access_check` from it (cached for a day), and `request.html` and
+`admin.html` read it too, so the Worker's address lives in one place. While the four service values
+are empty the extension uses the allowlist bundled in the VSIX and the trial button says to ask the
+lead. The settings `ashley.licenseServiceUrl`, `ashley.allowlistUrl`, `ashley.licenseRevocationUrl`
+and `ashley.diagnostics.endpoint` still override the file for one installation.
 
 Check: `curl https://<worker>/health`, then open `admin.html`, paste the token from
 `~/.ashley-vendor/admin_token`, and add yourself.
@@ -107,6 +111,16 @@ machine's address. The free plan covers a lab.
 - Remove deletes the record and puts every key issued to that person on the revocation list, which
   the Worker signs with the trial key and serves at `/revoked`; installations fetch it daily. Withdraw
   one key on its own with the form at the bottom of the admin page (`revoke-lid`).
+- Ashley Bridge has no keys. The student signs in to their own Open OnDemand portal; the extension
+  reads the account name the portal's dashboard shows and asks `POST /access_check` whether that
+  account is on the approved list (when the portal is connected, on each click of its icon, and about
+  once a day). Yes means it works; no means its one button reads "Ask for access" and opens
+  `request.html?access_id=<account>`, which fills in the first field. Remove takes the approval away:
+  the next check answers no and the extension stops starting workers. The checks on record (who, from
+  which portal, which version, when, the decision) are the `checks` list in `admin.mjs list` and in
+  `GET /admin/list`. [ACCESS_CHECK.md](ACCESS_CHECK.md) is the contract.
+- The mock portal the store reviewers run signs in as `st1234`; that name is on the approved list
+  (note "store-reviewer mock username") so the reviewers' copy is approved by the real service.
 
 ## Publishing your own revocation list
 
@@ -119,8 +133,11 @@ bash publish.sh                    # sends every id in extension/media/revoked.t
 ```
 
 `publish.sh` verifies the bundled list against `grid/license_keys.json`, reads the admin token from
-`~/.ashley-vendor/admin_token`, posts each id, and checks that `/revoked` lists them all. From then on
-the service's list is the union of yours and its own removals. Each release still bundles
+`~/.ashley-vendor/admin_token`, posts all the ids in one call (`revoke-lid` takes `{"lids": [...]}`
+as well as one `lid`; one call per id would race its own earlier writes in KV and drop some), then
+waits until `/revoked` lists them all (KV takes up to a minute to settle). From then on the service's
+list is the union of yours and its own removals. Run it from WSL with `ASHLEY_VENDOR_DIR` pointing at
+the vendor folder, as with `deploy.sh`. Each release still bundles
 `extension/media/revoked.txt`, which holds only the keys withdrawn with the tool; keys the service
 withdrew reach installations through `/revoked`.
 
@@ -134,6 +151,8 @@ withdrew reach installations through `/revoked`.
 | ACCESS | `revoked`, `revoked_signed` | the withdrawn key ids; the signed list | until replaced |
 | ACCESS | `audit:<time>` | action, AccessID, by | for the record |
 | ACCESS | `req:<hash>:<day>` | requests from one connection (a salted hash; the address itself is never stored) | 2 days |
+| ACCESS | `seen:<product>:<AccessID>` | the last access check for that product and account: portal, version, time of the first and the last check, how many, the salted hash of the address, the decision, when the decision last changed | until the maintainer deletes it |
+| ACCESS | `chk:<AccessID>:<day>`, `chkip:<hash>:<day>` | access checks that day per account (120 at most) and per connection (2000 at most) | 2 days |
 | TRIALS | `<AccessID>` | the last key issued: time, key id, e-mail, end date | for the record |
 | TRIALS | `issue:<AccessID>:<day>` | keys issued that day | 2 days |
 | REPORTS | `rate:<install id>:<day>` | count | 2 days |
@@ -151,7 +170,9 @@ ten requests per connection per day; the issue body carries the AccessID, name a
 e-mail. Keys require a Microsoft account in the allowed domains (`ALLOWED_DOMAINS`, default
 `wayne.edu`) whose user name, or on-premises account name, is an AccessID, and an approved record
 for it; anything else is answered with a message that says what to do. `/request` and `/admin/*`
-answer browsers from `SITE_ORIGIN` only.
+answer browsers from `SITE_ORIGIN` only. `/access_check` answers any origin (the caller is a browser
+extension), looks up one account and never returns the list; it is capped at 120 checks per account
+and 2000 per connection a day, and the extension itself asks only a few times a day.
 
 ## Tests
 

@@ -17,6 +17,12 @@
 //   GET  /revoked    the signed revocation list. The Worker signs it itself, with the trial key, whenever
 //                    a person is removed or a key withdrawn (KV ACCESS revoked_signed); grid/license.js
 //                    accepts it because the trial key id is in grid/license_keys.json.
+//   POST /access_check  Ashley Bridge asks whether one account is approved (ACCESS_CHECK.md has the
+//                    contract). No key is involved: the account name is the one the person's own portal
+//                    shows after their university sign-in. The decision is the same approved record the
+//                    admin routes manage, so one approval serves both products; one id is looked up and
+//                    the list itself is never returned here. Answers carry an open CORS header (the
+//                    caller is an extension's background page); the body may be text/plain or JSON.
 //   /admin/*         the maintainer's page (docs/site/admin.html): list, approve, deny, add, remove,
 //                    revoke-lid. Behind a bearer token (secret ADMIN_TOKEN); put Cloudflare Access in
 //                    front of it as a second wall. Every write leaves an audit line (KV ACCESS audit:<time>).
@@ -28,8 +34,16 @@ const MAX_BODY_BYTES = 8 * 1024;
 const REPORTS_PER_INSTALL_PER_DAY = 10;
 const REQUESTS_PER_IP_PER_DAY = 10;
 const ISSUES_PER_PERSON_PER_DAY = 3;
+const CHECKS_PER_ACCOUNT_PER_DAY = 120;
+const CHECKS_PER_IP_PER_DAY = 2000;
 const ACCESS_ID = /^[a-z]{2}[0-9]{4}$/;
 const LID = /^L-[A-Za-z0-9_-]{6,64}$/;
+// what an access check may carry: an account name as a portal shows it, a hostname (a port is allowed
+// for a local mock portal), a short product name and a version string
+const PORTAL_ACCOUNT = /^[a-z0-9][a-z0-9._@-]{0,63}$/;
+const PORTAL_HOST = /^(?=.{1,253}(:|$))[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*(:[0-9]{1,5})?$/;
+const PRODUCT_NAME = /^[a-z][a-z0-9-]{0,31}$/;
+const VERSION_TEXT = /^[0-9A-Za-z.+-]{1,40}$/;
 const DEFAULT_SITE_ORIGIN = 'https://openspineconsortium.github.io';
 
 const json = (status, body, headers) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store', ...(headers || {}) } });
@@ -102,7 +116,22 @@ async function records(env, kind) {
   return names.map((n, i) => ({ accessId: n.slice(kind.length + 1), ...(rows[i] || {}) })).sort((a, b) => a.accessId.localeCompare(b.accessId));
 }
 
+// the access checks on record: one per product and account, the newest first (for the admin list only)
+async function checkRecords(env) {
+  const names = await listKeys(env.ACCESS, 'seen:');
+  const rows = await Promise.all(names.map((n) => env.ACCESS.get(n, 'json')));
+  return rows.filter(Boolean).sort((a, b) => String(b.last_seen).localeCompare(String(a.last_seen)));
+}
+
 const audit = (env, action, accessId, extra) => env.ACCESS.put(`audit:${new Date().toISOString()}`, JSON.stringify({ action, accessId, by: 'admin', ...(extra || {}) }));
+
+// a counter for one day under one key; true when the cap is already reached (nothing is written then)
+async function countToday(ns, key, cap) {
+  const n = Number((await ns.get(key)) || 0);
+  if (n >= cap) return true;
+  await ns.put(key, String(n + 1), { expirationTtl: 2 * 86400 });
+  return false;
+}
 
 const github = (env) => ({ authorization: `Bearer ${env.GITHUB_TOKEN}`, accept: 'application/vnd.github+json', 'user-agent': 'ashley-intake', 'x-github-api-version': '2022-11-28', 'content-type': 'application/json' });
 
@@ -193,6 +222,51 @@ async function accessRequest(request, env) {
   return reply(202, { status: 'pending' });
 }
 
+// Ashley Bridge's approval check (ACCESS_CHECK.md). Request: POST {"v":1,"access_id","portal","product",
+// "version"}, sent as text/plain so no preflight fires; OPTIONS is answered all the same. Every answer,
+// the refusals included, carries access-control-allow-origin: * and cache-control: no-store, and never
+// allow-credentials. The decision is the presence of approved:<access_id>; an approved record may carry
+// an `until` (ISO date) after which the answer is no (none does today, so until is null). What is kept:
+// seen:<product>:<access_id>, one record per product and account with the last check (portal, version,
+// time, the salted hash of the address, the decision, when the decision last changed), and the day's
+// counters per account and per hashed address. The address itself is never stored.
+async function accessCheck(request, env) {
+  const cors = { 'access-control-allow-origin': '*', 'cache-control': 'no-store' };
+  if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: { ...cors, 'access-control-allow-methods': 'POST, OPTIONS', 'access-control-allow-headers': 'content-type', 'access-control-max-age': '600' } });
+  const reply = (status, body) => json(status, body, cors);
+  if (request.method !== 'POST') return reply(405, { error: 'POST the check here' });
+  if (!env.IP_SALT) return reply(503, { error: 'the access service is not open yet' });
+  const ip = request.headers.get('cf-connecting-ip') || '';
+  const ipHash = hex(await sha256(`${env.IP_SALT}\n${ip}`)).slice(0, 32);
+  const day = today();
+  if (await countToday(env.ACCESS, `chkip:${ipHash}:${day}`, CHECKS_PER_IP_PER_DAY)) return reply(429, { error: 'too many checks from this connection today; the last answer stands until tomorrow' });
+  const r = await readJson(request);
+  if (r.error) return reply(r.status, { error: r.error });
+  const b = r.body;
+  if (b.v !== 1) return reply(400, { error: 'v must be 1' });
+  const accessId = String(b.access_id ?? '').trim().toLowerCase();
+  if (!PORTAL_ACCOUNT.test(accessId)) return reply(400, { error: 'access_id is the account name the portal shows (letters, digits, . _ @ -; 64 at most)' });
+  const portal = String(b.portal ?? '').trim().toLowerCase();
+  if (!PORTAL_HOST.test(portal)) return reply(400, { error: 'portal is the hostname of the portal, like ondemand.grid.wayne.edu' });
+  const product = String(b.product ?? '').trim().toLowerCase();
+  if (!PRODUCT_NAME.test(product)) return reply(400, { error: 'product is a short name, like bridge' });
+  const version = String(b.version ?? '').trim();
+  if (!VERSION_TEXT.test(version)) return reply(400, { error: 'version is like 4.0.0' });
+  if (await countToday(env.ACCESS, `chk:${accessId}:${day}`, CHECKS_PER_ACCOUNT_PER_DAY)) return reply(429, { error: 'too many checks for this account today; the last answer stands until tomorrow' });
+  const rec = await env.ACCESS.get(`approved:${accessId}`, 'json');
+  const until = rec && typeof rec.until === 'string' && !Number.isNaN(Date.parse(rec.until)) ? rec.until : null;
+  const now = new Date().toISOString();
+  const approved = !!rec && (until === null || Date.parse(until) > Date.now());
+  const seenKey = `seen:${product}:${accessId}`;
+  const prior = (await env.ACCESS.get(seenKey, 'json')) || {};
+  const seen = { access_id: accessId, product, portal, version, first_seen: prior.first_seen || now, last_seen: now, checks: (Number(prior.checks) || 0) + 1, approved, ip_hash: ipHash };
+  if (typeof prior.approved === 'boolean' && prior.approved !== approved) seen.changed_at = now;
+  else if (prior.changed_at) seen.changed_at = prior.changed_at;
+  await env.ACCESS.put(seenKey, JSON.stringify(seen));
+  if (!approved) return reply(200, { approved: false, access_id: accessId, requestPage: requestPage(env) });
+  return reply(200, { approved: true, access_id: accessId, checked: now, until });
+}
+
 async function whoIs(accessToken) {
   const r = await fetch('https://graph.microsoft.com/v1.0/me?$select=id,userPrincipalName,mail,displayName,onPremisesSamAccountName', { headers: { authorization: `Bearer ${accessToken}` } });
   if (!r.ok) return null;
@@ -235,8 +309,8 @@ async function admin(request, env, url) {
   if (!(await sameSecret(given, env.ADMIN_TOKEN))) return reply(401, { error: 'admin token missing or wrong' });
   const route = url.pathname.slice('/admin/'.length);
   if (request.method === 'GET' && route === 'list') {
-    const [pending, approved, denied, revoked] = await Promise.all([records(env, 'pending'), records(env, 'approved'), records(env, 'denied'), env.ACCESS.get('revoked', 'json')]);
-    return reply(200, { pending, approved, denied, revoked: revoked || [] });
+    const [pending, approved, denied, revoked, checks] = await Promise.all([records(env, 'pending'), records(env, 'approved'), records(env, 'denied'), env.ACCESS.get('revoked', 'json'), checkRecords(env)]);
+    return reply(200, { pending, approved, denied, revoked: revoked || [], checks });
   }
   if (request.method !== 'POST') return reply(404, { error: 'not found' });
   const r = await readJson(request);
@@ -245,11 +319,13 @@ async function admin(request, env, url) {
   const accessId = String(body.accessId ?? '').trim().toLowerCase();
   const now = new Date().toISOString();
   if (route === 'revoke-lid') {
-    const lid = String(body.lid ?? '').trim();
-    if (!LID.test(lid)) return reply(400, { error: 'lid looks like L-...' });
-    const revoked = await revoke(env, [lid]);
-    await audit(env, 'revoke-lid', ACCESS_ID.test(accessId) ? accessId : null, { lid });
-    return reply(200, { status: 'revoked', lid, revoked });
+    // one lid, or several in one call: KV is eventually consistent, so several quick calls that each
+    // read the list, add one id and write it back can lose the earlier ids; publish.sh sends them all at once
+    const lids = [...new Set((Array.isArray(body.lids) ? body.lids : [body.lid]).map((x) => String(x ?? '').trim()))];
+    if (!lids.length || lids.length > 500 || !lids.every((l) => LID.test(l))) return reply(400, { error: 'lid looks like L-... (or lids: a list of them, 500 at most)' });
+    const revoked = await revoke(env, lids);
+    await audit(env, 'revoke-lid', ACCESS_ID.test(accessId) ? accessId : null, lids.length === 1 ? { lid: lids[0] } : { lids });
+    return reply(200, { status: 'revoked', ...(lids.length === 1 ? { lid: lids[0] } : { lids }), revoked });
   }
   if (!ACCESS_ID.test(accessId)) return reply(400, { error: 'accessId looks like ab1234' });
   const [pending, approved, denied] = await Promise.all([env.ACCESS.get(`pending:${accessId}`, 'json'), env.ACCESS.get(`approved:${accessId}`, 'json'), env.ACCESS.get(`denied:${accessId}`, 'json')]);
@@ -365,6 +441,7 @@ export default {
     if (request.method === 'GET' && p === '/allowlist') return allowlist(env);
     if (request.method === 'GET' && p === '/revoked') return new Response((await env.ACCESS.get('revoked_signed')) || '', { headers: { 'content-type': 'text/plain', 'cache-control': 'max-age=300' } });
     if (p === '/request') return accessRequest(request, env);
+    if (p === '/access_check') return accessCheck(request, env);
     if (p.startsWith('/admin/')) return admin(request, env, url);
     if (request.method === 'POST' && p === '/trial') return trial(request, env);
     if (request.method === 'POST' && p === '/report') return report(request, env);

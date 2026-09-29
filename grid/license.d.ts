@@ -7,6 +7,7 @@ export interface LicensePayload {
   edition: string;
   sub?: string;
   email?: string;
+  /** present only in keys issued before 2026-09-29; verifyLicense refuses any key that carries it */
   domain?: string;
   name?: string;
   org?: string;
@@ -41,6 +42,7 @@ export function signLicense(fields: Partial<LicensePayload> & { kid: string; exp
 export function signRevocationList(lids: string[], kid: string, privateKey: unknown, issuedSec?: number): string;
 export function verifyRevocationList(text: string | undefined | null, keys: PublicKeys): { ok: boolean; revoked: string[]; issued: number; detail: string };
 export function identityMatches(p: Partial<LicensePayload>, identity?: Identity): boolean | null;
+export function namesAnInstitution(p: Partial<LicensePayload> | null | undefined): boolean;
 export function effectiveNow(nowSec: number, lastSeenSec?: number): number;
 export function findKey(text: string): string | null;
 export function peek(key: string): Partial<LicensePayload> | null;

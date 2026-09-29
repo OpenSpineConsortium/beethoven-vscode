@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
 # Deploy the access service end to end, after `wrangler login` has been done once on this machine:
 # KV namespaces (created if missing, ids written into wrangler.toml), the secrets (piped, never on a
-# command line), the Worker itself, then docs/site/services.json and the support-site copy.
+# command line), the Worker itself, then docs/site/services.json (the five service addresses, access_check
+# among them) and the support-site copy.
 #   bash tools/intake/deploy.sh            (Git Bash on Windows or any shell; needs node 22 and the vendor folder)
+#   From WSL on the maintainer's machine (the Windows network path times out against Cloudflare):
+#   ASHLEY_VENDOR_DIR=/mnt/c/Users/<you>/.ashley-vendor PATH=$HOME/node22/bin:$PATH bash tools/intake/deploy.sh
 # Re-running is safe: existing namespaces are reused, secrets are overwritten with the same values,
 # the Worker is redeployed.
 set -euo pipefail
@@ -54,7 +57,7 @@ curl -fsS "$URL/health" && echo
 echo "== services.json"
 node -e '
   const fs=require("fs");const [f,u]=process.argv.slice(1);const j=JSON.parse(fs.readFileSync(f,"utf8"));
-  j.license_service=u+"/trial"; j.allowlist=u+"/allowlist"; j.revocation=u+"/revoked"; j.report=u+"/report";
+  j.license_service=u+"/trial"; j.allowlist=u+"/allowlist"; j.revocation=u+"/revoked"; j.report=u+"/report"; j.access_check=u+"/access_check";
   fs.writeFileSync(f,JSON.stringify(j,null,2)+"\n");' "$REPO/docs/site/services.json" "$URL"
 cat "$REPO/docs/site/services.json"
 ( cd "$REPO" && { python -X utf8 tools/site_build.py >/dev/null 2>&1 || python3 tools/site_build.py >/dev/null; } )

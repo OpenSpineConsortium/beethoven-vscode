@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // The maintainer's command-line door to the access service, for when the admin page is not handy:
-//   node tools/intake/admin.mjs list
+//   node tools/intake/admin.mjs list          pending, approved, denied, revoked, and the access checks on record
 //   node tools/intake/admin.mjs add <accessId> "<name>" [<email>] ["<note>"]     approve without a request
 //   node tools/intake/admin.mjs approve <accessId> ["<note>"]
 //   node tools/intake/admin.mjs deny <accessId> ["<reason>"]
@@ -36,7 +36,7 @@ const id = (a1 || '').toLowerCase();
 switch (cmd) {
   case 'list': {
     const j = await call('list');
-    for (const k of ['pending', 'approved', 'denied', 'revoked']) console.log(`${k} (${(j[k] || []).length}):`, JSON.stringify(j[k] || [], null, 1));
+    for (const k of ['pending', 'approved', 'denied', 'revoked', 'checks']) console.log(`${k} (${(j[k] || []).length}):`, JSON.stringify(j[k] || [], null, 1));
     break;
   }
   case 'add': console.log(JSON.stringify(await call('add', { accessId: id, name: a2 || '', email: a3 || `${id}@wayne.edu`, note: a4 || 'added by the maintainer' }))); break;

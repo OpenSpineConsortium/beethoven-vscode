@@ -228,7 +228,7 @@ export function buildGraph(): DiagNode<DiagCtx>[] {
   });
   add({
     id: 'account.license-identity', title: 'License names the signed-in person', layer: 'account', dependsOn: ['laptop.license', 'account.wsu'],
-    assumption: 'the AccessID (or e-mail, or site domain) in the license matches the Wayne State sign-in Ashley recorded',
+    assumption: 'the AccessID (or e-mail) in the license matches the Wayne State sign-in Ashley recorded',
     manualFix: 'sign in with the account the license names (setup step "Sign in with Wayne State"), or ask your lead for a license in your name',
     fixCommand: { command: 'ashley.wsuSignIn', title: 'Sign in with Wayne State' },
     futureRisk: 'Wayne State changing the sign-in e-mail format (AccessID@wayne.edu)',

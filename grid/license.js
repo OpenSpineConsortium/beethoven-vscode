@@ -4,6 +4,10 @@
 //
 //   ASHLEY1.<base64url(JSON payload)>.<base64url(Ed25519 signature)>
 //
+// A key names one person: an AccessID (sub) or an e-mail. Keys that named a whole e-mail domain
+// ("site" edition) existed until 2026-09-29; the verifier now refuses any key that carries a
+// domain or claims that edition, whoever holds it, and the issuer no longer makes one.
+//
 // The signature covers the ASCII text "ASHLEY1.<payload part>", so no JSON canonicalisation is
 // involved. Public keys are listed by key id in license_keys.json (raw 32-byte Ed25519 keys,
 // base64); the private keys never leave the issuer's machine. A revocation list has the same
@@ -78,8 +82,8 @@ function normId(s) {
 }
 
 /**
- * Does the license belong to this person? A license names an AccessID (sub), an e-mail, or
- * a whole e-mail domain (site licence; subdomains count, look-alike domains do not).
+ * Does the license belong to this person? A license names an AccessID (sub) or an e-mail; a
+ * domain in the payload matches nobody (verifyLicense refuses such a key before this is asked).
  * Returns true, false, or null when there is nothing to compare with yet.
  */
 function identityMatches(p, identity) {
@@ -89,12 +93,12 @@ function identityMatches(p, identity) {
   if (!accessId && !email) return null;
   if (p.sub && accessId && normId(p.sub) === accessId) return true;
   if (p.email && email && normId(p.email) === email) return true;
-  if (p.domain && email) {
-    const dom = normId(p.domain).replace(/^@/, '');
-    const host = email.split('@')[1] || '';
-    if (host === dom || host.endsWith(`.${dom}`)) return true;
-  }
   return false;
+}
+
+/** A key that names a whole institution instead of one person: refused whoever holds it. */
+function namesAnInstitution(p) {
+  return Boolean(p && (p.domain || p.edition === 'site'));
 }
 
 /** Never let the clock run backwards: the latest time already seen wins (setting the clock back does not revive a key). */
@@ -120,13 +124,14 @@ function verifyLicense(key, opts) {
   if (opened.error) return { ok: false, status: opened.error === 'missing' ? 'missing' : 'invalid', detail: opened.error === 'bad-signature' ? 'the key has been altered or was not issued for Ashley' : 'this is not an Ashley license key', identity: null };
   const p = opened.payload;
   if (p.v !== 1 || p.product !== PRODUCT) return { ok: false, status: 'wrong-product', detail: 'this key is not for Ashley', payload: p, identity: null };
+  if (namesAnInstitution(p)) return { ok: false, status: 'invalid', detail: 'this key was issued for a whole institution, not for one person; Ashley accepts only a key issued to one person', payload: p, identity: null };
   if (typeof p.exp !== 'number' || typeof p.iat !== 'number' || !p.lid) return { ok: false, status: 'invalid', detail: 'the key lacks its dates or its id', payload: p, identity: null };
   const revoked = o.revoked instanceof Set ? o.revoked : new Set(o.revoked || []);
   if (revoked.has(p.lid)) return { ok: false, status: 'revoked', detail: `license ${p.lid} has been withdrawn`, payload: p, identity: null };
   if (typeof p.nbf === 'number' && now < p.nbf - DAY) return { ok: false, status: 'not-yet-valid', detail: `the license starts on ${new Date(p.nbf * 1000).toISOString().slice(0, 10)}`, payload: p, identity: null };
   const who = identityMatches(p, o.identity);
   if (who === false) {
-    const forWho = p.sub || p.email || (p.domain ? `accounts at ${p.domain}` : 'someone else');
+    const forWho = p.sub || p.email || 'someone else';
     return { ok: false, status: 'wrong-person', detail: `this license is for ${forWho}, not for ${o.identity.accessId || o.identity.email}`, payload: p, identity: false };
   }
   const graceDays = typeof p.grace_days === 'number' && p.grace_days >= 0 ? p.grace_days : DEFAULT_GRACE_DAYS;
@@ -134,15 +139,16 @@ function verifyLicense(key, opts) {
   const until = new Date(p.exp * 1000).toISOString().slice(0, 10);
   if (now > p.exp + graceDays * DAY) return { ok: false, status: 'expired', detail: `the license ended on ${until}`, payload: p, daysLeft, identity: who };
   if (now > p.exp) return { ok: true, status: 'grace', detail: `the license ended on ${until}; Ashley keeps working until ${new Date((p.exp + graceDays * DAY) * 1000).toISOString().slice(0, 10)}`, payload: p, daysLeft, identity: who };
-  return { ok: true, status: 'valid', detail: `licensed to ${p.name || p.sub || p.email || p.domain} until ${until}`, payload: p, daysLeft, identity: who };
+  return { ok: true, status: 'valid', detail: `licensed to ${p.name || p.sub || p.email} until ${until}`, payload: p, daysLeft, identity: who };
 }
 
-/** Build and sign a license (issuer side). Fills v, product, lid, iat; requires kid and exp. */
+/** Build and sign a license (issuer side). Fills v, product, lid, iat; requires kid, exp and one person. */
 function signLicense(fields, privateKey) {
   const f = fields || {};
   if (!f.kid) throw new Error('kid is required');
   if (typeof f.exp !== 'number') throw new Error('exp (unix seconds) is required');
-  if (!f.sub && !f.email && !f.domain) throw new Error('a license names a person (sub or email) or a domain');
+  if (f.domain || f.edition === 'site') throw new Error('a license names one person; a key for a whole domain or the site edition is not issued');
+  if (!f.sub && !f.email) throw new Error('a license names a person (sub or email)');
   const payload = {
     v: 1,
     kid: f.kid,
@@ -151,7 +157,6 @@ function signLicense(fields, privateKey) {
     edition: f.edition || 'student',
     ...(f.sub ? { sub: normId(f.sub) } : {}),
     ...(f.email ? { email: normId(f.email) } : {}),
-    ...(f.domain ? { domain: normId(f.domain).replace(/^@/, '') } : {}),
     ...(f.name ? { name: String(f.name) } : {}),
     ...(f.org ? { org: String(f.org) } : {}),
     iat: typeof f.iat === 'number' ? f.iat : Math.floor(Date.now() / 1000),
@@ -204,6 +209,7 @@ module.exports = {
   signRevocationList,
   verifyRevocationList,
   identityMatches,
+  namesAnInstitution,
   effectiveNow,
   findKey,
   peek,

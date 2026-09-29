@@ -278,7 +278,7 @@
     "laptop.license",
     "account.wsu"
    ],
-   "assumption": "the AccessID (or e-mail, or site domain) in the license matches the Wayne State sign-in Ashley recorded",
+   "assumption": "the AccessID (or e-mail) in the license matches the Wayne State sign-in Ashley recorded",
    "manualFix": "sign in with the account the license names (setup step \"Sign in with Wayne State\"), or ask your lead for a license in your name",
    "futureRisk": "Wayne State changing the sign-in e-mail format (AccessID@wayne.edu)",
    "source": "grid/license.js (identityMatches), extension/src/core/wizard.ts (stepWsuSignIn)",

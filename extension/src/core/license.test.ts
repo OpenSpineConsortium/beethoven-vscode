@@ -59,15 +59,35 @@ test('dates: grace after the end, then expired; not before the start', () => {
   assert.equal(check(issue({ nbf: NOW + 3600 })).status, 'valid', 'a day of clock skew is tolerated');
 });
 
-test('the wrong person is refused; a site license takes subdomains but not look-alikes', () => {
+test('the wrong person is refused', () => {
   assert.equal(check(issue(), { identity: { accessId: 'cd5678' } }).status, 'wrong-person');
   assert.equal(check(issue(), { identity: { email: 'ab1234@wayne.edu' } }).status, 'valid', 'the e-mail alone is enough');
-  const site = issue({ sub: undefined, email: undefined, domain: 'wayne.edu', edition: 'site' });
-  assert.equal(check(site, { identity: { email: 'x@wayne.edu' } }).status, 'valid');
-  assert.equal(check(site, { identity: { email: 'x@med.wayne.edu' } }).status, 'valid');
-  assert.equal(check(site, { identity: { email: 'x@notwayne.edu' } }).status, 'wrong-person');
-  assert.equal(check(site, { identity: { email: 'x@wayne.edu.evil.com' } }).status, 'wrong-person');
-  assert.equal(check(site, { identity: { accessId: 'ab1234' } }).status, 'wrong-person', 'a site license needs the e-mail');
+});
+
+test('a key for a whole domain, or one claiming the site edition, is refused for everyone and is not issued', () => {
+  // the issuer refuses to make one
+  assert.throws(() => L.signLicense({ kid: 'k1', domain: 'wayne.edu', exp: NOW + DAY } as never, key1), /whole domain/);
+  assert.throws(() => L.signLicense({ kid: 'k1', sub: 'ab1234', edition: 'site', exp: NOW + DAY } as never, key1), /site edition/);
+  // one signed by hand under a trusted key, shaped like the keys issued before 2026-09-29
+  const b64u = (s: string | Buffer) => Buffer.from(s).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  const handSigned = (extra: Record<string, unknown>) => {
+    const body = b64u(JSON.stringify({ v: 1, kid: 'k1', lid: 'L-handsigned01', product: 'ashley', iat: NOW - DAY, exp: NOW + 30 * DAY, ...extra }));
+    return `ASHLEY1.${body}.${b64u(crypto.sign(null, Buffer.from(`ASHLEY1.${body}`, 'ascii'), key1))}`;
+  };
+  const site = handSigned({ edition: 'site', domain: 'wayne.edu', name: 'testers' });
+  for (const identity of [{ email: 'x@wayne.edu' }, { email: 'x@med.wayne.edu' }, { accessId: 'ab1234', email: 'ab1234@wayne.edu' }, undefined]) {
+    const c = check(site, identity ? { identity } : {});
+    assert.equal(c.ok, false, `held by ${JSON.stringify(identity)}`);
+    assert.equal(c.status, 'invalid');
+    assert.match(c.detail, /one person/);
+  }
+  assert.equal(check(handSigned({ edition: 'site', sub: 'ab1234' }), { identity: { accessId: 'ab1234' } }).status, 'invalid', 'the site edition alone is enough to refuse');
+  assert.equal(check(handSigned({ edition: 'student', sub: 'ab1234', domain: 'wayne.edu' }), { identity: { accessId: 'ab1234' } }).status, 'invalid', 'a domain alone is enough to refuse');
+  assert.equal(check(handSigned({ edition: 'student', sub: 'ab1234' }), { identity: { accessId: 'ab1234' } }).status, 'valid', 'the same shape without either is a personal key');
+  assert.equal(L.identityMatches({ domain: 'wayne.edu' }, { email: 'x@wayne.edu' }), false, 'a domain matches nobody');
+  assert.equal(L.namesAnInstitution({ domain: 'wayne.edu' }), true);
+  assert.equal(L.namesAnInstitution({ edition: 'site' }), true);
+  assert.equal(L.namesAnInstitution({ edition: 'trial', sub: 'ab1234' }), false);
 });
 
 test('a withdrawn license is refused; revocation lists are signed', () => {
