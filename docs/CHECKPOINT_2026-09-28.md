@@ -10,6 +10,38 @@ SHA256SUMS signed by k1). Committed and pushed as this checkpoint says below.
 
 ### What version 3 changed (pass 18)
 
+- **Pass 25 (2026-09-29 afternoon): Ashley Bridge 3.0.0 store kit; pages and kill-list live.** A two-stream
+  workflow (site pages + signed kill-list; store listing kit + screenshots), each stream reviewed, found three
+  defects in what would have been published, all fixed the same afternoon: (1) the privacy and licence texts said
+  no request reaches Licensor before acceptance while the kill-list alarm fetched one minute after install, so
+  `refreshKillListNow` now refuses without an in-force terms record and the background fetches when the record
+  is written (true by construction); (2) `LICENSE.txt` v2 still described an access-service activation ping,
+  error reports and a Licensor-held acceptance record that Bridge never had, so **LICENSE.txt is version 3**,
+  `TERMS_VERSION` 3, `PRIVACY.md` v4 (the other stream's rewrite), README/SECURITY/CLAUDE.md/ARCHITECTURE.md
+  brought into line; (3) the screenshots showed the maintainer's scratchpad path (recapture in progress). Also:
+  `normaliseOrigin` refuses claude.ai/claude.com/anthropic.com hostnames; the listing sentences "talks to one
+  website", "never deletes anything", "payment is required" corrected everywhere; Limited Use sentence without
+  the Google APIs clause; **extension 3.0.0** (2.0.0 went to testers with the v2 texts). 134 tests, both
+  packaged manifests: storage/alarms/scripting/activeTab(+sidePanel), optional `https://*/*`, Firefox
+  `data_collection_permissions {required:["none"]}`. Zips in `ashley-bridge/extension/.output/`
+  (`ashley-bridge-3.0.0-{chrome,firefox,sources}.zip`).
+  **Live:** `https://openspineconsortium.com/ashley/bridge/` (+ `privacy.html`, `terms.html`) and
+  `https://openspineconsortium.com/ashley/bridge-killlist.json` (k1, nothing withdrawn, verified from the live
+  download with `ashley-license.mjs verify-killlist`; GitHub Pages sends `access-control-allow-origin: *` on every
+  response, 404s included). Signer: `tools/license/ashley-license.mjs sign-killlist` (this repo, 0b2f9be); pages
+  regenerate with `ashley-bridge/tools/site_bridge_build.py`; `extension/test/killlist.live.test.ts` is a
+  deliberate tripwire (change its two `toEqual([])` when something is withdrawn). Store kit:
+  `ashley-bridge/docs/store/LISTING.md` (texts per store, permission justifications, privacy answers, reviewer
+  notes with the mock-portal recipe and reviewer key **L-Dw8z5-3R4RAK** for username st1234, to 2027-03-28) and
+  `SUBMISSION.md` (click-by-click: Chrome Web Store $5 + 2-Step Verification on the personal Google account,
+  Edge Partner Center, Firefox AMO with the sources zip; Safari deferred: Mac + Apple Developer Program, no
+  licence keys). Tester package 3.0.0 on the Desktop (`AshleyBridge-3.0.0-tester-package.zip`); the folder
+  `Ashley Bridge for testers` also holds an extracted 2.0.0 copy that was not made by the tooling. Still open:
+  a human end-to-end run of 3.0.0 against the live portal before the first submission; `k1.pem` in
+  `~/.ashley-vendor` signs without a passphrase while SECURITY.md speaks of hardware-key custody; the options
+  page's example "such as wayne.edu" and the bundled `profiles/wayne.json` against the university-agnostic
+  wording; "Testers: ask Greg for the package" on the public landing page; the two walk-through recordings
+  (optional in the reviewer reply); store accounts are Greg's to open.
 - **Pass 24 (2026-09-29): tester key and Bridge 2.0.0.** Site (domain) key issued for testers:
   lid **L-kBUmEepmm5D8**, edition site, domain wayne.edu, valid to 2027-03-28, signed with k1, file
   `~/.ashley-vendor/licenses/wayne.edu-L-kBUmEepmm5D8.key`; **revoke it when the pilot ends**
