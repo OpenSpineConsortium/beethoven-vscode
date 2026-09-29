@@ -10,6 +10,21 @@ SHA256SUMS signed by k1). Committed and pushed as this checkpoint says below.
 
 ### What version 3 changed (pass 18)
 
+- **Pass 23 (2026-09-29 morning): Ashley Bridge v2 flow.** After Greg's live test of Bridge v1 against
+  ondemand.grid.wayne.edu (checks passed except sign-in; three bugs: page script not injected until
+  reload, cold-PUN "Server Error", a missing file's 200-HTML page read as a `.restricted` marker), the
+  flow was rebuilt: icon click opens the side panel and connects the portal in one gesture; options page
+  replaces the popup; one-button strip driven by a step machine (terms -> key -> install/upgrade ->
+  probe -> sign-in -> statement -> start -> online -> Open in Claude, automatic where nothing needs the
+  student); the Claude sign-in runs inside the panel (`hpcworker claude login --plain`: AUTH-URL opened
+  in a tab, one paste box, code never logged); consent marker written on the statement so the worker
+  answers Claude Code's question itself (no y, no Ctrl-C, no second command); 15-minute sitting;
+  TERMS_VERSION 2 (LICENSE 2 / PRIVACY 3). Framework **2**: line contract, needs/hint, ten-minute probe,
+  deterministic stop, version-aware install; deployed to go2432's `~/.hpcworker`. 115 extension tests,
+  104 framework tests. Not yet: a human run of v2 against the live portal (Greg reloads the unpacked
+  build from `ashley-bridge/extension/.output/chrome-mv3`). Greg re-signed in on the grid at 05:02 with
+  his Google-linked Claude account (Max); Ashley's phone host is up again
+  (env_01BSwGFbdvjXwTG56B86GYnm). The remaining manual act, by design: Anthropic's paste-code login.
 - **Pass 22 (2026-09-29, night): Remote Control proven from a batch job; Ashley Bridge built; the
   22:34 deletion.** (a) Greg completed `ashley claude login` on the grid (Max plan) and answered
   Claude Code's Remote Control question; Ashley's phone host in worker job 40496445 (asx15) then
