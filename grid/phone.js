@@ -43,6 +43,18 @@ function startPhone(o) {
   const ENABLE = path.join(RC, 'enable');
   const STATUS = path.join(RC, 'status.json');
   const CONSENT = path.join(CFG, '.ashley-remote-consent');
+  // Claude Code records the student's answer to "Enable Remote Control?" itself, as remoteDialogSeen
+  // in its config file (a setting, not a credential). That answer counts; the marker file is the
+  // fallback for a config Claude Code has not written yet. Only that one key is read.
+  function consentGiven() {
+    if (fs.existsSync(CONSENT)) return true;
+    try {
+      const j = JSON.parse(fs.readFileSync(path.join(CFG, '.claude.json'), 'utf8'));
+      return j && j.remoteDialogSeen === true;
+    } catch {
+      return false;
+    }
+  }
   const LEASE = path.join(o.ashleyHome, 'remote', 'host.lock');
   const HOLDER = path.join(LEASE, 'holder.json');
   const log = o.log || (() => {});
@@ -129,7 +141,7 @@ function startPhone(o) {
       // Claude Code's consent question: the student answered it once (marker file); repeat the answer they gave
       if (CONSENT_RE.test(tail) && Date.now() - mine.lastAnswer > 5000) {
         mine.lastAnswer = Date.now();
-        if (fs.existsSync(CONSENT)) child.stdin.write('y\r');
+        if (consentGiven()) child.stdin.write('y\r');
         else {
           write({ phase: 'need_consent', session_url: null, message: 'Claude Code asks once whether to enable Remote Control; answer it yourself with: ashley claude remote-consent (Ashley: Phone access does this)' });
           child.kill('SIGTERM');
@@ -238,7 +250,7 @@ function startPhone(o) {
         if (st.phase !== 'need_login') write({ phase: 'need_login', session_url: null, message: 'sign in to Claude on the grid first: ashley claude login (Ashley: Sign in to Claude on the grid)' });
         return;
       }
-      if (!fs.existsSync(CONSENT)) {
+      if (!consentGiven()) {
         if (st.phase !== 'need_consent') write({ phase: 'need_consent', session_url: null, message: 'answer Claude Code\'s one-time Remote Control question yourself: ashley claude remote-consent (Ashley: Phone access does this)' });
         return;
       }

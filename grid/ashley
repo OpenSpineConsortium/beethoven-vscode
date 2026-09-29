@@ -32,6 +32,16 @@ die() { echo "ashley: $*" >&2; exit 1; }
 json_str() { # escape a string for JSON (control characters dropped)
   local s; s=$(printf '%s' "$1" | tr -d '\000-\010\013\014\016-\037'); s=${s//\\/\\\\}; s=${s//\"/\\\"}; s=${s//$'\n'/\\n}; s=${s//$'\r'/}; s=${s//$'\t'/\\t}; printf '"%s"' "$s"
 }
+# Destructive commands (uninstall, claude forget) are for a person at a terminal. A Claude Code
+# session (CLAUDECODE is set in every shell it runs) or a worker request must never remove the
+# student's installation or their sign-in: on 2026-09-28 the whole ~/.ashley folder vanished while a
+# Remote Control session was open, with the sign-in inside it.
+refuse_destructive_from_agent() { # $1 what
+  if [ -n "${CLAUDECODE:-}" ] || [ -n "${ASHLEY_REQUEST_ID:-}" ] || [ -n "${ASHLEY_WORKER:-}" ]; then
+    die "refusing to $1 from inside a Claude Code session or worker: a person runs this at a terminal (ashley $1 --yes)"
+  fi
+  [ -t 0 ] || die "refusing to $1 without a terminal: a person runs this (ashley $1 --yes)"
+}
 load_cfg() { [ -s "$CFG" ] && source "$CFG"; ROOT="${ROOT:-}"; RUNTIME="${RUNTIME:-}"; SANDBOX="${SANDBOX:-}"; CLAUDE_BIN="${CLAUDE_BIN:-}"; BOOTSTRAP_JOB="${BOOTSTRAP_JOB:-}"; BINDS="${BINDS:-}"; CONTAINER="${CONTAINER:-}"; SOURCE="${SOURCE:-}"; }
 is_ready() { load_cfg; [ -s "$ASHLEY_HOME/READY" ] && [ -n "$CLAUDE_BIN" ] && [ -x "$CLAUDE_BIN" ] && [ -x "$SANDBOX/usr/local/bin/node" ]; }
 job_state() { # $1 job id -> state or "" if gone
@@ -433,6 +443,10 @@ claude_in_alloc() { # run Claude Code interactively inside the container, in a r
     srun -p secp -q secondary -t 00:30:00 -N1 -n1 --mem=2G -J ashley_claude --pty "$RUNTIME" exec $BINDS "$SANDBOX" env -u CLAUDE_CODE_OAUTH_TOKEN -u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN -u ANTHROPIC_BASE_URL -u CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC HOME="$HOME" CLAUDE_CONFIG_DIR="$CLAUDE_HOME" TERM="${TERM:-xterm-256color}" BROWSER=/bin/false bash -c "$inner"
   fi
 }
+consent_given() { # the student answered Claude Code's one-time Remote Control question (Claude Code's own record, or Ashley's marker)
+  [ -e "$CLAUDE_HOME/.ashley-remote-consent" ] && return 0
+  grep -q '"remoteDialogSeen": *true' "$CLAUDE_HOME/.claude.json" 2>/dev/null
+}
 claude_login_json() { # what the newest running worker's Claude Code said about the sign-in (heartbeat), or null
   local wk best="" bt=0; for wk in $(worker_dirs); do local wd="$ASHLEY_HOME/workers/$wk"
     [ "$(job_state "$(cat "$wd/job.id" 2>/dev/null)")" = RUNNING ] || continue
@@ -455,7 +469,18 @@ account you made with your Wayne State e-mail, press Authorize, then paste the c
 back here. Use one Claude account only: the one that is yours.
 EOT
       claude_in_alloc auth login
-      echo; echo "Done. Your workers pick the sign-in up by themselves. For phone access run: ashley claude remote-consent";;
+      if consent_given; then
+        echo; echo "Done. Your workers pick the sign-in up by themselves; phone access is already enabled."
+      else
+        cat <<'EOT'
+
+One more question, asked once by Claude Code itself: it now starts a Remote Control session on this
+compute node and asks "Enable Remote Control? (y/n)". Answer y, wait for "Connected", then press
+Ctrl+C. After that your workers host phone access by themselves; you will not be asked again.
+EOT
+        claude_in_alloc remote-control || true
+        if consent_given; then echo; echo "Done. Phone access is enabled for your workers (Ashley: Phone access)."; else echo; echo "Not recorded yet: run  ashley claude remote-consent  when you want phone access."; fi
+      fi;;
     remote-consent)
       cat <<'EOT'
 Phone access: Claude Code asks once whether to enable Remote Control. Answer it yourself here.
@@ -465,15 +490,18 @@ leave; from then on your worker hosts Remote Control whenever phone access is on
 the session transcript (your messages, Claude's answers, tool activity) is stored on Anthropic's
 servers: keep confidential data out of phone sessions.
 EOT
-      claude_in_alloc remote-control || true
-      echo; printf 'Did you answer y to "Enable Remote Control?" [y/N] '; local a; read -r a
-      if [[ "$a" =~ ^[Yy] ]]; then date -u +%FT%TZ > "$CLAUDE_HOME/.ashley-remote-consent"; echo "recorded: your workers may now host Remote Control (Ashley: Phone access)"; else echo "not recorded; run this again when you want phone access"; fi;;
+      if consent_given; then echo "Already answered: your workers host Remote Control whenever phone access is on."; else claude_in_alloc remote-control || true; fi
+      if consent_given; then echo; echo "recorded by Claude Code: your workers may now host Remote Control (Ashley: Phone access)"
+      else echo; printf 'Did you answer y to "Enable Remote Control?" [y/N] '; local a; read -r a
+        if [[ "$a" =~ ^[Yy] ]]; then date -u +%FT%TZ > "$CLAUDE_HOME/.ashley-remote-consent"; echo "recorded: your workers may now host Remote Control (Ashley: Phone access)"; else echo "not recorded; run this again when you want phone access"; fi
+      fi;;
     status)
-      local present=false consent=false; [ -s "$CLAUDE_HOME/.credentials.json" ] && present=true; [ -e "$CLAUDE_HOME/.ashley-remote-consent" ] && consent=true
+      local present=false consent=false; [ -s "$CLAUDE_HOME/.credentials.json" ] && present=true; consent_given && consent=true
       if [ "${1:-}" = "--json" ]; then printf '{"dir_present":%s,"consent":%s,"login":%s}\n' "$present" "$consent" "$(claude_login_json)"
       else echo "sign-in file present: $present; Remote Control consent: $consent; a running worker says: $(claude_login_json)"; fi;;
     forget)
       [ "${1:-}" = "--yes" ] || die "this deletes Claude Code's stored sign-in in $CLAUDE_HOME (your workers stop until you sign in again): ashley claude forget --yes"
+      refuse_destructive_from_agent "claude forget"
       rm -rf "$CLAUDE_HOME"; echo "removed $CLAUDE_HOME";;
     *) die "claude: login|status [--json]|remote-consent|forget --yes";;
   esac
@@ -738,7 +766,7 @@ cmd_phone() { # phone access through Claude Code Remote Control, hosted by a wor
       local ow moved=""; for ow in "$ASHLEY_HOME"/workers/*/rc/enable; do [ -e "$ow" ] || continue; ow=$(basename "$(dirname "$(dirname "$ow")")")
         [ "$ow" = "$worker" ] || { rm -f "$ASHLEY_HOME/workers/$ow/rc/enable"; moved="$moved $ow"; }; done
       [ -s "$CLAUDE_HOME/.credentials.json" ] || echo "note: Claude is not signed in on the grid yet (ashley claude login); phone access waits for it"
-      [ -e "$CLAUDE_HOME/.ashley-remote-consent" ] || echo "note: Remote Control has not been enabled yet (ashley claude remote-consent); phone access waits for it"
+      consent_given || echo "note: Remote Control has not been enabled yet (ashley claude remote-consent); phone access waits for it"
       mkdir -p "$rc" && chmod 700 "$rc" && touch "$rc/enable" && echo "phone access starting on worker $worker ($(cat "$w/node" 2>/dev/null || echo 'node not assigned yet'))${moved:+; moved from$moved}";;
     off) rm -f "$rc/enable"; echo "phone access off on worker $worker";;
     status)
@@ -945,6 +973,7 @@ cmd_verify_tokens() { # prove the stored tokens work, from the login node (tiny 
   else echo "GITHUB_TOKEN missing"; fi
 }
 cmd_uninstall() { # what a brand-new grid account looks like to Ashley
+  refuse_destructive_from_agent uninstall
   local purge=0; [ "${1:-}" = "--purge-root" ] && purge=1
   load_cfg
   for w in $(worker_dirs); do local jid; jid=$(cat "$ASHLEY_HOME/workers/$w/job.id" 2>/dev/null || echo ""); [ -n "$jid" ] && scancel "$jid" 2>/dev/null && echo "cancelled worker $w (job $jid)"; done
