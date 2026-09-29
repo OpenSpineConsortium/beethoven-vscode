@@ -10,6 +10,34 @@ SHA256SUMS signed by k1). Committed and pushed as this checkpoint says below.
 
 ### What version 3 changed (pass 18)
 
+- **Pass 22 (2026-09-29, night): Remote Control proven from a batch job; Ashley Bridge built; the
+  22:34 deletion.** (a) Greg completed `ashley claude login` on the grid (Max plan) and answered
+  Claude Code's Remote Control question; Ashley's phone host in worker job 40496445 (asx15) then
+  registered from `sbatch` under a pseudo-terminal: `https://claude.ai/code?environment=env_01XzAN32jsbL8W1PAFSvitBt`.
+  Claude Code records that answer itself (`remoteDialogSeen: true` in its `.claude.json`); grid
+  scripts **v6** read it (marker file is the fallback) and `ashley claude login` asks the question in
+  the same sitting (no separate `remote-consent`). (b) At **22:34 local** the whole `~/.ashley` folder
+  on the grid was deleted while a Remote Control session spawned from the phone was open; the login,
+  config, license copy and grid tokens went with it. Not `ashley uninstall` (the .bashrc block and the
+  worker job survived), not the build agents (transcripts searched), not the new framework (no such
+  code path); the session's own record was inside the deleted folder. Restored by hand (scripts,
+  `config.env`, `license.key`, `READY`); **Greg must sign in again** (`ashley claude login`, one
+  sitting) and re-run the wizard's Install step for the GitHub/HF tokens on the grid. Guard added:
+  `ashley uninstall` and `claude forget` refuse under `CLAUDECODE`/`ASHLEY_REQUEST_ID`/`ASHLEY_WORKER`
+  or without a terminal. (c) Deep research (six notes + report `docs/research/reports/Browser
+  extension HPC Claude worker.md`) rejected the two prior PDFs' claude.ai-interception design
+  (Consumer Terms) and specified: Remote Control as the surface; a portal-origin-only browser
+  extension over Open OnDemand (Shell WebSocket bootstrap, Files JSON mailbox, Active Jobs); a
+  six/eight-call scheduler adapter; no cookies/claude.ai permissions; signed kill-list. (d) Built as
+  **Ashley Bridge** in `C:\Users\grego\OneDrive\Desktop\ashley-bridge` (private GitHub
+  `GregorySchwing/ashley-bridge`): `framework/` (hpcworker CLI, Slurm live-tested on the grid with
+  probe + worker jobs, PBS/LSF fixture-tested, always-on self-renewing chain, one-sitting login,
+  destructive-command guard, 54+ tests), `extension/` (WXT, Chrome/Edge/Firefox builds, mock
+  OnDemand portal, 72 tests, Open-in-Claude button, auto-start setting, Google Drive step),
+  documents (README, ARCHITECTURE, DIAGNOSTICS, OPEN_QUESTIONS, STORE_LISTING, WAYNE_STATE_PILOT,
+  agreements). Two build rounds with adversarial reviews; remaining minors listed in that repo's
+  checkpoint section of README. Not yet: a human load-unpacked run in Edge against
+  ondemand.grid.wayne.edu; kill-list document not published; Safari untested.
 - **Marketplace (pass 21, 2026-09-28 evening).** Publisher `openspineconsortium` created under the
   personal Microsoft account gregoryamdg@gmail.com (verified-domain badge impossible before
   2026-12-21: the domain is 3 months old and the rule is 6 months for both the domain and the
