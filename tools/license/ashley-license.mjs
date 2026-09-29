@@ -11,6 +11,9 @@
 //   node tools/license/ashley-license.mjs revoke --lid L-... [--reason "..."]
 //   node tools/license/ashley-license.mjs sign-release <dir>              SHA256SUMS + SHA256SUMS.sig
 //   node tools/license/ashley-license.mjs verify-release <dir>
+//   node tools/license/ashley-license.mjs sign-killlist [--kid k1] [--revoked-lids L-a,L-b] [--revoked-versions 1.0.0,2.0.0]
+//        [--message "..."] [--out path]                            Ashley Bridge's signed kill-list (JSON)
+//   node tools/license/ashley-license.mjs verify-killlist <path>
 //
 // The private signing keys and the ledger of issued licenses (names, e-mails) live in the vendor
 // folder, never in the repository: ASHLEY_VENDOR_DIR or ~/.ashley-vendor. Only public keys
@@ -103,6 +106,54 @@ function writeLedger(rows) {
 function dateEnd(s) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) die(`--until wants YYYY-MM-DD, got ${s}`);
   return Math.floor(Date.parse(`${s}T23:59:59Z`) / 1000);
+}
+
+// Ashley Bridge's kill-list (ashley-bridge: extension/src/licensing/killlist.ts): a JSON document whose
+// readable fields are repeated inside `sig`, a complete ASHLEYREV1 token, so the extension trusts only
+// what was signed while a person can still read the file. The verifier checks the token's own payload
+// part, as license.js open() does, so no canonical key order is involved; the fields are written in
+// the order the extension documents. The signing bytes are license.js sign()'s, which it does not
+// export, spelled out here.
+const KILL_FIELDS = ['v', 'kid', 'issued', 'revoked_versions', 'revoked_lids', 'message'];
+function b64u(buf) {
+  return Buffer.from(buf).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+function unb64u(s) {
+  if (!/^[A-Za-z0-9_-]*$/.test(String(s))) throw new Error('not base64url');
+  return Buffer.from(String(s).replace(/-/g, '+').replace(/_/g, '/'), 'base64');
+}
+function signKillList(payload, key) {
+  const body = `${L.REV_PREFIX}.${b64u(Buffer.from(JSON.stringify(payload), 'utf8'))}`;
+  return `${body}.${b64u(crypto.sign(null, Buffer.from(body, 'ascii'), key))}`;
+}
+/** Returns { ok, detail, payload? }: the signature against the trusted public keys, then the readable copy against the signed one. */
+function verifyKillListDoc(doc, keys) {
+  if (!doc || typeof doc !== 'object') return { ok: false, detail: 'not a JSON object' };
+  if (typeof doc.sig !== 'string') return { ok: false, detail: 'no sig field' };
+  const parts = doc.sig.trim().split('.');
+  if (parts.length !== 3 || parts[0] !== L.REV_PREFIX) return { ok: false, detail: `sig is not an ${L.REV_PREFIX} token` };
+  let payload;
+  try {
+    payload = JSON.parse(unb64u(parts[1]).toString('utf8'));
+  } catch {
+    return { ok: false, detail: 'the signed payload is not JSON' };
+  }
+  const raw = payload && Object.prototype.hasOwnProperty.call(keys, payload.kid) ? keys[payload.kid] : undefined;
+  if (!raw) return { ok: false, detail: `unknown signing key ${payload && payload.kid}`, payload };
+  let ok = false;
+  try {
+    ok = crypto.verify(null, Buffer.from(`${parts[0]}.${parts[1]}`, 'ascii'), L.publicKeyFromRaw(raw), unb64u(parts[2]));
+  } catch {
+    ok = false;
+  }
+  if (!ok) return { ok: false, detail: 'the signature does NOT verify', payload };
+  if (payload.v !== 1) return { ok: false, detail: 'the signed payload is malformed (v)', payload };
+  const versions = Array.isArray(payload.revoked_versions) ? payload.revoked_versions : [];
+  const lids = Array.isArray(payload.revoked_lids) ? payload.revoked_lids : Array.isArray(payload.revoked) ? payload.revoked : [];
+  // the extension enforces the signed payload and ignores the readable fields; a person reads the readable ones, so they must agree
+  const differ = KILL_FIELDS.filter((k) => k in payload && JSON.stringify(doc[k]) !== JSON.stringify(payload[k]));
+  if (differ.length) return { ok: false, detail: `the readable fields differ from the signed payload: ${differ.join(', ')}`, payload };
+  return { ok: true, detail: `signed by ${payload.kid}, ${versions.length} withdrawn version(s), ${lids.length} withdrawn license(s), list of ${new Date((Number(payload.issued) || 0) * 1000).toISOString().slice(0, 10)}`, payload };
 }
 
 const [cmd, ...args] = process.argv.slice(2);
@@ -247,7 +298,43 @@ switch (cmd) {
     console.log(`release verified: signature by ${kid}, ${sums.split('\n').filter(Boolean).length} files match`);
     break;
   }
+  case 'sign-killlist': {
+    // The list is whole, not a delta: the extension keeps the newest list by `issued`, so every
+    // withdrawal that must stay in force is repeated on each signing.
+    const kid = flag(args, '--kid', newestKid());
+    if (!kid) die('no signing key: run init first');
+    const csv = (name) => [...new Set((flag(args, name, '') || '').split(',').map((s) => s.trim()).filter(Boolean))].sort();
+    const versions = csv('--revoked-versions');
+    const lids = csv('--revoked-lids');
+    for (const v of versions) if (!/^\d+\.\d+\.\d+$/.test(v)) die(`--revoked-versions: ${v} is not a version like 1.0.0`);
+    for (const l of lids) if (!/^L-[A-Za-z0-9_-]+$/.test(l)) die(`--revoked-lids: ${l} is not a license id like L-...`);
+    const payload = { v: 1, kid, issued: Math.floor(Date.now() / 1000), revoked_versions: versions, revoked_lids: lids, message: flag(args, '--message', '') };
+    const doc = { ...payload, sig: signKillList(payload, privateKey(kid)) };
+    const check = verifyKillListDoc(doc, readKeys());
+    if (!check.ok) die(`the new kill-list does not verify: ${check.detail}`);
+    const text = JSON.stringify(doc, null, 1) + '\n';
+    const out = flag(args, '--out');
+    if (out) {
+      fs.writeFileSync(out, text);
+      console.log(`kill-list written to ${out}: ${check.detail}`);
+    } else process.stdout.write(text);
+    break;
+  }
+  case 'verify-killlist': {
+    const file = args[0];
+    if (!file) die('verify-killlist <path>');
+    let doc;
+    try {
+      doc = JSON.parse(fs.readFileSync(file, 'utf8'));
+    } catch (e) {
+      die(`${file}: not JSON (${e.message})`);
+    }
+    const r = verifyKillListDoc(doc, readKeys());
+    console.log(JSON.stringify({ ok: r.ok, detail: r.detail, payload: r.payload }, null, 1));
+    process.exit(r.ok ? 0 : 2);
+    break;
+  }
   default:
-    console.log(fs.readFileSync(fileURLToPath(import.meta.url), 'utf8').split('\n').slice(3, 14).map((l) => l.replace(/^\/\/ ?/, '')).join('\n'));
+    console.log(fs.readFileSync(fileURLToPath(import.meta.url), 'utf8').split('\n').slice(3, 17).map((l) => l.replace(/^\/\/ ?/, '')).join('\n'));
     process.exit(cmd ? 1 : 0);
 }
