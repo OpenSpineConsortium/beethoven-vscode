@@ -10,6 +10,14 @@ SHA256SUMS signed by k1). Committed and pushed as this checkpoint says below.
 
 ### What version 3 changed (pass 18)
 
+- **Pass 24 (2026-09-29): tester key and Bridge 2.0.0.** Site (domain) key issued for testers:
+  lid **L-kBUmEepmm5D8**, edition site, domain wayne.edu, valid to 2027-03-28, signed with k1, file
+  `~/.ashley-vendor/licenses/wayne.edu-L-kBUmEepmm5D8.key`; **revoke it when the pilot ends**
+  (`ashley-license.mjs revoke --lid L-kBUmEepmm5D8`, then publish the list). Bridge extension 2.0.0
+  honours site keys (profile `email_domain`, else the portal hostname's domain; look-alikes refused;
+  a typed name with an @ builds no e-mail). Tester package on the Desktop: `Ashley Bridge for
+  testers/` (chrome + firefox zips, tester-key.txt, README). Gmail/Drive connectors are not enabled
+  for Claude Code in this session, so upload and e-mail to the tester were left to Greg.
 - **Pass 23 (2026-09-29 morning): Ashley Bridge v2 flow.** After Greg's live test of Bridge v1 against
   ondemand.grid.wayne.edu (checks passed except sign-in; three bugs: page script not injected until
   reload, cold-PUN "Server Error", a missing file's 200-HTML page read as a `.restricted` marker), the
