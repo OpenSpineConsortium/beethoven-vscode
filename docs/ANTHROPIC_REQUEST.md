@@ -12,9 +12,9 @@ Claude Code binary under each student's own subscription
 
 Hello,
 
-I maintain a small tool ("Ashley") for medical students in a university research lab. I would like
-a written answer on whether its use of Claude Code is within the Claude Code legal terms, and if
-not, what would make it so.
+I maintain a small tool ("Beethoven for VS Code", called "Ashley" until September 2026) for medical
+students in a university research lab. I would like a written answer on whether its use of Claude
+Code is within the Claude Code legal terms, and if not, what would make it so.
 
 What the tool does
 

@@ -64,5 +64,5 @@
   <text class="s" x="224" y="350">you sign in, once, in a terminal</text>
   <line class="a" x1="199" y1="336.0" x2="210" y2="336.0"/>
   <path class="a" d="M842.0 248 C 842.0 270, 114.0 282, 114.0 306"/>
-  <text class="s" x="30" y="402">Renew next to a token signs you in again and updates the grid. Ashley never sees your Claude sign-in: Claude Code makes it and keeps it, on the laptop and in your grid account.</text>
+  <text class="s" x="30" y="402">Renew next to a token signs you in again and updates the grid. Beethoven never sees your Claude sign-in: Claude Code makes it and keeps it, on the laptop and in your grid account.</text>
 </svg>

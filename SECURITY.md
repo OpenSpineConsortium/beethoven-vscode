@@ -2,19 +2,22 @@
 
 ## Reporting
 
-Report a security problem in Ashley privately to the maintainer at the contact address stated where
-you obtained Ashley, or to your lab lead, not in a public place. Say what you found, how to
-reproduce it, and what you think it exposes. You will get an acknowledgement within five working
-days and a fix or a plan within thirty. Good-faith research within the law (including 17 U.S.C.
-1201(j) and the security-research exemption) is welcome and will not be met with a claim.
+Report a security problem in Beethoven for VS Code (Ashley for VS Code until 3.0.0) privately to the
+maintainer at the contact address stated where you obtained it, or to your lab lead, not in a public
+place. Say what you found, how to reproduce it, and what you think it exposes. You will get an
+acknowledgement within five working days and a fix or a plan within thirty. Good-faith research
+within the law (including 17 U.S.C. 1201(j) and the security-research exemption) is welcome and will
+not be met with a claim.
 
-## What Ashley holds, and where
+## What Beethoven for VS Code holds, and where
 
 - On the laptop: settings; GitHub and Hugging Face tokens and an optional Console key in the OS
-  credential store; the license key and the institutional identity in `~/.ashley-local`; copies of
-  error reports and troubleshooter logs in the extension's storage.
+  credential store; the license key and the institutional identity in `~/.beethoven-local`
+  (`~/.ashley-local` on a computer that ran Ashley for VS Code); copies of error reports and
+  troubleshooter logs in the extension's storage.
 - In the student's grid account: the same tokens in a mode-600 file, the license key, worker files,
-  and Claude Code's own sign-in in `~/.ashley/claude` (written by Claude Code, never read by Ashley).
+  and Claude Code's own sign-in in `~/.beethoven/claude` (written by Claude Code, never read by
+  Beethoven; `~/.ashley`, the folder's name before the rename, is a link to `~/.beethoven`).
 - With the maintainer: license records; error reports if the student allows them (scrubbed of
   identity; retention 365 days).
 

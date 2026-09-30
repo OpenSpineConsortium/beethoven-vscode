@@ -70,7 +70,7 @@ def main():
             parts.append(f'  <path class="a" d="M{px} {py} C {px} {py + 22}, {x0 + BOX_W / 2} {by - 26}, {x0 + BOX_W / 2} {by - 2}"/>')
         prev_last = (x0 + (len(steps) - 1) * (BOX_W + GAP) + BOX_W / 2, by + BOX_H)
         y += band_h + 16
-    parts.append(f'  <text class="s" x="{x0}" y="{y + 8}">Renew next to a token signs you in again and updates the grid. Ashley never sees your Claude sign-in: Claude Code makes it and keeps it, on the laptop and in your grid account.</text>')
+    parts.append(f'  <text class="s" x="{x0}" y="{y + 8}">Renew next to a token signs you in again and updates the grid. Beethoven never sees your Claude sign-in: Claude Code makes it and keeps it, on the laptop and in your grid account.</text>')
     parts.append('</svg>')
     with open(OUT, "w", encoding="utf-8", newline="\n") as f:
         f.write("\n".join(parts) + "\n")

@@ -1,20 +1,20 @@
 <#
 Runs inside Windows Sandbox (bootstrap.cmd starts it at logon): puts VS Code on the clean machine,
-installs the Ashley extension, writes sandbox-report.txt on the desktop and opens VS Code on an
+installs Beethoven for VS Code, writes sandbox-report.txt on the desktop and opens VS Code on an
 empty folder. Nothing else is installed, no Node, no Git, no Claude Code: the point is to see what
 a student sees on a laptop that has only VS Code, so the extension's own first-run path (the
 signing dialog, the license, the sign-ins, the wizard's checks for what is missing) is what gets
 tested.
 
-  bootstrap.ps1                 install the newest ashley-*.vsix from the mapped dist folder
-  bootstrap.ps1 -Marketplace    install openspineconsortium.ashley from the Marketplace instead
+  bootstrap.ps1                 install the newest beethoven-*.vsix from the mapped dist folder
+  bootstrap.ps1 -Marketplace    install openspineconsortium.beethoven from the Marketplace instead
 
 Every failure is printed and written to the report; the script never stops silently. Written for
 Windows PowerShell 5.1, the only PowerShell the sandbox has.
 #>
 param(
   [switch]$Marketplace,
-  [string]$DistFolder = (Join-Path $env:USERPROFILE 'Desktop\ashley-dist'),
+  [string]$DistFolder = (Join-Path $env:USERPROFILE 'Desktop\beethoven-dist'),
   [string]$WorkFolder = (Join-Path $env:USERPROFILE 'Desktop\work'),
   [string]$ReportPath = (Join-Path $env:USERPROFILE 'Desktop\sandbox-report.txt')
 )
@@ -24,7 +24,7 @@ $ProgressPreference = 'SilentlyContinue'   # Invoke-WebRequest is many times slo
 $started = Get-Date
 $VsCodeUrl = 'https://update.code.visualstudio.com/latest/win32-x64-user/stable'
 $CodeCmd = Join-Path $env:LOCALAPPDATA 'Programs\Microsoft VS Code\bin\code.cmd'
-$MarketplaceId = 'openspineconsortium.ashley'
+$MarketplaceId = 'openspineconsortium.beethoven'   # the item since 4.0.0 (openspineconsortium.ashley is retired)
 $results = New-Object System.Collections.Generic.List[string]   # one line per step, for the report
 $failed = $false
 $installer = Join-Path $env:TEMP 'VSCodeUserSetup-x64.exe'
@@ -69,7 +69,7 @@ function Native([string]$exe, [string[]]$arguments) {
   return @{ text = (($out | Out-String).Trim()); code = $code }
 }
 
-Say ('Ashley on a virgin Windows: ' + $(if ($Marketplace) { "Marketplace build ($MarketplaceId)" } else { "VSIX from $DistFolder" }))
+Say ('Beethoven for VS Code on a virgin Windows: ' + $(if ($Marketplace) { "Marketplace build ($MarketplaceId)" } else { "VSIX from $DistFolder" }))
 
 # 1. TLS 1.2: Windows PowerShell 5.1 does not offer it to web servers unless told to.
 [void](Step 'tls' {
@@ -158,18 +158,18 @@ if ($downloaded) {
   Record 'install-vscode' 'skipped' 'no installer'
 }
 
-# 5. Install Ashley: the newest VSIX from the mapped dist folder (the same rule as make_wsb.py:
+# 5. Install Beethoven for VS Code: the newest VSIX from the mapped dist folder (the same rule as make_wsb.py:
 #    most recently modified), or the Marketplace build.
 $extInstalled = $false
 if ($vsInstalled) {
-  $extInstalled = Step 'install-ashley' {
+  $extInstalled = Step 'install-beethoven' {
     if ($Marketplace) {
       $what = $MarketplaceId
       $r = Native $CodeCmd @('--install-extension', $MarketplaceId, '--force')
     } else {
       if (-not (Test-Path -LiteralPath $DistFolder)) { throw ('{0} is not there: the .wsb did not map the repository''s dist folder' -f $DistFolder) }
-      $vsix = Get-ChildItem -LiteralPath $DistFolder -Filter 'ashley-*.vsix' | Sort-Object LastWriteTime, Name -Descending | Select-Object -First 1
-      if (-not $vsix) { throw ('no ashley-*.vsix in {0}' -f $DistFolder) }
+      $vsix = Get-ChildItem -LiteralPath $DistFolder -Filter 'beethoven-*.vsix' | Sort-Object LastWriteTime, Name -Descending | Select-Object -First 1
+      if (-not $vsix) { throw ('no beethoven-*.vsix in {0}' -f $DistFolder) }
       $what = $vsix.Name
       $r = Native $CodeCmd @('--install-extension', $vsix.FullName, '--force')
     }
@@ -177,7 +177,7 @@ if ($vsInstalled) {
     '{0}: {1}' -f $what, (($r.text -replace '\s+', ' ').Trim())
   }
 } else {
-  Record 'install-ashley' 'skipped' 'VS Code is not installed'
+  Record 'install-beethoven' 'skipped' 'VS Code is not installed'
 }
 
 # 6. Open VS Code on an empty folder, the way a student would after installing. PATH is re-read
@@ -204,14 +204,14 @@ try {
   if ($vsInstalled) { $extensions = (Native $CodeCmd @('--list-extensions', '--show-versions')).text }
   if (-not $extensions) { $extensions = '(none)' }
   $elapsed = [int]((Get-Date) - $started).TotalSeconds
-  $lines.Add('Ashley on a virgin Windows (Windows Sandbox)')
+  $lines.Add('Beethoven for VS Code on a virgin Windows (Windows Sandbox)')
   $lines.Add('written      ' + (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'))
   $lines.Add('source       ' + $(if ($Marketplace) { "Marketplace, $MarketplaceId" } else { "VSIX from $DistFolder" }))
   $lines.Add('windows      ' + $build)
   $lines.Add('ssh.exe      ' + $(if ($ssh) { $ssh.Source } else { 'absent (the OpenSSH client is a Windows optional feature; the wizard must say so at the SSH steps)' }))
   $lines.Add('ssh-keygen   ' + $(if ($sshKeygen) { $sshKeygen.Source } else { 'absent' }))
   $lines.Add('vs code      ' + $(if ($codeVersion) { $codeVersion } else { 'not installed' }))
-  $lines.Add('ashley       ' + $(if ($extInstalled) { 'installed' } else { 'NOT installed' }))
+  $lines.Add('beethoven    ' + $(if ($extInstalled) { 'installed' } else { 'NOT installed' }))
   $lines.Add('elapsed      ' + $elapsed + ' s')
   $lines.Add('result       ' + $(if ($failed) { 'FAILED, see the steps below' } else { 'ok' }))
   $lines.Add('')

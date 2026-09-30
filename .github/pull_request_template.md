@@ -4,7 +4,7 @@
 
 ## Diagnostics (the pre-integration rule)
 
-- [ ] every new tool, package, template or assumption has a node in `extension/src/vscode/diagNodes.ts` (or `grid/ashley` cmd_diag) with a check, a manual fix and a future risk
+- [ ] every new tool, package, template or assumption has a node in `extension/src/vscode/diagNodes.ts` (or `grid/beethoven` cmd_diag) with a check, a manual fix and a future risk
 - [ ] its ids are in `REQUIRED_BY_FEATURE` (`extension/src/vscode-test/extension.test.ts`)
 - [ ] `docs/DIAGNOSTICS.md` regenerated (`python tools/diag_doc.py`) if nodes changed
 

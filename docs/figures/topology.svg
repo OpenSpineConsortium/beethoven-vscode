@@ -21,11 +21,11 @@
 
   <!-- laptop boxes -->
   <rect class="box" x="30" y="90" width="218" height="54"/>
-  <text x="40" y="112" class="t h">VS Code + Ashley</text>
+  <text x="40" y="112" class="t h">VS Code + Beethoven</text>
   <text x="40" y="132" class="s">wizard, tokens in the keychain, Ask</text>
   <rect class="box" x="30" y="160" width="218" height="54"/>
   <text x="40" y="182" class="t h">Claude Code (local)</text>
-  <text x="40" y="202" class="s">MCP bridge: ashley_ask, ashley_status ...</text>
+  <text x="40" y="202" class="s">MCP bridge: the beethoven_* tools</text>
   <rect class="box" x="30" y="230" width="218" height="54"/>
   <text x="40" y="252" class="t h">Remote-SSH</text>
   <text x="40" y="272" class="s">Explorer, editor, images on the node</text>
@@ -35,24 +35,24 @@
 
   <!-- warrior -->
   <rect class="box" x="318" y="130" width="194" height="60"/>
-  <text x="328" y="152" class="t h">~/.ashley/bin/ashley</text>
+  <text x="328" y="152" class="t h" style="font-size:13px">~/.beethoven/bin/beethoven</text>
   <text x="328" y="172" class="s">bash: status, worker, send, wait</text>
   <rect class="file" x="318" y="215" width="194" height="110"/>
   <text x="328" y="237" class="t h">shared home (Panasas)</text>
   <text x="328" y="257" class="s">workers/default/inbox/ *.json</text>
   <text x="328" y="275" class="s">workers/default/outbox/ *.json</text>
-  <text x="328" y="293" class="s">accounts/ (token, 600)  sessions/</text>
+  <text x="328" y="293" class="s">claude/ (sign-in)  sessions/</text>
   <text x="328" y="311" class="s">secrets.env (600)  READY  config.env</text>
 
   <!-- compute -->
   <rect class="box" x="584" y="100" width="364" height="230"/>
   <text x="596" y="122" class="t h">apptainer exec node22-bookworm (glibc 2.36)</text>
   <rect class="box" x="600" y="140" width="330" height="60"/>
-  <text x="612" y="162" class="t h">ashleyd.js</text>
+  <text x="612" y="162" class="t h">beethovend.js</text>
   <text x="612" y="182" class="s">polls inbox, claims, spawns Claude, writes outbox</text>
   <rect class="box" x="600" y="215" width="330" height="60"/>
   <text x="612" y="237" class="t h">claude -p ... --output-format stream-json</text>
-  <text x="612" y="257" class="s">your subscription token, --resume &lt;session&gt;, cwd = project</text>
+  <text x="612" y="257" class="s">your own Claude sign-in, --resume &lt;session&gt;, cwd = project</text>
   <text x="600" y="300" class="s">reads and writes the same home; CephFS holds the container,</text>
   <text x="600" y="316" class="s">npm prefix and workspaces</text>
   <rect class="box" x="584" y="345" width="364" height="34"/>

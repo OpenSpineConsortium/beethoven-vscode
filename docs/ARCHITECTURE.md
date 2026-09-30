@@ -1,29 +1,52 @@
-# Ashley: architecture
+# Beethoven for VS Code: architecture
 
-Ashley is three small things that agree on one file format.
+Beethoven for VS Code (Ashley for VS Code until 3.0.0) is three small things that agree on one
+file format.
 
 | Piece | Runs on | Language | Job |
 |---|---|---|---|
-| VS Code extension (`extension/`) | the student's laptop, inside VS Code | TypeScript | wizard, secrets, Remote-SSH, the Ashley view, "Ask", MCP registration |
-| MCP server (`extension/dist/mcp-server.js`) | the laptop, spawned by Claude Code | TypeScript (bundled) | gives the local Claude the `ashley_*` tools |
-| Grid CLI + daemon (`grid/`) | the grid: `ashley` on the login node, `ashleyd.js` inside a container on a compute node | bash, Node | install, workers, the request queue, Claude Code itself |
+| VS Code extension (`extension/`) | the student's laptop, inside VS Code | TypeScript | wizard, secrets, Remote-SSH, the Beethoven view, "Ask", MCP registration |
+| MCP server (`extension/dist/mcp-server.js`) | the laptop, spawned by Claude Code | TypeScript (bundled) | gives the local Claude the `beethoven_*` tools |
+| Grid CLI + daemon (`grid/`) | the grid: `beethoven` on the login node, `beethovend.js` inside a container on a compute node | bash, Node | install, workers, the request queue, Claude Code itself |
 
-Everything the laptop does on the grid is `ssh wsu-grid ~/.ashley/bin/ashley <verb>`. There is no
-port, no tunnel and no server on the laptop; nothing on the login node beyond `sbatch`, `squeue`,
+Everything the laptop does on the grid is `ssh wsu-grid ~/.beethoven/bin/beethoven <verb>`. There is
+no port, no tunnel and no server on the laptop; nothing on the login node beyond `sbatch`, `squeue`,
 `cat`, `ls` and a half-second sleep loop.
+
+## The names from before 4.0.0
+
+The product was Ashley for VS Code until 3.0.0 and is Beethoven for VS Code from 4.0.0
+(2026-09-30). The old names below still work, each because something built or written before the
+rename still uses it; everything new uses the Beethoven name.
+
+| Old name | What it is now | Why it stays |
+|---|---|---|
+| `~/.ashley` on the grid | a link to `~/.beethoven`; `beethoven install` moves the folder once, while no worker runs | Ashley for VS Code 3.0.0, grid scripts before 7 and the browser edition's framework before 7 name it |
+| `bin/ashley`, `bin/ashleyd.js` | links to `beethoven` and `beethovend.js` | the same builds, and worker job files written before grid scripts 7, run them |
+| `/rs/rs_grp_oschome/shared/ashley` | a link to `shared/beethoven`, the lab folder | grid scripts before 7 and Beethoven builds before 8.0.0 reach the lab's copies through it |
+| `~/.ashley-local` on the laptop | still used while no `~/.beethoven-local` exists | the key and the accepted terms carry over, and both extensions see one key while both are installed |
+| `ashley.*` settings | read while the `beethoven.*` one is unset; never declared | a value a student set keeps working; declaring them would collide with Ashley while it is installed |
+| `ashley.*` command ids | hidden aliases while Ashley for VS Code is not installed | keybindings and notes that name them keep working; two extensions cannot hold one id |
+| `ASHLEY_*` environment names (`ASHLEY_HOME`, `ASHLEY_GRID`, `ASHLEY_LICENSE_DIR`, `ASHLEY_VENDOR_DIR`, ...) | read after the `BEETHOVEN_*` name | older job files, forwarders and shells still set them |
+| the `# >>> ashley` blocks in `~/.ssh/config` and `~/.bashrc` | recognised and replaced by the Beethoven block | an upgrade must not leave two blocks |
+| `ASHLEY1.` keys and `ASHLEYREV1` lists | what the issuers still write (`KEY_PREFIX` in the access service, `--prefix` in the vendor tool); `BEETHOVEN1.` and `BEETHOVENREV1` verify as well | Ashley for VS Code 3.0.0, grid scripts before 7 and Beethoven builds before 8.0.0 accept only the old prefix |
+| `ASHLEY-RELEASE1` | the signature domain of every `SHA256SUMS.sig` | a format tag: renaming it would fail `verify-release` on every earlier release |
+| the Slurm job name `ashley_access` | a lab-access request (below) | an admin's tool older than grid scripts 7 looks for exactly it |
+| the Worker `ashley-service` and the pages under `/ashley/` | kept beside `beethoven-access` and `/beethoven/` | installed 3.0.0 builds know only those addresses |
+| `openspineconsortium.ashley` | the retired Marketplace item | a Marketplace id cannot be renamed (`docs/MARKETPLACE.md`) |
 
 ## Topology
 
 ```
-laptop                       warrior (login node)                compute node (Slurm job)
-──────                       ────────────────────                ────────────────────────
-VS Code ─ Ashley ext ──ssh──▶ ~/.ashley/bin/ashley ──files──▶  apptainer exec node22-bookworm
-Claude Code ─ MCP ─┘          (bash: install, status,           └─ node ashleyd.js
-Remote-SSH ─────────ProxyJump──────────────────────────────────▶   └─ claude -p ... (2.1.283)
-                              sbatch / squeue                        watches  workers/<w>/inbox
-                                                                     writes   workers/<w>/outbox
-                              shared home: ~/.ashley/{accounts,sessions,workers}
-                              CephFS ROOT: containers/, npm/, workspaces/
+laptop                           warrior (login node)                  compute node (Slurm job)
+──────                           ────────────────────                  ────────────────────────
+VS Code ─ Beethoven ext ──ssh──▶ ~/.beethoven/bin/beethoven ──files──▶ apptainer exec node22-bookworm
+Claude Code ─ MCP ─┘             (bash: install, status,               └─ node beethovend.js
+Remote-SSH ─────────ProxyJump─────────────────────────────────────────▶   └─ claude -p ... (2.1.283)
+                                 sbatch / squeue                             watches  workers/<w>/inbox
+                                                                             writes   workers/<w>/outbox
+                                 shared home: ~/.beethoven/{accounts,sessions,workers}
+                                 CephFS ROOT: containers/, npm/, workspaces/
 ```
 
 The login node is a jump host. VS Code Remote-SSH connects to `voh3.nas.grid.wayne.edu`
@@ -35,21 +58,21 @@ Hugging Face and Zenodo all work from inside the job.
 
 A request is a JSON file. Its life:
 
-1. The laptop writes `~/.ashley/workers/<w>/inbox/<id>.json` through `ashley send` (stdin,
+1. The laptop writes `~/.beethoven/workers/<w>/inbox/<id>.json` through `beethoven send` (stdin,
    `.part` then rename, so the daemon never reads a half-written file).
-2. `ashleyd.js` polls the inbox every second, claims the file by renaming it to
+2. `beethovend.js` polls the inbox every second, claims the file by renaming it to
    `<id>.json.claimed` (an atomic operation on the shared filesystem; two daemons cannot both win).
 3. It picks a credential (below), resolves the session, and spawns
    `claude -p <prompt> --output-format stream-json --verbose --permission-mode <mode> --max-turns N [--resume <sid> | --session-id <uuid>]`
-   in the session's working directory, with `CLAUDE_CONFIG_DIR=~/.ashley/accounts/<account>`.
-4. Every stream-json line is appended to `outbox/<id>.events.jsonl` as it arrives. `ashley wait --stream`
-   tails that file to the laptop as `EVENT {…}` lines, so VS Code shows tool calls live.
+   in the session's working directory, with `CLAUDE_CONFIG_DIR=~/.beethoven/accounts/<account>`.
+4. Every stream-json line is appended to `outbox/<id>.events.jsonl` as it arrives. `beethoven wait
+   --stream` tails that file to the laptop as `EVENT {…}` lines, so VS Code shows tool calls live.
 5. On exit, the daemon writes `outbox/<id>.json` (`.part` then rename): status, result text,
-   session id, account, cost, turns, duration, node, job. `ashley wait` prints it as `RESULT {…}`.
+   session id, account, cost, turns, duration, node, job. `beethoven wait` prints it as `RESULT {…}`.
 
 ### How a prompt travels, and how fast
 
-The laptop keeps **one ssh session** to the login node open, running `ashley relay`. A prompt
+The laptop keeps **one ssh session** to the login node open, running `beethoven relay`. A prompt
 is one line on that session's stdin; the relay writes the inbox file and answers `QUEUED`; the
 daemon polls the inbox every 250 ms; results and events come back on the same session as
 `RESULT`/`EVENT` lines. Measured on 2026-09-28 (Windows laptop, skew-corrected; `docs/research/`):
@@ -76,7 +99,7 @@ per session is the next lever if that ever matters.
 
 A queued request survives a daemon restart, a requeued job or a closed laptop: the daemon
 moves any `.claimed` file back to the inbox when it starts. An interactive ssh to the login
-node or the node (Remote-SSH, `Ashley: Open a terminal on the grid login node`) remains
+node or the node (Remote-SSH, `Beethoven: Open a terminal on the grid login node`) remains
 available; it is simply not the path prompts take.
 
 Why not a socket or a TCP port: the laptop can only reach the login node; the daemon runs on
@@ -85,39 +108,39 @@ student can debug with `ls` and `cat`.
 
 ## Sessions
 
-`~/.ashley/sessions/<name>.json` maps a name the student chose ("thesis", "figure-2") to a
+`~/.beethoven/sessions/<name>.json` maps a name the student chose ("thesis", "figure-2") to a
 Claude Code session id, the working directory it is bound to and the account that owns it. The
 first turn of a session passes `--session-id <uuid>` so the id is known even if the run dies;
 later turns pass `--resume <uuid>`. Claude Code keeps the transcript under
 `<CLAUDE_CONFIG_DIR>/projects/<encoded cwd>/<uuid>.jsonl`, which is why a session stays bound to
 its directory.
 
-`--resume` looks only in the running account's `projects/`. Measured on Claude Code 2.1.283: from
-a second config folder the resume answers "No conversation found"; with the transcript present it
-finds it. A turn moved to the student's API key after a limit would therefore start from nothing.
-So every account's `projects/` is a link to one `~/.ashley/projects` (the daemon links it before
-each run; `ashley accounts add-token|add-key` link it when an account is made; the diagnostics
-node `grid.accounts` finds and repairs an unlinked one). All accounts belong to one person, so
-this shares nothing between people.
+`--resume` looks only in the running account's `projects/`. Measured on Claude Code 2.1.283: from a
+second config folder the resume answers "No conversation found"; with the transcript present it
+finds it. A turn moved to the student's API key after a limit would therefore start from nothing. So
+every account's `projects/` is a link to one `~/.beethoven/projects` (the daemon links it before
+each run; `beethoven accounts add-key` links it when an account is made; the diagnostics node
+`grid.accounts` finds and repairs an unlinked one). All accounts belong to one person, so this
+shares nothing between people.
 
 ## Credentials
 
-The rule, since version 2: **Ashley never reads, stores, copies or relays a Claude credential.**
+The rule, since version 2: **Beethoven never reads, stores, copies or relays a Claude credential.**
 Anthropic's Claude Code terms permit an end user to sign in to the unmodified binary with their own
 subscription, including where a platform hosts it, and forbid a third-party developer to collect,
 store or intermediate Claude.ai credentials or tokens (`docs/research/reports/`, the compliance
-report). Version 1 captured the output of `claude setup-token` and copied it to the grid; that
-was on the wrong side of the line and is gone.
+report). Version 1 captured the output of `claude setup-token` and copied it to the grid; that was
+on the wrong side of the line and is gone.
 
 What happens instead:
 
-- `~/.ashley/claude` is a `CLAUDE_CONFIG_DIR` in the student's own grid account, mode 700. The
-  student runs `ashley claude login` once (the extension opens the terminal): inside their own Slurm
-  allocation, in the lab container, the unmodified `claude auth login` prints its link, the student
-  authorises in the browser and pastes the code, and Claude Code writes its own credential there.
-  Ashley wrote nothing but Claude Code's first-run settings.
-- Every Claude Code process Ashley starts on the grid (the worker's `claude -p`, Remote Control)
-  gets `CLAUDE_CONFIG_DIR=~/.ashley/claude` and an environment with every credential variable
+- `~/.beethoven/claude` is a `CLAUDE_CONFIG_DIR` in the student's own grid account, mode 700. The
+  student runs `beethoven claude login` once (the extension opens the terminal): inside their own
+  Slurm allocation, in the lab container, the unmodified `claude auth login` prints its link, the
+  student authorises in the browser and pastes the code, and Claude Code writes its own credential
+  there. Beethoven writes nothing there but Claude Code's first-run settings.
+- Every Claude Code process Beethoven starts on the grid (the worker's `claude -p`, Remote Control)
+  gets `CLAUDE_CONFIG_DIR=~/.beethoven/claude` and an environment with every credential variable
   removed (`CLAUDE_CODE_OAUTH_TOKEN`, `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`,
   `ANTHROPIC_BASE_URL` and the file-descriptor variants). Claude Code uses what it stored.
 - The daemon asks `claude auth status` at start, every 30 minutes and when the credential file
@@ -125,7 +148,7 @@ What happens instead:
   The laptop shows it; the diagnostics node `grid.claude-login` reads it; a prompt sent while not
   signed in is answered with the command that fixes it.
 - One person, one Claude account. The only other credential is the student's own Anthropic Console
-  key (`~/.ashley/accounts/apikey/apikey`, Commercial Terms), used only when the subscription
+  key (`~/.beethoven/accounts/apikey/apikey`, Commercial Terms), used only when the subscription
   window is exhausted, and only in that process's environment.
 - On the laptop, the wizard checks `claude auth status` of the student's own Claude Code and
   requires a subscription sign-in (Pro or Max), because the lab works on subscriptions; it stores
@@ -140,9 +163,9 @@ expiry). The heartbeat notices when it ends; the extension asks for step 12 agai
 
 | Secret | Laptop | Grid | Never |
 |---|---|---|---|
-| GitHub, Hugging Face tokens | VS Code SecretStorage (OS keychain); injected into integrated terminals | `~/.ashley/secrets.env` (mode 600), read by the daemon into the worker's environment | job logs, `sbatch --export`, command lines |
-| Claude subscription token | SecretStorage | `~/.ashley/accounts/default/token` (600) | laptop terminals |
-| Anthropic API key | SecretStorage | `~/.ashley/accounts/apikey/apikey` (600) | laptop terminals (it would silently switch the local Claude Code to pay-per-use) |
+| GitHub, Hugging Face tokens | VS Code SecretStorage (OS keychain); injected into integrated terminals | `~/.beethoven/secrets.env` (mode 600), read by the daemon into the worker's environment | job logs, `sbatch --export`, command lines |
+| Claude sign-in | Claude Code's own store (Beethoven never reads it) | `~/.beethoven/claude`, written by Claude Code itself (700) | Beethoven's files, logs and command lines (since version 2) |
+| Anthropic API key | SecretStorage | `~/.beethoven/accounts/apikey/apikey` (600) | laptop terminals (it would silently switch the local Claude Code to pay-per-use) |
 | Grid password / OTP | nowhere | nowhere | typed once, in a terminal, to install the SSH key |
 
 Files travel over ssh **stdin** (`cat > file` with `umask 077`), never as arguments.
@@ -166,8 +189,8 @@ limit; `--dependency=singleton` keeps one job per worker name; on the `requeue` 
 
 **Slurm inside the worker.** The container has no Slurm of its own, so until version 3 the
 worker's Claude could not submit or even see jobs, although its instructions said it could (found
-by the dependency study; confirmed on asx1: no `ashley`, `sbatch` or `squeue` on its PATH, and
-`ashley worker list` called running workers dead). The worker job now binds the host's Slurm client
+by the dependency study; confirmed on asx1: no grid command, `sbatch` or `squeue` on its PATH, and
+`worker list` called running workers dead). The worker job now binds the host's Slurm client
 in read-only: `/usr/bin` under `/opt/host/bin`, `/usr/lib64/slurm`, the munge library into `/usr/lib`
 (a default search folder, so no `LD_LIBRARY_PATH` leaks into submitted jobs), `/etc/slurm`, the
 munge socket, and a user list that adds the `slurm` and `munge` users that `slurm.conf` names
@@ -177,8 +200,8 @@ on the host with the student's normal environment. The daemon asks Slurm for its
 and puts the answer in its heartbeat; Claude is told either that Slurm works or that it does not,
 and why. The diagnostics node `grid.slurm-in-worker` reads that answer.
 
-`ashley worker start` saves its settings in `<worker>/params`; `ashley worker restart` stops the
-job and starts it again from the current template with those settings, so an upgrade of the
+`beethoven worker start` saves its settings in `<worker>/params`; `beethoven worker restart` stops
+the job and starts it again from the current template with those settings, so an upgrade of the
 template reaches running workers.
 
 Grid etiquette, as C&IT stated it on 2026-09-28: nothing container-related runs on the login node,
@@ -193,8 +216,9 @@ repair. Temp that must be shared between nodes goes under `/wsu/tmp`.
 ## The shared container library
 
 Containers are read-only at run time (every account's sessions, settings and caches live in its
-own home), so one copy serves the whole lab. `/rs/rs_grp_oschome/shared/ashley/` (group
-`oschome`, mode 2775) holds `library.json` and one sandbox per entry:
+own home), so one copy serves the whole lab. `/rs/rs_grp_oschome/shared/beethoven/` (group
+`oschome`, mode 2775; `shared/ashley`, its name until 2026-09-30, is a link to it) holds
+`library.json` and one sandbox per entry:
 
 ```json
 {"version": 1, "default": "claude-node22",
@@ -203,13 +227,13 @@ own home), so one copy serves the whole lab. `/rs/rs_grp_oschome/shared/ashley/`
    "claude_version": "2.1.283 (Claude Code)", "gpu": false, "built": "...", "built_by": "go2432", "purpose": "general ..."}}}
 ```
 
-- `ashley install` adopts the library's default when it is readable (`ashley adopt <name>` writes
-  `config.env` and `READY` in a second; nothing is built, nothing is stored in the student's
-  space). `ashley install --build-own` (admin only) builds a private copy for testing an image.
-- `ashley worker start --container <name>` runs any entry; the worker's job script carries the
+- `beethoven install` adopts the library's default when it is readable (`beethoven adopt <name>`
+  writes `config.env` and `READY` in a second; nothing is built, nothing is stored in the student's
+  space). `beethoven install --build-own` (admin only) builds a private copy for testing an image.
+- `beethoven worker start --container <name>` runs any entry; the worker's job script carries the
   sandbox and binds the library root. A student can run a CPU worker on the general container and
   a GPU worker on a CUDA one at the same time.
-- Leads publish entries with `ashley library publish --name <name> --image docker://<image>
+- Leads publish entries with `beethoven library publish --name <name> --image docker://<image>
   [--gpu] [--purpose "..."]`: a job builds the sandbox, installs the pinned Claude Code, merges the
   entry into `library.json` and makes the tree group-readable. Entries are pinned by image and
   Claude Code version, so every student runs the same bits; an update is a new entry.
@@ -218,73 +242,82 @@ own home), so one copy serves the whole lab. `/rs/rs_grp_oschome/shared/ashley/`
   grid accounts (home, jobs, workers, their own tokens and subscription). Nothing under the lab
   volume is writable by students, not even a request drop-box.
 - **Requests travel as held Slurm jobs.** *Join the lab* (the wizard's last step) submits one held,
-  zero-work job named `ashley_access` whose comment carries the student's note. Slurm authenticates
-  the submitter (`PrivateData=none` here, so the admin sees every user's jobs), so a request cannot
-  be forged or squatted and uses no storage. The admin's ingest writes `status/<id>.json` (mode 600
-  plus an ACL for that student only) and gives the applicant a traverse-only ACL on the path to it.
-  Decisions: approve, deny or remove with a message, reset (the student may ask again); each goes to
-  `access/requests/decisions.log`. The student's own held job is cancelled once a decision exists.
+  zero-work job named `ashley_access` (its name from before the rename, kept because an admin's tool
+  older than grid scripts 7 looks for exactly it) whose comment carries the student's note. Slurm
+  authenticates the submitter (`PrivateData=none` here, so the admin sees every user's jobs), so a
+  request cannot be forged or squatted and uses no storage. The admin's ingest writes
+  `status/<id>.json` (mode 600 plus an ACL for that student only) and gives the applicant a
+  traverse-only ACL on the path to it. Decisions: approve, deny or remove with a message, reset (the
+  student may ask again); each goes to `access/requests/decisions.log`. The student's own held job
+  is cancelled once a decision exists.
 - **Approval is a read-only ACL** (CephFS honours POSIX ACLs; the admin owns the volume): `--x` on
   the volume root, `r-x` plus a default ACL on `shared/`, and `r-X` recursively with default ACLs on
   everything under it except `access/`, walking physically (links are never followed out of the
-  folder). No unix-group change, no ticket. `ashley access admin resync` re-applies grants after
+  folder). No unix-group change, no ticket. `beethoven access admin resync` re-applies grants after
   data is copied in with `cp -a` or `mv`; publishing a container resyncs automatically.
-- **Layout after `ashley access init`:** volume root 2770 with a default ACL `o::---` (new entries
+- **Layout after `beethoven access init`:** volume root 2770 with a default ACL `o::---` (new entries
   start closed); `shared/` and its contents 2750 (the group reads, only the admin writes); `access/`
   and `access/status/` 2710; `access/requests/` 2700. Nothing is open to other grid users.
 - **The request is refused until the environment works the way the lab works:** every earlier step
-  done; the Claude Code and Remote-SSH extensions and the bridge present; and, checked on the grid by
-  `ashley access requirements`, a Claude subscription token the API accepts (`GET /v1/models` with the
-  OAuth token must answer 200; 401 means invalid or revoked; `claude setup-token` only issues tokens
-  to paid plans), and GitHub and Hugging Face tokens that verify. The shared container is what access
-  gives, never a precondition; students are never offered a private build (`ashley install
-  --build-own` is for the admin only).
+  done; the Claude Code and Remote-SSH extensions and the bridge present; and, checked on the grid
+  by `beethoven access requirements`, a Claude subscription token the API accepts (`GET /v1/models`
+  with the OAuth token must answer 200; 401 means invalid or revoked; `claude setup-token` only
+  issues tokens to paid plans), and GitHub and Hugging Face tokens that verify. The shared container
+  is what access gives, never a precondition; students are never offered a private build (`beethoven
+  install --build-own` is for the admin only).
 - **Token checks never put a token on a command line:** `curl -K -` reads the header from stdin, so
   nothing appears in the login node's process list (sampled during three runs: nothing).
 
-Because every worker of an account shares `~/.ashley`, a worker Claude can hand work to another
-worker with `ashley send --worker <name>` from its shell; the daemon tells each worker who it is,
-which peers are alive and the exact command (`peerNote()` in `ashleyd.js`). A lead worker on the
+Because every worker of an account shares `~/.beethoven`, a worker Claude can hand work to another
+worker with `beethoven send --worker <name>` from its shell; the daemon tells each worker who it is,
+which peers are alive and the exact command (`peerNote()` in `beethovend.js`). A lead worker on the
 general container can therefore fan out to a GPU worker on a CUDA container and collect the result
-with `ashley result`.
+with `beethoven result`.
 
 ## Wayne State sign-in and the pre-approved list
 
 The wizard's first step signs the student in with the university's Microsoft account through VS
 Code's built-in Microsoft sign-in (work or school accounts only; only the account's e-mail is used).
 The AccessID is the part before `@wayne.edu`, and the student continues only if it is on the lab's
-approved list. That list lives in the access service (`tools/intake/worker.js`, a Cloudflare Worker):
-students ask for access on the website (`docs/site/request.html`: AccessID, name, e-mail, what for),
-the maintainer approves, denies, adds or removes people on `docs/site/admin.html` (admin token plus
-Cloudflare Access), and the extension fetches the current list from the service's `/allowlist`, in
-the same shape as the bundled file. An approved person's trial button asks the service's `/trial` for
-a key, issued after the service has asked Microsoft who they are; removing a person puts every key
-issued to them on the signed revocation list the service serves at `/revoked`. The service's
-addresses are in `docs/site/services.json`. The bundled list, `extension/media/allowlist.json`
+approved list. That list lives in the access service (`tools/intake/worker.js`, a Cloudflare
+Worker): students ask for access on the website
+(`https://openspineconsortium.com/beethoven/request.html`: AccessID, name, e-mail, what for; each
+request is e-mailed to the maintainer with an Approve and a Deny link), the maintainer decides from
+that e-mail or approves, denies, adds or removes people on
+`https://openspineconsortium.com/beethoven/admin.html` (admin token plus Cloudflare Access), and the
+extension fetches the current list from the service's `/allowlist`, in the same shape as the bundled
+file. An approved person's trial button asks the service's `/trial` for a key, issued after the
+service has asked Microsoft who they are; removing a person puts every key issued to them on the
+signed revocation list the service serves at `/revoked`. The service's addresses are in
+`https://openspineconsortium.com/beethoven/services.json`, which `tools/intake/deploy.sh` writes
+into the site repository; the pages themselves are generated by the site repository's
+`tools/build_site.py` (this edition's own pages, its agreements and privacy statement under
+`/beethoven/vscode/`), not from this repository. The bundled list, `extension/media/allowlist.json`
 (`python tools/allow.py add ab1234`, then rebuild), is the fallback when no service is configured
-there or in `ashley.allowlistUrl`. This is a gate for honest users; the enforceable boundary is still
-the grid (the student's own account and the admin's approval). The lab assumes the student's Claude,
-GitHub and Hugging Face accounts were made with AccessID@wayne.edu.
+there or in `beethoven.allowlistUrl` (or the `ashley.*` value an earlier install set). This is a
+gate for honest users; the enforceable boundary is still the grid (the student's own account and the
+admin's approval). The lab assumes the student's Claude, GitHub and Hugging Face accounts were made
+with AccessID@wayne.edu.
 
 ## Phone access
 
 Claude Code's Remote Control lets the Claude app (or claude.ai/code) drive a session running
 elsewhere, over outbound HTTPS only. On the grid the worker hosts it (`grid/phone.js`, inside the
-worker job). It uses the same sign-in as the worker (`~/.ashley/claude`): Remote Control needs a full
-login, which is what `ashley claude login` makes. Two things are the student's own acts, in a
-terminal, because Anthropic's flow and its consent belong to the account holder: the sign-in, and
-Claude Code's one-time question "Enable Remote Control?", which `ashley claude remote-consent`
+worker job). It uses the same sign-in as the worker (`~/.beethoven/claude`): Remote Control needs a
+full login, which is what `beethoven claude login` makes. Two things are the student's own acts, in
+a terminal, because Anthropic's flow and its consent belong to the account holder: the sign-in, and
+Claude Code's one-time question "Enable Remote Control?", which `beethoven claude remote-consent`
 puts in front of them; their answer is recorded in a marker file and repeated to Claude Code if it
 asks again. Until both exist, phone access waits and says which one is missing.
 
 Only one worker hosts phone access. All workers share the one sign-in, and two hosts on it would
-fight. The host holds a lease: a directory `~/.ashley/remote/host.lock` made with `mkdir` (atomic on
-the shared home, where `flock` is not reliable across nodes), with a beat every 5 s, treated as
-abandoned after 60 s, the timings Claude Code uses for its own credential locks. `ashley phone on
+fight. The host holds a lease: a directory `~/.beethoven/remote/host.lock` made with `mkdir` (atomic
+on the shared home, where `flock` is not reliable across nodes), with a beat every 5 s, treated as
+abandoned after 60 s, the timings Claude Code uses for its own credential locks. `beethoven phone on
 --worker B` turns phone access off on the other workers; B shows *elsewhere* for about a second and
 then takes over. Turning phone access off only stops processes: `claude auth logout` would revoke
-the login, so Ashley never runs it. The handlers act only for the current session, so output from a
-stopped process can neither change the status nor raise inside the daemon.
+the login, so Beethoven never runs it. The handlers act only for the current session, so output from
+a stopped process can neither change the status nor raise inside the daemon.
 
 Students are told, in the terminal and in the manual, that while the phone is connected the session
 transcript, tool activity included, is stored on Anthropic's servers; confidential data stays out of
@@ -297,9 +330,10 @@ and the privacy statement in a webview: the full text must be scrolled to its en
 editor also counts), four un-prechecked statements (each names the button) must be ticked, a name
 typed, and "Accept and Continue" chosen. The record (`core/terms.ts`: terms version, edition,
 SHA-256 of both texts, each statement's wording and state, the typed name, the surface, the host and
-product versions, the locale, the install id, the time) is written to `~/.ashley-local/terms.json`
-with the exact texts beside it, so the person can store and print them (Michigan UETA, MCL
-450.838(3)), and the CLI (`ashley-cli terms`) and the MCP server refuse to work without it.
+product versions, the locale, the install id, the time) is written to `terms.json` in
+`~/.beethoven-local` (`~/.ashley-local` on a computer that ran Ashley for VS Code) with the exact
+texts beside it, so the person can store and print them (Michigan UETA, MCL 450.838(3)), and the CLI
+(`beethoven-cli terms`) and the MCP server refuse to work without it.
 
 The paid Full Edition has its own agreement (`LICENSE-FULL.txt`), shown by the same dialog when a key
 whose edition is not `trial` is registered (`licenseGate.set` calls `requireFullTerms`; the CLI
@@ -310,15 +344,16 @@ an affirmative act whose label names the agreement, and a record of what was sho
 
 ## Licenses
 
-Every copy of Ashley needs a license key for the person using it (`docs/LICENSING.md`). Keys are
-offline, Ed25519-signed (`grid/license.js`, one implementation for the extension, the CLI, the MCP
-server and the grid daemon), name an AccessID or e-mail, carry an edition, dates and a grace period,
-and are checked against the Wayne State sign-in the extension recorded. The extension refuses every
-command but the ones that get you a key; the daemon refuses work; both compare the key against a
-signed revocation list bundled with the release and, where the lab publishes one, fetched daily. A
-clock set back does not revive a key: the latest time seen is kept. Trials are keys of edition
-`trial`, one per AccessID, issued by the lab's licence service (`tools/intake/`) after it has asked
-Microsoft who the signed-in person is, or by the lead with the issuing tool.
+Every copy of Beethoven for VS Code needs a license key for the person using it
+(`docs/LICENSING.md`). Keys are offline, Ed25519-signed (`grid/license.js`, one implementation for
+the extension, the CLI, the MCP server and the grid daemon), name an AccessID or e-mail, carry an
+edition, dates and a grace period, and are checked against the Wayne State sign-in the extension
+recorded. The extension refuses every command but the ones that get you a key; the daemon refuses
+work; both compare the key against a signed revocation list bundled with the release and, where the
+lab publishes one, fetched daily. A clock set back does not revive a key: the latest time seen is
+kept. Trials are keys of edition `trial`, one per AccessID, issued by the lab's licence service
+(`tools/intake/`) after it has asked Microsoft who the signed-in person is, or by the lead with the
+issuing tool.
 
 ## Error reports
 
@@ -334,12 +369,12 @@ key, propose a reviewed draft pull request. Nothing in this path touches a stude
 
 ## Diagnostics
 
-Every assumption Ashley makes, from the laptop's OpenSSH to the node's pseudo-terminal, is a node
-in one dependency graph (`extension/src/vscode/diagNodes.ts`, grid side `ashley diag`). The
+Every assumption Beethoven makes, from the laptop's OpenSSH to the node's pseudo-terminal, is a node
+in one dependency graph (`extension/src/vscode/diagNodes.ts`, grid side `beethoven diag`). The
 troubleshooter checks the nodes in dependency order, names the lowest broken one as the cause of
 everything above it, and runs a repair where one is safe. A feature is not integrated until its
-nodes are in the graph, and a test fails when a feature's nodes go missing. The map, the rule,
-and how to add a node: `docs/DIAGNOSTICS.md`.
+nodes are in the graph, and a test fails when a feature's nodes go missing. The map, the rule, and
+how to add a node: `docs/DIAGNOSTICS.md`.
 
 ## The laptop side
 
@@ -365,8 +400,8 @@ and how to add a node: `docs/DIAGNOSTICS.md`.
 
 ## Xcode and other editors
 
-`core/` never imports `vscode`. `dist/ashley-cli.js` runs the same wizard and the same grid calls
-from a terminal; `cli/ashley` is a ten-line ssh forwarder for machines without Node. The MCP
+`core/` never imports `vscode`. `dist/beethoven-cli.js` runs the same wizard and the same grid calls
+from a terminal; `cli/beethoven` is a ten-line ssh forwarder for machines without Node. The MCP
 server is editor-agnostic: any client that speaks MCP over stdio (Claude Code in Xcode's
 terminal, Claude Desktop, an Agent SDK script) can register it. A native Xcode extension is the
 wrong layer: Xcode Source Editor Extensions cannot open terminals, store secrets or run
@@ -375,7 +410,7 @@ processes; the CLI plus MCP is the port.
 ## What is deliberately not here
 
 - No Nextflow yet. The queue and the worker are the substrate a pipeline can call
-  (`ashley send` from a Nextflow process, `ashley result` in the next); the recipe's Nextflow
+  (`beethoven send` from a Nextflow process, `beethoven result` in the next); the recipe's Nextflow
   section stays the plan.
 - No shared lab account, no cross-student pooling.
 - No X11. Remote-SSH renders images; `srun --x11` remains available for the rare tool that needs

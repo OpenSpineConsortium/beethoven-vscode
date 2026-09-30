@@ -23,19 +23,19 @@ submit and poll jobs; it should not itself run a two-hour computation in one tur
 exclusion list?" picks up where it stopped, days later, on any node.
 
 **Ask the laptop Claude to delegate.** "Check the grid status, then ask the grid Claude to run the
-pelvic width demo on ten records and tell me the mean." The laptop Claude uses the `ashley_*`
+pelvic width demo on ten records and tell me the mean." The laptop Claude uses the `beethoven_*`
 tools; the heavy part happens on the grid; the answer returns to your panel.
 
-**Long tasks.** `ashley_send` queues; `ashley_result` collects later. Close the laptop. The job
-runs until its wall time (24 h by default, 30 days maximum on the `primary` QoS).
+**Long tasks.** `beethoven_send` queues; `beethoven_result` collects later. Close the laptop. The
+job runs until its wall time (24 h by default, 30 days maximum on the `primary` QoS).
 
-**From your phone.** *Ashley: Phone access* puts your worker's Claude in the Claude app on your phone
-(Remote Control), for the same account. One sign-in on the worker, good for about 30 days.
+**From your phone.** *Beethoven: Phone access* puts your worker's Claude in the Claude app on your
+phone (Remote Control), for the same account. One sign-in on the worker, good for about 30 days.
 
-**Images.** Open your grid files with **Ashley: Open my grid files on a compute node**; click a PNG.
+**Images.** Open your grid files with **Beethoven: Open my grid files on a compute node**; click a PNG.
 No X server.
 
-**Containers.** Workers run the lab's shared container once your lead has approved your access (the wizard's last step files the request when everything else works; *Ashley: Lab access* shows its state); a lead can publish
+**Containers.** Workers run the lab's shared container once your lead has approved your access (the wizard's last step files the request when everything else works; *Beethoven: Lab access* shows its state); a lead can publish
 others (a CUDA one for training, an R/Bioconductor one) and you pick per worker. Two workers of yours can run
 different containers at once and hand work to each other.
 
@@ -46,15 +46,15 @@ and V100-class nodes. Ask for a GPU only for that worker; CPU workers start soon
 
 | You cannot | Because |
 |---|---|
-| Run the worker or VS Code's server on the login node | C&IT kills processes on `warrior`; Ashley only ever connects VS Code to a compute node and runs a half-second file poll on the login node |
-| Use someone else's Claude account, or pool accounts across students | Anthropic's consumer terms: an account is for the person who holds it. Ashley rotates only *your* credentials (your subscription, then your own API key) |
+| Run the worker or VS Code's server on the login node | C&IT kills processes on `warrior`; Beethoven only ever connects VS Code to a compute node and runs a half-second file poll on the login node |
+| Use someone else's Claude account, or pool accounts across students | Anthropic's consumer terms: an account is for the person who holds it. Beethoven rotates only *your* credentials (your subscription, then your own API key) |
 | Get more than your plan's window | A Pro/Max window is per account. When it is exhausted the worker reports `rate_limited` with the reset time and waits; an API key with a spending cap is the only overflow |
 | Put patient data, PHI, survey CSVs or contact lists on the grid | The lab's IRB umbrella (HPR 2026-269) covers public, de-identified datasets only; anything else needs its own filing first (RECIPE.md, data rules) |
 | Push the grid Claude to `--dangerously-skip-permissions` for everything | It is available (`mode: bypassPermissions`) but the default `acceptEdits` lets it edit files and run tools while refusing destructive commands; use bypass only inside a project folder you can `git checkout` back |
 | Ask for interactive programs (ITK-SNAP, a GUI) through the worker | The worker is headless. Run GUI tools locally on rsynced results, or with `srun --x11` in your own shell |
 | Expect a reply in under a few seconds | A prompt reaches the worker in about 0.2 s over the open relay, but Claude Code's own start (about 5 s) comes before the first token; a real task takes minutes |
 | Keep a worker forever | Jobs have wall limits; the `requeue` QoS may requeue the job (it resumes). Start another; queued requests wait |
-| Store 200 GB in your home | Home is a 4 TB soft quota shared with everything else; Ashley's container and workspaces live on the lab's CephFS volume when you have access, and the doctor shows the quota |
+| Store 200 GB in your home | Home is a 4 TB soft quota shared with everything else; Beethoven's container and workspaces live on the lab's CephFS volume when you have access, and the doctor shows the quota |
 
 ## What the worker Claude can and cannot see
 

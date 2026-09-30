@@ -5,7 +5,7 @@ rem desktop, next to the report. Any switch given here (for example -Marketplace
 setlocal
 set "HERE=%~dp0"
 set "LOG=%USERPROFILE%\Desktop\sandbox-bootstrap.log"
-echo Ashley on a virgin Windows: setting up. Log: %LOG%
+echo Beethoven for VS Code on a virgin Windows: setting up. Log: %LOG%
 powershell -NoProfile -ExecutionPolicy Bypass -File "%HERE%bootstrap.ps1" %* 2>&1 | powershell -NoProfile -ExecutionPolicy Bypass -Command "$input | Tee-Object -FilePath '%LOG%'"
 echo Done. The report is %USERPROFILE%\Desktop\sandbox-report.txt
 endlocal

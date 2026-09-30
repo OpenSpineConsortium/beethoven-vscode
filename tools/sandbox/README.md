@@ -1,4 +1,4 @@
-# Ashley on a virgin Windows
+# Beethoven for VS Code on a virgin Windows
 
 A test kit for the maintainer: it starts a throwaway copy of Windows with nothing on it, puts VS
 Code there, installs the packaged extension and hands you the window. Nothing else is installed,
@@ -28,10 +28,11 @@ not have Windows Sandbox.
 python tools/sandbox/make_wsb.py
 ```
 
-writes `tools/sandbox/Ashley-VirginWindows.wsb` with this checkout's absolute paths (so it is
+writes `tools/sandbox/Beethoven-VirginWindows.wsb` with this checkout's absolute paths (so it is
 written per machine and not committed), reads it back to make sure it is well-formed, and prints
-which VSIX will be installed: the most recently modified `dist/ashley-*.vsix`. Package first if
-that is not the build you mean to test.
+which VSIX will be installed: the most recently modified `dist/beethoven-*.vsix` (the
+`ashley-*.vsix` beside it, the builds before the rename, are never picked). Package first if that is
+not the build you mean to test.
 
 Double-click the `.wsb`. A clean Windows desktop appears and a console window runs
 `bootstrap.cmd`, which:
@@ -51,16 +52,16 @@ the report and printed; the script goes on to the next step so the report is alw
 
 ## What to test
 
-- **The signing dialog.** Run any Ashley command (the Ashley view in the activity bar, or
-  `Ashley: Set up my research environment (wizard)`). The agreement and privacy statement must
-  appear before Ashley does anything; scroll, tick, type a name, agree. Decline once and check that
-  nothing happened.
+- **The signing dialog.** Run any Beethoven command (the Beethoven view in the activity bar, or
+  `Beethoven: Set up my research environment (wizard)`). The agreement and privacy statement must
+  appear before Beethoven does anything; scroll, tick, type a name, agree. Decline once and check
+  that nothing happened.
 - **The license step.** Paste a key from the host (the clipboard is shared with the sandbox) or
   press the trial button and check the message when the trial service is not reachable.
 - **Sign in with Wayne State.** VS Code's Microsoft sign-in opens Edge; sign in and check that the
   AccessID and e-mail come back and the pre-approval check answers plainly.
 - **GitHub and Hugging Face.** The GitHub sign-in through VS Code, the Hugging Face token page
-  and the clipboard pick-up. Check `Ashley: Manage stored tokens` afterwards: the tokens should
+  and the clipboard pick-up. Check `Beethoven: Manage stored tokens` afterwards: the tokens should
   be in VS Code's secret store (DPAPI-encrypted, inside VS Code's own state database) and nowhere
   else: not in a file on the desktop, not in the sandbox's Credential Manager.
 - **The grid steps.** The SSH key, the SSH configuration block and the one login to the grid.
@@ -76,12 +77,12 @@ the report and printed; the script goes on to the next step so the report is alw
   wrong assumption shows up as an unhelpful error, which is a diagnostics node to add
   (`docs/ENGINEERING.md`, "Invariants", item 8).
 
-Read the Ashley output channel (`Ashley: Show the log`) as you go.
+Read the Beethoven output channel (`Beethoven: Show log`) as you go.
 
 ## What the sandbox has and lacks
 
 Has: Edge (the sign-ins work), Notepad, Explorer, Windows PowerShell 5.1, `cmd`, the shared
-clipboard, the host's network through NAT. The two mapped folders on the desktop: `ashley-dist`
+clipboard, the host's network through NAT. The two mapped folders on the desktop: `beethoven-dist`
 (the repository's `dist/`) and `sandbox` (this folder), both read-only.
 
 Lacks: `winget`, the Microsoft Store, WSL, Hyper-V, any Microsoft account on the OS, and anything
@@ -96,10 +97,11 @@ before closing.
 python tools/sandbox/make_wsb.py --marketplace
 ```
 
-writes `Ashley-VirginWindows-Marketplace.wsb`, whose logon command passes `-Marketplace` to the
-script, and `openspineconsortium.ashley` is installed from the Marketplace instead of the VSIX. Use
-it to check what a student who finds Ashley in the Extensions view gets, including the Marketplace's
-own signing and the version it serves.
+writes `Beethoven-VirginWindows-Marketplace.wsb`, whose logon command passes `-Marketplace` to the
+script, and `openspineconsortium.beethoven` is installed from the Marketplace instead of the VSIX
+(the item has to be published first; `openspineconsortium.ashley` is the retired one). Use it to
+check what a student who finds Beethoven for VS Code in the Extensions view gets, including the
+Marketplace's own signing and the version it serves.
 
 ## If it does not start
 

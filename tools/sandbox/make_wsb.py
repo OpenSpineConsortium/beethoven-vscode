@@ -1,9 +1,9 @@
-"""Write the Windows Sandbox file that tries Ashley on a clean Windows: nothing on the machine but
+"""Write the Windows Sandbox file that tries Beethoven for VS Code on a clean Windows: nothing on the machine but
 what bootstrap.ps1 puts there (VS Code and the extension). The file carries absolute host paths,
 so it is written per checkout and not committed.
 
-  python tools/sandbox/make_wsb.py                  -> tools/sandbox/Ashley-VirginWindows.wsb (installs the VSIX in dist/)
-  python tools/sandbox/make_wsb.py --marketplace    -> tools/sandbox/Ashley-VirginWindows-Marketplace.wsb (installs from the Marketplace)
+  python tools/sandbox/make_wsb.py                  -> tools/sandbox/Beethoven-VirginWindows.wsb (installs the VSIX in dist/)
+  python tools/sandbox/make_wsb.py --marketplace    -> tools/sandbox/Beethoven-VirginWindows-Marketplace.wsb (installs from the Marketplace)
   python tools/sandbox/make_wsb.py --memory 8192    give the sandbox more memory (MB; 4096 by default)
 
 Then double-click the .wsb. README.md in this folder says what to test and what the sandbox lacks.
@@ -18,17 +18,19 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.abspath(os.path.join(HERE, "..", ".."))
 DIST = os.path.join(REPO, "dist")
 DESKTOP = r"C:\Users\WDAGUtilityAccount\Desktop"  # the sandbox's one user; the same on every machine
-MARKETPLACE_ID = "openspineconsortium.ashley"
+# the item since 4.0.0; openspineconsortium.ashley, the retired item, serves Ashley for VS Code 3.0.0
+MARKETPLACE_ID = "openspineconsortium.beethoven"
 # VS Code, Edge for the sign-ins and the installer fit in 4 GB with room to spare; the sandbox
 # gives memory it does not use back to the host, so more costs nothing while it is idle.
 MEMORY_MB = 4096
 # host folder -> sandbox folder, both read-only: the sandbox can never write to the checkout
-FOLDERS = [(DIST, DESKTOP + r"\ashley-dist"), (HERE, DESKTOP + r"\sandbox")]
+FOLDERS = [(DIST, DESKTOP + r"\beethoven-dist"), (HERE, DESKTOP + r"\sandbox")]
 
 
 def newest_vsix():
-    """The VSIX bootstrap.ps1 will install: the most recently modified dist/ashley-*.vsix (same rule there)."""
-    found = glob.glob(os.path.join(DIST, "ashley-*.vsix"))
+    """The VSIX bootstrap.ps1 will install: the most recently modified dist/beethoven-*.vsix (same rule there;
+    the ashley-*.vsix beside it are the builds before the rename and are never picked)."""
+    found = glob.glob(os.path.join(DIST, "beethoven-*.vsix"))
     found.sort(key=lambda p: (os.path.getmtime(p), os.path.basename(p)), reverse=True)
     return found[0] if found else None
 
@@ -84,9 +86,9 @@ def main(argv):
     if not args.marketplace:
         vsix = newest_vsix()
         if not vsix:
-            print(f"no ashley-*.vsix in {DIST}: package first (cd extension && npm run package) or use --marketplace")
+            print(f"no beethoven-*.vsix in {DIST}: package first (cd extension && npm run package) or use --marketplace")
             return 1
-    name = "Ashley-VirginWindows-Marketplace.wsb" if args.marketplace else "Ashley-VirginWindows.wsb"
+    name = "Beethoven-VirginWindows-Marketplace.wsb" if args.marketplace else "Beethoven-VirginWindows.wsb"
     out = os.path.join(HERE, name)
     with open(out, "w", encoding="utf-8", newline="\n") as f:
         f.write(build(args.marketplace, args.memory))

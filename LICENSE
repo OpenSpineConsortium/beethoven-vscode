@@ -1,8 +1,8 @@
 Copyright (c) 2026 OpenSpineConsortium. All rights reserved.
 
-Ashley is licensed software. Its terms are in extension/LICENSE.txt, and they cover everything in
-this repository: the extension, the grid scripts (grid/), the tools (tools/, cli/) and the
-documentation (docs/). The open-source packages Ashley bundles are listed, with their licences, in
-extension/THIRD_PARTY_NOTICES.md.
+Beethoven for VS Code (called Ashley for VS Code until version 3.0.0) is licensed software. Its
+terms are in extension/LICENSE.txt, and they cover everything in this repository: the extension,
+the grid scripts (grid/), the tools (tools/, cli/) and the documentation (docs/). The open-source
+packages it bundles are listed, with their licences, in extension/THIRD_PARTY_NOTICES.md.
 
 No licence is granted by access to this repository. Use requires a license key.

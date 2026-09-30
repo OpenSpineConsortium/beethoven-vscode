@@ -13,7 +13,7 @@
   <g>
     <text x="60" y="24" class="h" text-anchor="middle">laptop</text>
     <text x="330" y="24" class="h" text-anchor="middle">login node</text>
-    <text x="620" y="24" class="h" text-anchor="middle">ashleyd (compute node)</text>
+    <text x="620" y="24" class="h" text-anchor="middle">beethovend (compute node)</text>
     <text x="880" y="24" class="h" text-anchor="middle">claude -p</text>
     <line class="lane" x1="60" y1="34" x2="60" y2="340"/>
     <line class="lane" x1="330" y1="34" x2="330" y2="340"/>
@@ -21,7 +21,7 @@
     <line class="lane" x1="880" y1="34" x2="880" y2="340"/>
   </g>
   <path class="m" d="M60 60 L330 60"/>
-  <text x="70" y="54" class="l">ssh wsu-grid ashley ask (request JSON on stdin)</text>
+  <text x="70" y="54" class="l">ssh wsu-grid beethoven ask (request JSON on stdin)</text>
   <rect class="f" x="336" y="72" width="200" height="20"/>
   <text x="342" y="86" class="s">inbox/&lt;id&gt;.json (.part, then rename)</text>
   <path class="d" d="M330 110 L620 110"/>
@@ -33,7 +33,7 @@
   <rect class="f" x="336" y="182" width="230" height="20"/>
   <text x="342" y="196" class="s">outbox/&lt;id&gt;.events.jsonl (appended live)</text>
   <path class="d" d="M330 222 L60 222"/>
-  <text x="70" y="216" class="l">EVENT lines over the same ssh (ashley wait --stream)</text>
+  <text x="70" y="216" class="l">EVENT lines over the same ssh (beethoven wait --stream)</text>
   <path class="m" d="M880 252 L620 252"/>
   <text x="630" y="246" class="l">exit; result event has is_error, session_id, cost, turns</text>
   <rect class="f" x="336" y="264" width="230" height="20"/>

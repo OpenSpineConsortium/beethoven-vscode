@@ -1,8 +1,9 @@
-# Contributing to Ashley
+# Contributing to Beethoven for VS Code
 
-Ashley is licensed software with a private source repository. Contributions come from the
-maintainer, from collaborators the maintainer has added, and from an automated pipeline that turns
-students' error reports into reviewed pull requests. All three follow the same rules.
+Beethoven for VS Code (Ashley for VS Code until 3.0.0) is licensed software with a private source
+repository (`OpenSpineConsortium/beethoven-vscode`). Contributions come from the maintainer, from
+collaborators the maintainer has added, and from an automated pipeline that turns students' error
+reports into reviewed pull requests. All three follow the same rules.
 
 ## The rules
 
@@ -30,8 +31,8 @@ students' error reports into reviewed pull requests. All three follow the same r
 
 ## AI-assisted changes
 
-Ashley's maintenance pipeline and its maintainer both use Claude Code. The posture is disclose and
-own: an AI tool may draft a change, and the human who opens or approves the pull request is its
+Beethoven's maintenance pipeline and its maintainer both use Claude Code. The posture is disclose
+and own: an AI tool may draft a change, and the human who opens or approves the pull request is its
 author and answers for it.
 
 - Commits made with assistance carry the trailer `Assisted-by: Claude Code (<tool or action>)`. An
@@ -46,10 +47,10 @@ author and answers for it.
 
 ## Reporting a problem
 
-Students report through Ashley (`Ashley: Error reports` shows what is sent) or to their lead.
+Students report through Beethoven (`Beethoven: Error reports` shows what is sent) or to their lead.
 Security problems: see `SECURITY.md`.
 
 ## Building and releasing
 
 `docs/INSTALL.md` (developer section) and `tools/release.mjs`. Releases are signed with the
-maintainer's licence signing key (`tools/license/ashley-license.mjs sign-release`), never in CI.
+maintainer's licence signing key (`tools/license/beethoven-license.mjs sign-release`), never in CI.

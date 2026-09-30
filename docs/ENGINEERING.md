@@ -1,4 +1,4 @@
-# Engineering standards for changes to Ashley
+# Engineering standards for changes to Beethoven for VS Code
 
 Written for anyone, human or automated, who changes this code. Short on purpose; every rule here
 has cost time when it was broken.
@@ -20,18 +20,18 @@ has cost time when it was broken.
 | Concern | Place |
 |---|---|
 | the wizard's steps and their checks | `extension/src/core/wizard.ts` (no VS Code import) |
-| the dependency graph and repairs | `extension/src/vscode/diagNodes.ts`, `grid/ashley` (`cmd_diag`) |
-| the grid worker | `grid/ashleyd.js`; phone access `grid/phone.js`; job template `grid/worker.sbatch.tpl` |
+| the dependency graph and repairs | `extension/src/vscode/diagNodes.ts`, `grid/beethoven` (`cmd_diag`) |
+| the grid worker | `grid/beethovend.js`; phone access `grid/phone.js`; job template `grid/worker.sbatch.tpl` |
 | licences | `grid/license.js` (one implementation), `extension/src/core/license.ts`, `extension/src/vscode/licenseGate.ts` |
 | error reports | `extension/src/core/diagReport.ts` (scrubber), `extension/src/vscode/diagShare.ts` |
 | tests | `extension/src/**/*.test.ts` (unit), `extension/src/vscode-test/` (VS Code), `tools/grid_tests.sh` (container) |
 
 ## Invariants that must hold after any change
 
-1. Ashley never reads, stores, copies or relays a Claude credential. It sets `CLAUDE_CONFIG_DIR`
+1. Beethoven never reads, stores, copies or relays a Claude credential. It sets `CLAUDE_CONFIG_DIR`
    and asks `claude auth status`; nothing else.
 2. One person, one Claude account; the only fallback is that person's own Console key.
-3. Every Claude Code process Ashley starts on the grid runs inside a Slurm allocation, never on the
+3. Every Claude Code process Beethoven starts on the grid runs inside a Slurm allocation, never on the
    login node; every job has a wall time.
 4. Tokens travel on stdin or in files with mode 600, never on a command line, in a job log or in
    `sbatch --export`.
@@ -42,6 +42,11 @@ has cost time when it was broken.
 7. Remote shell arguments are quoted once (`renderRemote`); a leading `~/` is the only unquoted
    thing; `$USER` and friends go through `bash -c`.
 8. A feature's diagnostics nodes exist before the feature is merged (`REQUIRED_BY_FEATURE`).
+9. A name from before the rename (Ashley for VS Code, up to 3.0.0) stays readable until every build
+   that uses it is retired: `ashley.*` settings and command aliases, `~/.ashley` and
+   `~/.ashley-local`, the `ASHLEY_*` variables, the `ASHLEY1.`/`ASHLEYREV1` prefixes the issuers
+   still write (`docs/ARCHITECTURE.md`, "The names from before 4.0.0"). Removing one is a change
+   of its own, made only when nothing installed can still depend on it.
 
 ## Tests
 
