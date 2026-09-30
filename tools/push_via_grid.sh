@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# RETIRED 2026-09-30: the personal repository this pushed to is being deleted; the remote is
+# OpenSpineConsortium/beethoven-vscode, pushed with tools/push_org.sh from WSL. Kept for the record only.
+echo "retired: use tools/push_org.sh (see its header)" >&2; exit 1
 # Push this repository to GitHub through the grid, where a repo-scoped GITHUB_TOKEN already lives in
 # the login environment. The token never comes to the laptop and is never written to disk on the grid;
 # the clone is private (700) while it exists and is deleted after the push, so no copy of the source stays on the grid:
