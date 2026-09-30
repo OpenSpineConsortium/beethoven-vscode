@@ -1,3 +1,7 @@
+# One Worker, two names. This file names ashley-service (Ashley in VS Code, and Beethoven 4.0.0 to 6.0.0,
+# which were built when Beethoven was called Ashley Bridge). The same code is deployed a second time as
+# beethoven-access (Beethoven 7.0.0 on) with `WORKER_NAME=beethoven-access bash deploy.sh`, which passes
+# --name and uses these same vars and KV namespace ids; deploy.sh gives both names the same secrets.
 name = "ashley-service"
 main = "worker.js"
 compatibility_date = "2026-09-01"
@@ -7,14 +11,16 @@ ALLOWED_DOMAINS = "wayne.edu"
 TRIAL_DAYS = "365"
 # the website the request and admin pages are served from: the only origin /request and /admin/* accept
 SITE_ORIGIN = "https://openspineconsortium.com"
-# where /trial sends a person who is not approved yet
+# where /trial, and an access check from any product but Beethoven, send a person who is not approved yet
 REQUEST_PAGE = "https://openspineconsortium.com/ashley/request.html"
+# where an access check from Beethoven (product "bridge" or "beethoven") sends a person who is not approved yet
+BEETHOVEN_REQUEST_PAGE = "https://openspineconsortium.com/beethoven/request.html"
 
 # secrets, never here: TRIAL_KEY_PKCS8_B64, TRIAL_KID, ADMIN_TOKEN, IP_SALT, GITHUB_TOKEN, GITHUB_REPO,
 # DECIDE_KEY, NOTIFY_TO, MAIL_FROM, RESEND_API_KEY (the e-mail about each request; no binding needed)
 # (wrangler secret put, see README.md)
 
-# paste the ids that `wrangler kv namespace create` prints
+# paste the ids that `wrangler kv namespace create` prints; both Worker names bind these same three
 [[kv_namespaces]]
 binding = "TRIALS"
 id = "328006d0894d4b45be7fb5e7becaec62"

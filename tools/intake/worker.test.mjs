@@ -164,7 +164,9 @@ test('POST /request validates, stores a pending record and files one issue', asy
 
 test('POST /request comes from the website only and answers a preflight', async () => {
   const env = makeEnv();
-  assert.equal((await request(env, {}, { origin: 'https://evil.example' })).status, 403);
+  const refused = await request(env, {}, { origin: 'https://evil.example' });
+  assert.equal(refused.status, 403);
+  assert.equal(refused.body.error, `requests are taken from the request page at ${SITE} only`);
   const pre = await call(env, 'OPTIONS', '/request');
   assert.equal(pre.status, 204);
   assert.equal(pre.headers.get('access-control-allow-origin'), SITE);
@@ -366,7 +368,8 @@ test('deny, then approve and add: the records move and an approved person cannot
   assert.equal(add.body.record.approved_at, ap.body.record.approved_at);
 });
 
-// Ashley Bridge's approval check, sent the way an extension's background page sends it: an extension
+// Beethoven's approval check (code name Ashley Bridge; its builds send product "bridge"), sent the way
+// an extension's background page sends it: an extension
 // origin, a text/plain body (no preflight), no credentials
 const EXT = 'chrome-extension://abcdefghijklmnopabcdefghijklmnop';
 const CHECK = { v: 1, access_id: 'st1234', portal: 'ondemand.grid.wayne.edu', product: 'bridge', version: '4.0.0' };
@@ -383,7 +386,7 @@ test('POST /access_check: open CORS on every answer, one account looked up, the 
   assert.equal(pre.headers.get('cache-control'), 'no-store');
   let r = await check(env);
   assert.equal(r.status, 200);
-  assert.deepEqual(r.body, { approved: false, access_id: 'st1234', requestPage: `${SITE}/ashley/request.html` });
+  assert.deepEqual(r.body, { approved: false, access_id: 'st1234', requestPage: `${SITE}/beethoven/request.html` });
   assert.equal(r.headers.get('access-control-allow-origin'), '*');
   assert.equal(r.headers.get('cache-control'), 'no-store');
   assert.equal(r.headers.get('access-control-allow-credentials'), null);
@@ -419,7 +422,7 @@ test('POST /access_check: open CORS on every answer, one account looked up, the 
   // withdrawal: removed from the list, and the next check says no and points at the request page
   await adminPost(env, 'remove', { accessId: 'st1234' });
   r = await check(env);
-  assert.deepEqual(r.body, { approved: false, access_id: 'st1234', requestPage: `${SITE}/ashley/request.html` });
+  assert.deepEqual(r.body, { approved: false, access_id: 'st1234', requestPage: `${SITE}/beethoven/request.html` });
   // the public allowlist route is what it was
   const al = await call(env, 'GET', '/allowlist', { origin: null }).then(asJson);
   assert.deepEqual(al.body, { about: 'AccessIDs approved to use Ashley', accessIds: [] });
@@ -512,6 +515,44 @@ test('POST /access_check keeps one record per product and account, counts the da
   assert.equal((await many.ACCESS.get('seen:bridge:zz0001', 'json')).checks, 120, 'a refused check is not recorded as a check');
 });
 
+test('POST /access_check: a no carries the request page of the product that asked', async () => {
+  const env = makeEnv();
+  const BEETHOVEN_PAGE = 'https://openspineconsortium.com/beethoven/request.html';
+  const ASHLEY_PAGE = 'https://openspineconsortium.com/ashley/request.html';
+  // Beethoven's builds send "bridge" (4.0.0 on); "beethoven" is the same product; case and spaces are ignored
+  const cases = [['bridge', BEETHOVEN_PAGE], ['beethoven', BEETHOVEN_PAGE], [' Beethoven ', BEETHOVEN_PAGE], ['BRIDGE', BEETHOVEN_PAGE], ['ashley', ASHLEY_PAGE], ['vscode', ASHLEY_PAGE], ['something-else', ASHLEY_PAGE]];
+  for (const [product, page] of cases) {
+    const r = await check(env, { product, access_id: 'zz9876' });
+    assert.equal(r.status, 200, product);
+    assert.deepEqual(r.body, { approved: false, access_id: 'zz9876', requestPage: page }, product);
+    assert.equal(r.headers.get('access-control-allow-origin'), '*', product);
+  }
+  // each product keeps its own record of the checks (bridge and BRIDGE are one, beethoven and Beethoven one)
+  assert.equal((await env.ACCESS.get('seen:bridge:zz9876', 'json')).checks, 2);
+  assert.equal((await env.ACCESS.get('seen:beethoven:zz9876', 'json')).checks, 2);
+  assert.equal((await env.ACCESS.get('seen:ashley:zz9876', 'json')).checks, 1);
+  // an approved account is approved whichever product asks, and a yes names no request page
+  await adminPost(env, 'add', { accessId: 'st1234', name: 'Store reviewer (mock portal)', note: 'store-reviewer mock username' });
+  for (const product of ['bridge', 'beethoven', 'ashley']) {
+    const r = await check(env, { product });
+    assert.equal(r.body.approved, true, product);
+    assert.deepEqual(Object.keys(r.body), ['approved', 'access_id', 'checked', 'until'], product);
+  }
+  // each page can be moved on its own: REQUEST_PAGE moves Ashley's, BEETHOVEN_REQUEST_PAGE Beethoven's
+  const moved = makeEnv({ REQUEST_PAGE: 'https://example.org/a.html', BEETHOVEN_REQUEST_PAGE: 'https://example.org/b.html' });
+  assert.equal((await check(moved, { product: 'bridge' })).body.requestPage, 'https://example.org/b.html');
+  assert.equal((await check(moved, { product: 'beethoven' })).body.requestPage, 'https://example.org/b.html');
+  assert.equal((await check(moved, { product: 'ashley' })).body.requestPage, 'https://example.org/a.html');
+  // Ashley in VS Code's key route still points at Ashley's page
+  const vscode = await trial(makeEnv({ BEETHOVEN_REQUEST_PAGE: 'https://example.org/b.html' }), 'tok-ab1234');
+  assert.equal(vscode.body.request_page, ASHLEY_PAGE);
+  // wrangler.toml, which both Worker names deploy with, gives the two published addresses
+  const toml = fs.readFileSync(path.join(HERE, 'wrangler.toml'), 'utf8');
+  assert.match(toml, /^REQUEST_PAGE = "https:\/\/openspineconsortium\.com\/ashley\/request\.html"$/m);
+  assert.match(toml, /^BEETHOVEN_REQUEST_PAGE = "https:\/\/openspineconsortium\.com\/beethoven\/request\.html"$/m);
+  assert.match(toml, /^SITE_ORIGIN = "https:\/\/openspineconsortium\.com"$/m);
+});
+
 test('/health and /report still answer', async () => {
   const env = makeEnv();
   issues.length = 0;
@@ -599,7 +640,7 @@ test('/request e-mails the maintainer once, with an Approve and a Deny link that
   const env2 = mailEnv();
   mails.length = 0;
   await request(env2, { accessId: 'cd5678', email: 'cd5678@wayne.edu', name: '<b>Eve</b> & co', note: '<img src=x onerror=alert(1)> research', product: 'bridge' });
-  assert.ok(mails[0].body.text.includes('Asked from: Ashley Bridge'));
+  assert.ok(mails[0].body.text.includes('Asked from: Beethoven'));
   // a product named like an Object property is shown as typed, not as Object's own members
   const env4 = mailEnv();
   await request(env4, { accessId: 'ef9012', email: 'ef9012@wayne.edu', product: 'constructor' });
@@ -612,8 +653,45 @@ test('/request e-mails the maintainer once, with an Approve and a Deny link that
   assert.ok(q.text.includes('What for: &lt;img src=x onerror=alert(1)&gt; research'));
   assert.ok(!q.text.includes('<b>Eve') && !q.text.includes('<img'));
   const done = await press(env2, tokenOf(linksIn(mails[0].body.text).approve));
-  assert.ok(done.text.includes('&lt;b&gt;Eve&lt;/b&gt; &amp; co can click the Ashley Bridge icon now'));
+  assert.ok(done.text.includes('&lt;b&gt;Eve&lt;/b&gt; &amp; co can click the Beethoven icon now'));
   assert.ok(!done.text.includes('<b>Eve'));
+});
+
+test('the e-mail names the product the form named: Beethoven for bridge and beethoven, Ashley otherwise', async () => {
+  // [what the form sends, what the headline and subject say, what "Asked from" says (null: no line)]
+  const cases = [['bridge', 'Beethoven', 'Beethoven'], ['beethoven', 'Beethoven', 'Beethoven'], ['Beethoven', 'Beethoven', 'Beethoven'], ['ashley', 'Ashley', 'Ashley in VS Code'], ['vscode', 'Ashley', 'Ashley in VS Code'], ['other-thing', 'Ashley', 'other-thing'], [undefined, 'Ashley', null]];
+  for (const [product, headline, from] of cases) {
+    const env = mailEnv();
+    mails.length = 0;
+    const r = await request(env, product === undefined ? {} : { product });
+    assert.equal(r.status, 202, String(product));
+    assert.equal(mails.length, 1, String(product));
+    const m = mails[0].body;
+    assert.equal(m.subject, `${headline} access request: ab1234 (A. Student)`, String(product));
+    assert.match(m.text, new RegExp(`^A\\. Student asked for access to ${headline}\\.$`, 'm'), String(product));
+    assert.ok(m.html.includes(`<p>A. Student asked for access to ${headline}.</p>`), String(product));
+    if (from) {
+      assert.match(m.text, new RegExp(`^Asked from: ${from}$`, 'm'), String(product));
+      assert.ok(m.html.includes(`>Asked from</td><td style="padding:2px 0">${from}</td>`), String(product));
+    } else {
+      assert.ok(!m.text.includes('Asked from') && !m.html.includes('Asked from'), 'the form did not say which product');
+    }
+    assert.ok(!JSON.stringify(m).includes('Ashley Bridge'), 'the old public name is gone from the e-mail');
+  }
+  // Beethoven's request page posts to the second Worker name: the links carry that host, and either name
+  // decides them, because both names share DECIDE_KEY and the KV namespaces
+  const env = mailEnv();
+  mails.length = 0;
+  const posted = await worker.fetch(new Request('https://beethoven-access.example.workers.dev/request', { method: 'POST', headers: { origin: SITE, 'cf-connecting-ip': '203.0.113.7', 'content-type': 'application/json' }, body: JSON.stringify({ accessId: 'ab1234', name: 'A. Student', email: 'ab1234@wayne.edu', note: 'spine segmentation project', product: 'bridge' }) }), env);
+  assert.equal(posted.status, 202);
+  assert.equal(posted.headers.get('access-control-allow-origin'), SITE);
+  const { approve } = linksIn(mails[0].body.text);
+  assert.ok(approve.startsWith('https://beethoven-access.example.workers.dev/decide?t='), approve);
+  const done = await press(env, tokenOf(approve)); // pressed at the other name (https://service.example)
+  assert.equal(done.status, 200);
+  assert.ok(done.text.includes('A. Student can click the Beethoven icon now; the extension re-checks within ten minutes.'));
+  assert.ok(!done.text.includes('Ashley Bridge'));
+  assert.equal((await check(env, { access_id: 'ab1234' })).body.approved, true);
 });
 
 test('one e-mail per AccessID a day; a failed send is logged with its status only and tried again', async () => {
@@ -689,7 +767,7 @@ test('the button applies the decision once, through the admin code, and spends b
   assert.equal(done.status, 200);
   plainPage(done, 'approved page');
   assert.ok(done.text.includes('<h1>Approved.</h1>'));
-  assert.ok(done.text.includes('A. Student can click the Ashley Bridge icon now; the extension re-checks within ten minutes.'));
+  assert.ok(done.text.includes('A. Student can click the Beethoven icon now; the extension re-checks within ten minutes.'));
   assert.ok(done.text.includes(ADMIN_PAGE));
   const rec = await env.ACCESS.get('approved:ab1234', 'json');
   assert.deepEqual({ ...rec, approved_at: 'x' }, { name: 'A. Student', email: 'ab1234@wayne.edu', note: 'spine segmentation project', approved_at: 'x', by: 'e-mail link', lids: [] });
@@ -708,7 +786,7 @@ test('the button applies the decision once, through the admin code, and spends b
   const spent = await env.ACCESS.get(`decide:${nonce}`, 'json');
   assert.deepEqual([spent.access_id, spent.decision], ['ab1234', 'approve']);
   assert.equal(env.ACCESS.ttl.get(`decide:${nonce}`), 30 * 86400);
-  // Ashley Bridge and Ashley in VS Code see the approval
+  // Beethoven and Ashley in VS Code see the approval
   assert.equal((await check(env, { access_id: 'ab1234' })).body.approved, true);
   assert.ok((await call(env, 'GET', '/allowlist', { origin: null }).then(asJson)).body.accessIds.includes('ab1234'));
   // a second press, the other link, or opening either again: already used, and nothing changes

@@ -26,3 +26,4 @@ docs/build/
 !extension/test-fixtures/license/test-signing-key.pem
 .ashley-vendor/
 extension/build-meta/
+.wrangler/

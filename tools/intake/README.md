@@ -3,28 +3,71 @@
 One Cloudflare Worker (`worker.js`) gives Ashley five things without a server to keep: the list of
 approved AccessIDs (asked for from the website, e-mailed to the maintainer with Approve and Deny links,
 managed from an admin page), keys issued in the student's own name to approved people (Ashley in VS
-Code), a yes-or-no approval check for one account (Ashley Bridge, which has no keys), error reports
-filed as issues in the private repository, and the published list of withdrawn keys. It runs on the
-maintainer's own accounts (Cloudflare, GitHub, Resend for the e-mail); no
-student credential other than the Microsoft sign-in token for a key ever reaches it, and that token
-is used once, to ask Microsoft who the person is. Nothing here logs a token, an e-mail or an IP
-address.
+Code), a yes-or-no approval check for one account (Beethoven, the browser extension whose code name
+is Ashley Bridge, which has no keys), error reports filed as issues in the private repository, and
+the published list of withdrawn keys. It runs on the maintainer's own accounts (Cloudflare, GitHub,
+Resend for the e-mail); no student credential other than the Microsoft sign-in token for a key ever
+reaches it, and that token is used once, to ask Microsoft who the person is. Nothing here logs a
+token, an e-mail or an IP address. The same code runs under two Worker names, `ashley-service` and
+`beethoven-access` ([Two names](#two-names)).
 
 ## Routes
 
 | Route | Who calls it | What it does |
 |---|---|---|
 | `GET /allowlist` | the extension (`ashley.allowlistUrl`) | the approved AccessIDs, in the shape of `extension/media/allowlist.json`; cached one minute |
-| `POST /request` | `docs/site/request.html` | a student asks for access: stored as pending, e-mailed to the maintainer with Approve and Deny links (see [Requests by e-mail](#requests-by-e-mail)), filed as an issue labelled `access-request` when `GITHUB_TOKEN` is set; answers pending, approved or denied |
+| `POST /request` | `docs/site/request.html`, and Beethoven's request page (`https://openspineconsortium.com/beethoven/request.html`, which sends `product: "bridge"`) | a student asks for access: stored as pending, e-mailed to the maintainer with Approve and Deny links (see [Requests by e-mail](#requests-by-e-mail)), filed as an issue labelled `access-request` when `GITHUB_TOKEN` is set; answers pending, approved or denied |
 | `GET` and `POST /decide?t=<token>` | the links in that e-mail | GET shows one question and one button; the button POSTs the decision |
 | `POST /trial` | the extension (`ashley.licenseServiceUrl`) | a key for a signed-in, approved person; three a day at most; the key's id is written to the approved record |
-| `POST /access_check` | Ashley Bridge (`services.json` key `access_check`) | is this one account approved? Yes or no, from the same list; contract in [ACCESS_CHECK.md](ACCESS_CHECK.md) |
+| `POST /access_check` | Beethoven (`access_check` in `https://openspineconsortium.com/beethoven/services.json`; 4.0.0 to 6.0.0 read `/ashley/services.json`) | is this one account approved? Yes or no, from the same list; contract in [ACCESS_CHECK.md](ACCESS_CHECK.md) |
 | `GET /revoked` | every installation, daily | the signed revocation list |
 | `POST /report` | installations that allow error reports | an issue labelled `diagnostic-report`; repeats add a count |
 | `/admin/*` | `docs/site/admin.html`, `publish.sh`, `admin.mjs` | `list`, `approve`, `deny`, `add`, `remove`, `revoke-lid`, `notify-test`, behind the bearer token `ADMIN_TOKEN` |
 | `GET /health` | you | `{"ok":true}` |
 
+## Two names
+
+The browser extension's public name is Beethoven (decided 2026-09-29); Ashley Bridge stays its code
+name, in the repository and in the code. So the one Worker answers at two addresses:
+
+| Worker name | Address | Who calls it |
+|---|---|---|
+| `ashley-service` (the name in `wrangler.toml`) | `https://ashley-service.openspineconsortium.workers.dev` | Ashley in VS Code (its `services.json` at `/ashley/`, its settings), and Beethoven 4.0.0 to 6.0.0, built when it was called Ashley Bridge and reading `/ashley/services.json` |
+| `beethoven-access` | `https://beethoven-access.openspineconsortium.workers.dev` | Beethoven 7.0.0 on, through `https://openspineconsortium.com/beethoven/services.json`, which names this host for every route |
+
+Why two names and not a rename: a Worker's `workers.dev` address is its name, and the builds that
+already exist (Ashley in VS Code 3.0.0 on the Marketplace, and Beethoven 4.0.0 to 6.0.0, built as
+Ashley Bridge) know only the old address; renaming would cut them off. Keeping only the old address
+would leave the old name in Beethoven's privacy text and in front of every store reviewer. A route on
+the site's own domain is not available either: the domain's DNS is at Spaceship, not Cloudflare. A
+second Worker name for the same code costs nothing and keeps both.
+
+What makes them one service: the same `worker.js`, the same `wrangler.toml` vars, the same three KV
+namespaces (the ids in `wrangler.toml`; none is ever created for the second name), and the same
+secrets, all from files in the vendor folder, `IP_SALT` included (`ip_salt`), so an address is hashed
+the same way by both and the per-connection limits count across both. An approval, a removal or a
+withdrawn key is seen by both at once (within KV's minute). The Approve and Deny links in an e-mail
+carry the host the request was posted to, and either host decides them. Beethoven still sends
+`product: "bridge"` on the wire, so 4.0.0 to 6.0.0 and 7.0.0 are one product to the service; the
+Worker calls it Beethoven in the e-mail and answers a no with Beethoven's request page.
+
+Deploy both whenever `worker.js` or `wrangler.toml` changes:
+
+```
+cd /mnt/c/Users/grego/OneDrive/Desktop/ashley          # from WSL
+export ASHLEY_VENDOR_DIR=/mnt/c/Users/grego/.ashley-vendor PATH=$HOME/node22/bin:$PATH
+bash tools/intake/deploy.sh                               # ashley-service, then services.json and the site copy
+WORKER_NAME=beethoven-access bash tools/intake/deploy.sh  # the second name: same KV ids, same secrets
+```
+
+`SKIP_SITE=1` leaves `docs/site/services.json` and the site copy alone on the first. The second name
+never writes them: Beethoven's `services.json` is built in the ashley-bridge repository
+(`docs/site/beethoven/services.json`). `admin.mjs` and `publish.sh` take the address from
+`docs/site/services.json` (the old name); either name would do, since both hold the same records.
+
 ## Deploy (once, from the maintainer's machine)
+
+`deploy.sh` (above) does all of this and is the way to deploy. The steps by hand, for reference:
 
 ```
 npm i -g wrangler
@@ -45,8 +88,10 @@ echo trial | wrangler secret put TRIAL_KID
 openssl rand -base64 32 > ~/.ashley-vendor/admin_token && chmod 600 ~/.ashley-vendor/admin_token
 wrangler secret put ADMIN_TOKEN < ~/.ashley-vendor/admin_token
 
-# the salt that hashes the address a request comes from (nothing reads it back; a new salt only resets the rate limit)
-openssl rand -base64 32 | wrangler secret put IP_SALT
+# the salt that hashes the address a request comes from (nothing reads it back; a new salt only resets the
+# rate limit). Kept in the vendor folder so both Worker names get the same one
+openssl rand -base64 32 > ~/.ashley-vendor/ip_salt && chmod 600 ~/.ashley-vendor/ip_salt
+wrangler secret put IP_SALT < ~/.ashley-vendor/ip_salt
 
 # a fine-grained GitHub token: repository GregorySchwing/ashley only, permission Issues: read and write
 wrangler secret put GITHUB_TOKEN
@@ -57,7 +102,9 @@ wrangler deploy
 
 `wrangler secret put NAME` reads the value from stdin when something is piped in, and from a hidden
 prompt otherwise; neither way puts the value in the command line or the history. `wrangler deploy`
-prints the Worker's address (`https://ashley-service.<account>.workers.dev`, or a domain you route to it).
+prints the Worker's address (`https://ashley-service.<account>.workers.dev`, or a domain you route to it);
+`wrangler deploy --name beethoven-access` and `wrangler secret put NAME --name beethoven-access` do the
+same for the second name.
 
 ## After deploy: services.json
 
@@ -76,8 +123,9 @@ then copy `docs/site/` into the site repository's `ashley/` folder):
 }
 ```
 
-`deploy.sh` writes the five service addresses itself. The extension reads this file to find the
-service, Ashley Bridge reads `access_check` from it (cached for a day), and `request.html` and
+`deploy.sh` writes the five service addresses itself (for the default name only). The extension reads
+this file to find the service, Beethoven 4.0.0 to 6.0.0 read `access_check` from it (cached for a
+day; 7.0.0 on read Beethoven's own file, see [Two names](#two-names)), and `request.html` and
 `admin.html` read it too, so the Worker's address lives in one place. While the four service values
 are empty the extension uses the allowlist bundled in the VSIX and the trial button says to ask the
 lead. The settings `ashley.licenseServiceUrl`, `ashley.allowlistUrl`, `ashley.licenseRevocationUrl`
@@ -115,11 +163,13 @@ machine's address. The free plan covers a lab.
 - Remove deletes the record and puts every key issued to that person on the revocation list, which
   the Worker signs with the trial key and serves at `/revoked`; installations fetch it daily. Withdraw
   one key on its own with the form at the bottom of the admin page (`revoke-lid`).
-- Ashley Bridge has no keys. The student signs in to their own Open OnDemand portal; the extension
-  reads the account name the portal's dashboard shows and asks `POST /access_check` whether that
-  account is on the approved list (when the portal is connected, on each click of its icon, and about
-  once a day). Yes means it works; no means its one button reads "Ask for access" and opens
-  `request.html?access_id=<account>`, which fills in the first field. Remove takes the approval away:
+- Beethoven (code name Ashley Bridge) has no keys. The student signs in to their own Open OnDemand
+  portal; the extension reads the account name the portal's dashboard shows and asks
+  `POST /access_check` whether that account is on the approved list (when the portal is connected,
+  on each click of its icon, and about once a day). Yes means it works; no means its one button reads
+  "Ask for access" and opens `request.html?access_id=<account>` on the page the answer names
+  (Beethoven's own, `https://openspineconsortium.com/beethoven/request.html`, for product `bridge` or
+  `beethoven`), which fills in the first field. Remove takes the approval away:
   the next check answers no and the extension stops starting workers. The checks on record (who, from
   which portal, which version, when, the decision) are the `checks` list in `admin.mjs list` and in
   `GET /admin/list`. [ACCESS_CHECK.md](ACCESS_CHECK.md) is the contract.
@@ -130,7 +180,9 @@ machine's address. The free plan covers a lab.
 
 Every request the form stores is e-mailed to you, one e-mail per AccessID a day at most: pressing the
 button again the same day adds nothing to your inbox, and a repeat after 24 hours sends one reminder.
-The e-mail, subject `Ashley access request: <AccessID> (<name>)`, says who asked (name, AccessID,
+The e-mail, subject `Ashley access request: <AccessID> (<name>)` (`Beethoven access request: ...`, and
+"asked for access to Beethoven", when the form says it came from Beethoven, product `bridge` or
+`beethoven`; "Asked from: Beethoven" then too), says who asked (name, AccessID,
 e-mail, what for, when, and which product sent them when the form says so) and carries an Approve link,
 a Deny link and the admin page's address. A link opens a page with one question and one button; nothing
 is decided until the button is pressed. Approve writes the same approved record the admin page writes,
@@ -146,8 +198,12 @@ once:
 
 1. Sign up at https://resend.com with go2432@wayne.edu and confirm the address from Resend's e-mail.
 2. In Resend, open API Keys, press Create API Key (Sending access is enough), and copy the key; it is shown once.
-3. Save it as one line, nothing else, in `C:/Users/grego/.ashley-vendor/resend_api_key`.
-4. From WSL: `cd /mnt/c/Users/grego/OneDrive/Desktop/ashley && ASHLEY_VENDOR_DIR=/mnt/c/Users/grego/.ashley-vendor PATH=$HOME/node22/bin:$PATH bash tools/intake/deploy.sh`
+3. Save it as one line, nothing else, in `C:/Users/grego/.ashley-vendor/resend_api_key` (open Notepad,
+   paste, Save As that name with "All files" so no `.txt` is added). It begins with `re_`; `deploy.sh`
+   refuses a file that does not and sends nothing from it, since whatever sits in that file travels to
+   Resend in a header with every e-mail.
+4. From WSL: `cd /mnt/c/Users/grego/OneDrive/Desktop/ashley && ASHLEY_VENDOR_DIR=/mnt/c/Users/grego/.ashley-vendor PATH=$HOME/node22/bin:$PATH bash tools/intake/deploy.sh`,
+   then the same with `WORKER_NAME=beethoven-access` in front, so both names send e-mail.
 5. Then `ASHLEY_VENDOR_DIR=/mnt/c/Users/grego/.ashley-vendor PATH=$HOME/node22/bin:$PATH node tools/intake/admin.mjs notify-test`: it prints `sent: the provider answered 200` and the test arrives (the first one may land in junk).
 
 Until the domain is verified at Resend, Resend sends only from `onboarding@resend.dev` and only to the
@@ -158,7 +214,8 @@ records Resend lists at Spaceship; once Resend says Verified, write a sender suc
 
 | File in the vendor folder | Secret | When absent |
 |---|---|---|
-| `resend_api_key` | `RESEND_API_KEY` | nothing is sent; `deploy.sh` says so and leaves any key already in the Worker in place |
+| `resend_api_key` | `RESEND_API_KEY` | nothing is sent; `deploy.sh` says so and leaves any key already in the Worker in place. A file that does not begin with `re_` is refused the same way and never sent |
+| `ip_salt` | `IP_SALT` | `deploy.sh` makes it: 32 random bytes, base64, the same for both Worker names. Delete it and deploy both names to start a new salt (it only restarts the day's per-connection counts) |
 | `decide_key` | `DECIDE_KEY` | `deploy.sh` makes it: 32 random bytes, base64. A new key makes every link already sent answer "not valid" |
 | `notify_to` | `NOTIFY_TO` | `deploy.sh` writes `go2432@wayne.edu`; several addresses may be given, separated by commas |
 | `mail_from` | `MAIL_FROM` | `deploy.sh` writes `Ashley access <onboarding@resend.dev>` |

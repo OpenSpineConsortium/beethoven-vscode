@@ -22,18 +22,23 @@
 //   GET  /revoked    the signed revocation list. The Worker signs it itself, with the trial key, whenever
 //                    a person is removed or a key withdrawn (KV ACCESS revoked_signed); grid/license.js
 //                    accepts it because the trial key id is in grid/license_keys.json.
-//   POST /access_check  Ashley Bridge asks whether one account is approved (ACCESS_CHECK.md has the
-//                    contract). No key is involved: the account name is the one the person's own portal
-//                    shows after their university sign-in. The decision is the same approved record the
-//                    admin routes manage, so one approval serves both products; one id is looked up and
-//                    the list itself is never returned here. Answers carry an open CORS header (the
-//                    caller is an extension's background page); the body may be text/plain or JSON.
+//   POST /access_check  Beethoven (the browser extension; code name Ashley Bridge) asks whether one
+//                    account is approved (ACCESS_CHECK.md has the contract). No key is involved: the
+//                    account name is the one the person's own portal shows after their university
+//                    sign-in. The decision is the same approved record the admin routes manage, so one
+//                    approval serves both products; one id is looked up and the list itself is never
+//                    returned here. Answers carry an open CORS header (the caller is an extension's
+//                    background page); the body may be text/plain or JSON. A no names the request page
+//                    of the product that asked (Beethoven's for "bridge" and "beethoven").
 //   /admin/*         the maintainer's page (docs/site/admin.html): list, approve, deny, add, remove,
 //                    revoke-lid, notify-test. Behind a bearer token (secret ADMIN_TOKEN); put Cloudflare Access
 //                    in front of it as a second wall. Every write leaves an audit line (KV ACCESS audit:<time>).
 // Everything a student sends is treated as hostile input: sizes are capped, strings are cleaned,
 // nothing is interpolated into anything but JSON or escaped HTML. Nothing here logs a token, an e-mail
 // or an IP address, and an IP is stored only as a salted hash (secret IP_SALT). Deploy: see README.md.
+// The same code runs under two Worker names, ashley-service (Ashley in VS Code, and Beethoven 4.0.0 to
+// 6.0.0, which were built when it was called Ashley Bridge) and beethoven-access (Beethoven 7.0.0 on),
+// bound to the same KV namespaces and given the same secrets, so both answer from one approved list.
 const MAX_REPORT_BYTES = 64 * 1024;
 const MAX_BODY_BYTES = 8 * 1024;
 const REPORTS_PER_INSTALL_PER_DAY = 10;
@@ -59,7 +64,12 @@ const NOTIFY_EVERY_SECONDS = 86400;
 const DECIDE_DAYS = 14;
 const DECIDE_NONCE_TTL = 30 * 86400;
 const DECIDE_TOKEN = /^([A-Za-z0-9_-]{16,2048})\.([A-Za-z0-9_-]{43})$/;
-const PRODUCTS = { bridge: 'Ashley Bridge', ashley: 'Ashley in VS Code', vscode: 'Ashley in VS Code' };
+// what the e-mail calls the product a request names. Beethoven is the public name of the browser
+// extension whose code name is Ashley Bridge: its builds send product "bridge" (4.0.0 on, kept so the
+// older builds keep working), and "beethoven" is taken as the same product
+const PRODUCTS = { bridge: 'Beethoven', beethoven: 'Beethoven', ashley: 'Ashley in VS Code', vscode: 'Ashley in VS Code' };
+// the products whose "Ask for access" button opens Beethoven's request page, not Ashley's
+const BEETHOVEN_PRODUCTS = new Set(['bridge', 'beethoven']);
 
 const json = (status, body, headers) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store', ...(headers || {}) } });
 const b64u = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
@@ -68,6 +78,9 @@ const hex = (bytes) => [...bytes].map((b) => b.toString(16).padStart(2, '0')).jo
 const today = () => new Date().toISOString().slice(0, 10);
 const siteOrigin = (env) => String(env.SITE_ORIGIN || DEFAULT_SITE_ORIGIN).replace(/\/$/, '');
 const requestPage = (env) => env.REQUEST_PAGE || `${siteOrigin(env)}/ashley/request.html`;
+const beethovenRequestPage = (env) => env.BEETHOVEN_REQUEST_PAGE || `${siteOrigin(env)}/beethoven/request.html`;
+// the request page for the product that asked: Beethoven's for bridge and beethoven, Ashley's otherwise
+const requestPageFor = (env, product) => (BEETHOVEN_PRODUCTS.has(product) ? beethovenRequestPage(env) : requestPage(env));
 const adminPage = (env) => `${siteOrigin(env)}/ashley/admin.html`;
 const fromB64u = (s) => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - (s.length % 4)) % 4)), (c) => c.charCodeAt(0));
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -288,6 +301,9 @@ async function readDecideToken(env, t) {
 // the maintainer's e-mail about one request, in plain text and the same in simple HTML
 async function requestMail(env, base, accessId, rec, { product, askedAgain } = {}) {
   const name = oneLine(rec.name);
+  // the headline and the subject say Beethoven when the form said it came from Beethoven; the approval
+  // itself is one record that serves both products
+  const asked = product === PRODUCTS.beethoven ? PRODUCTS.beethoven : 'Ashley';
   const facts = [
     ['Name', name],
     ['AccessID', accessId],
@@ -310,7 +326,7 @@ async function requestMail(env, base, accessId, rec, { product, askedAgain } = {
   const typed = 'The name and the note were typed by the person asking.';
   const footer = 'Sent by the Ashley access service because someone filled in the request form. You get one e-mail per person a day at most. The person is not told when you decide; let them know.';
   const text = [
-    `${name} asked for access to Ashley.`,
+    `${name} asked for access to ${asked}.`,
     '',
     ...facts.map(([k, v]) => `${k}: ${v}`),
     '',
@@ -325,7 +341,7 @@ async function requestMail(env, base, accessId, rec, { product, askedAgain } = {
   const a = (href, label) => `<a href="${esc(href)}">${esc(label)}</a>`;
   const html = [
     '<div style="font-family:system-ui,Segoe UI,Helvetica,Arial,sans-serif;font-size:15px;line-height:1.5">',
-    `<p>${esc(name)} asked for access to Ashley.</p>`,
+    `<p>${esc(name)} asked for access to ${esc(asked)}.</p>`,
     `<table style="border-collapse:collapse">${facts.map(([k, v]) => `<tr><td style="padding:2px 12px 2px 0;color:#555">${esc(k)}</td><td style="padding:2px 0">${esc(v)}</td></tr>`).join('')}</table>`,
     ...(links ? [`<p><strong>${a(links.approve, 'Approve')}</strong> &nbsp; &nbsp; ${a(links.deny, 'Deny')}</p>`] : []),
     `<p>${esc(how)}</p>`,
@@ -333,7 +349,7 @@ async function requestMail(env, base, accessId, rec, { product, askedAgain } = {
     `<p style="color:#555">${esc(typed)} ${esc(footer)}</p>`,
     '</div>',
   ].join('\n');
-  return { subject: `Ashley access request: ${accessId} (${name})`, text, html };
+  return { subject: `${asked} access request: ${accessId} (${name})`, text, html };
 }
 
 // after a request is stored: one e-mail, unless this AccessID already had a pending request and was
@@ -351,7 +367,7 @@ async function notifyRequest(env, base, accessId, rec, { product, repeat }) {
 
 async function accessRequest(request, env, ctx) {
   const cors = siteCors(request, env);
-  if (!cors) return json(403, { error: 'requests are taken from the Ashley website only' });
+  if (!cors) return json(403, { error: `requests are taken from the request page at ${siteOrigin(env)} only` });
   if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
   const reply = (status, body) => json(status, body, cors);
   if (request.method !== 'POST') return reply(405, { error: 'POST a request here' });
@@ -380,7 +396,7 @@ async function accessRequest(request, env, ctx) {
   // one issue per request, not per retry; a failure to file is not the student's problem (the admin page lists it anyway)
   if (!prior && env.GITHUB_TOKEN && env.GITHUB_REPO) await fileRequestIssue(env, accessId, name, note).catch(() => {});
   // the maintainer's e-mail, best effort: it never changes the answer. The form may say which product
-  // sent the person (product: "bridge"); it is only shown in the e-mail.
+  // sent the person (product: "bridge" from Beethoven's page); it is only shown in the e-mail.
   const asked = String(r.body.product ?? '').trim().toLowerCase();
   // own keys only: a plain lookup would turn "constructor" into Object's source text
   const product = PRODUCT_NAME.test(asked) ? (Object.hasOwn(PRODUCTS, asked) ? PRODUCTS[asked] : asked) : '';
@@ -390,14 +406,15 @@ async function accessRequest(request, env, ctx) {
   return reply(202, { status: 'pending' });
 }
 
-// Ashley Bridge's approval check (ACCESS_CHECK.md). Request: POST {"v":1,"access_id","portal","product",
+// Beethoven's approval check (ACCESS_CHECK.md). Request: POST {"v":1,"access_id","portal","product",
 // "version"}, sent as text/plain so no preflight fires; OPTIONS is answered all the same. Every answer,
 // the refusals included, carries access-control-allow-origin: * and cache-control: no-store, and never
 // allow-credentials. The decision is the presence of approved:<access_id>; an approved record may carry
 // an `until` (ISO date) after which the answer is no (none does today, so until is null). What is kept:
 // seen:<product>:<access_id>, one record per product and account with the last check (portal, version,
 // time, the salted hash of the address, the decision, when the decision last changed), and the day's
-// counters per account and per hashed address. The address itself is never stored.
+// counters per account and per hashed address. The address itself is never stored. A no carries the
+// request page for the product that asked: Beethoven's for "bridge" and "beethoven", Ashley's otherwise.
 async function accessCheck(request, env) {
   const cors = { 'access-control-allow-origin': '*', 'cache-control': 'no-store' };
   if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: { ...cors, 'access-control-allow-methods': 'POST, OPTIONS', 'access-control-allow-headers': 'content-type', 'access-control-max-age': '600' } });
@@ -431,7 +448,7 @@ async function accessCheck(request, env) {
   if (typeof prior.approved === 'boolean' && prior.approved !== approved) seen.changed_at = now;
   else if (prior.changed_at) seen.changed_at = prior.changed_at;
   await env.ACCESS.put(seenKey, JSON.stringify(seen));
-  if (!approved) return reply(200, { approved: false, access_id: accessId, requestPage: requestPage(env) });
+  if (!approved) return reply(200, { approved: false, access_id: accessId, requestPage: requestPageFor(env, product) });
   return reply(200, { approved: true, access_id: accessId, checked: now, until });
 }
 
@@ -566,7 +583,7 @@ async function decide(request, env, url) {
   const label = who ? `${who} (${c.access_id})` : c.access_id;
   if (!confirmed) {
     const now = approved ? `${c.access_id} is approved already.` : denied ? `${c.access_id} was denied before.` : pending ? `Asked ${readableTime(pending.requested_at)}.${pending.note ? ` What for: ${oneLine(pending.note)}` : ''}` : `There is no request from ${c.access_id} on record any more.`;
-    const effect = approve ? 'Pressing the button puts them on the approved list: Ashley Bridge works at their next click on its icon, and Ashley in VS Code lets them through at the Wayne State sign-in step.' : 'Pressing the button marks the request not approved; they are not told the reason, and the request page will say not approved.';
+    const effect = approve ? 'Pressing the button puts them on the approved list: Beethoven works at their next click on its icon, and Ashley in VS Code lets them through at the Wayne State sign-in step.' : 'Pressing the button marks the request not approved; they are not told the reason, and the request page will say not approved.';
     return decidePage(200, `${approve ? 'Approve' : 'Deny'} access for ${label}?`, [now, effect, { muted: 'Nothing has changed yet. Closing this page does nothing.' }], { action: `/decide?t=${t}`, button: approve ? 'Approve' : 'Deny' });
   }
   // the nonce is spent before the decision is applied, so a second press (or the other link) is refused
@@ -575,7 +592,7 @@ async function decide(request, env, url) {
   if (r.status === 404) return decidePage(409, 'Nothing changed', [`There is no request from ${c.access_id} on record any more; it may have been cleared on the admin page.`, toAdmin('To approve them anyway, use Add on')]);
   if (r.status === 409) return decidePage(409, 'Nothing changed', [`${label} is approved already, so the request cannot be denied.`, toAdmin('To take the approval away, use Remove on')]);
   if (r.status !== 200) return decidePage(500, 'Nothing changed', [`The service answered ${r.status}.`, toAdmin('Decide on')]);
-  if (approve) return decidePage(200, 'Approved.', [`${who || c.access_id} can click the Ashley Bridge icon now; the extension re-checks within ten minutes.`, 'In VS Code, Ashley lets them through at the Wayne State sign-in step. They are not told automatically; let them know.', toAdmin('Every request and approval is on')]);
+  if (approve) return decidePage(200, 'Approved.', [`${who || c.access_id} can click the Beethoven icon now; the extension re-checks within ten minutes.`, 'In VS Code, Ashley lets them through at the Wayne State sign-in step. They are not told automatically; let them know.', toAdmin('Every request and approval is on')]);
   return decidePage(200, 'Denied.', [`${label} is not approved. They are not told automatically, and the request page will say not approved if they ask again.`, toAdmin('To change this, use')]);
 }
 
