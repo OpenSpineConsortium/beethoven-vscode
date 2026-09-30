@@ -24,6 +24,16 @@ ADMIN_PAGE = "https://openspineconsortium.com/beethoven/admin.html"
 # and Beethoven for VS Code 4.0.0 is retired: those builds, and the grid scripts before 7, accept the old
 # prefixes only. Deploy both names after a change.
 KEY_PREFIX = "ashley"
+# "0": an access check without install_id (every Beethoven before 8.0.0) is still answered from the approved
+# list alone, so the builds in use keep working. Set it to "1" once Beethoven 8.0.0 is on the private
+# listing and installed; from then on such a check is refused with reason update_required. A check that
+# carries install_id is held to one installation per account either way. Deploy both names after a change.
+REQUIRE_INSTALL_ID = "0"
+# "1": a request is first e-mailed to the student at <AccessID>@wayne.edu with a "Confirm it is you" link,
+# and reaches the maintainer only when they use it. Only after openspineconsortium.com is verified at
+# Resend and mail_from names it (README.md, "The request portal"); until then Resend refuses every address
+# but the account owner's, and each request goes to the maintainer marked "mailbox not verified".
+MAIL_STUDENTS = "0"
 
 # secrets, never here: TRIAL_KEY_PKCS8_B64, TRIAL_KID, ADMIN_TOKEN, IP_SALT, GITHUB_TOKEN, GITHUB_REPO,
 # DECIDE_KEY, NOTIFY_TO, MAIL_FROM, RESEND_API_KEY (the e-mail about each request; no binding needed)

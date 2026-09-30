@@ -98,7 +98,7 @@ strip < "$VENDOR/admin_token" | S ADMIN_TOKEN
 [ -s "$VENDOR/ip_salt" ] || { umask 077; openssl rand -base64 32 | strip > "$VENDOR/ip_salt"; echo "  made $VENDOR/ip_salt"; }
 strip < "$VENDOR/ip_salt" | S IP_SALT
 echo "  TRIAL_KEY_PKCS8_B64, TRIAL_KID, ADMIN_TOKEN, IP_SALT set (GITHUB_TOKEN/GITHUB_REPO not set: requests are stored, no issue is opened)"
-# requests by e-mail (README.md, "Requests by e-mail"): the key that signs the Approve and Deny links is made
+# requests by e-mail (README.md, "The request portal"): the key that signs the links in the e-mails (decisions, CV, confirmation) is made
 # once and kept; the recipient and the sender have defaults; the Resend key is the maintainer's to add
 [ -s "$VENDOR/decide_key" ] || { umask 077; openssl rand -base64 32 | strip > "$VENDOR/decide_key"; echo "  made $VENDOR/decide_key"; }
 [ -s "$VENDOR/notify_to" ] || { printf 'go2432@wayne.edu' > "$VENDOR/notify_to"; echo "  made $VENDOR/notify_to (the default recipient)"; }
@@ -113,12 +113,12 @@ strip < "$VENDOR/mail_from" | S MAIL_FROM
 if [ -s "$VENDOR/resend_api_key" ] && ! strip < "$VENDOR/resend_api_key" | grep -qE '^re_[A-Za-z0-9_-]{8,200}$'; then
   echo "  DECIDE_KEY, NOTIFY_TO, MAIL_FROM set. $VENDOR/resend_api_key is NOT a Resend API key (one begins"
   echo "  with re_), so it was not sent: no e-mail is sent until that file holds the key from resend.com, API Keys"
-  echo "  (README.md, Requests by e-mail). Any key the Worker already holds is left in place."
+  echo "  (README.md, The request portal). Any key the Worker already holds is left in place."
 elif [ -s "$VENDOR/resend_api_key" ]; then
   strip < "$VENDOR/resend_api_key" | S RESEND_API_KEY
   echo "  DECIDE_KEY, NOTIFY_TO, MAIL_FROM, RESEND_API_KEY set: each request is e-mailed to the address in notify_to"
 else
-  echo "  DECIDE_KEY, NOTIFY_TO, MAIL_FROM set; no $VENDOR/resend_api_key, so no e-mail is sent (README.md, Requests by e-mail)"
+  echo "  DECIDE_KEY, NOTIFY_TO, MAIL_FROM set; no $VENDOR/resend_api_key, so no e-mail is sent (README.md, The request portal)"
 fi
 
 sleep 3

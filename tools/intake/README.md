@@ -1,28 +1,31 @@
 # The access, licence and report service
 
 One Cloudflare Worker (`worker.js`) gives Beethoven's two editions five things without a server to
-keep: the list of approved AccessIDs (asked for from the website, e-mailed to the maintainer with
-Approve and Deny links, managed from an admin page), keys issued in the student's own name to approved
-people (Beethoven for VS Code), a yes-or-no approval check for one account (Beethoven, the browser
-extension, which has no keys), error reports filed as issues in the private repository, and the
-published list of withdrawn keys. It runs on the maintainer's own accounts (Cloudflare, GitHub, Resend
-for the e-mail); no student credential other than the Microsoft sign-in token for a key ever reaches
-it, and that token is used once, to ask Microsoft who the person is. Nothing here logs a token, an
-e-mail or an IP address. The same code runs under two Worker names, `beethoven-access` and
-`ashley-service` ([Two names](#two-names)).
+keep: the list of approved AccessIDs (asked for from the website's request portal, with a Google
+account, a purpose and an optional CV, e-mailed to the maintainer with three decision links, managed
+from an admin page), keys issued in the student's own name to approved people (Beethoven for VS Code),
+a yes-or-no approval check for one account and one installation (Beethoven, the browser extension,
+which has no keys), error reports filed as issues in the private repository, and the published list of
+withdrawn keys. It runs on the maintainer's own accounts (Cloudflare, GitHub, Resend for the e-mail);
+no student credential other than the Microsoft sign-in token for a key ever reaches it, and that token
+is used once, to ask Microsoft who the person is. Nothing here logs a token, an e-mail or an IP
+address. The same code runs under two Worker names, `beethoven-access` and `ashley-service`
+([Two names](#two-names)).
 
 ## Routes
 
 | Route | Who calls it | What it does |
 |---|---|---|
-| `GET /allowlist` | Beethoven for VS Code (`beethoven.allowlistUrl`; `ashley.allowlistUrl` in 3.0.0) | the approved AccessIDs, in the shape of `extension/media/allowlist.json`; cached one minute |
-| `POST /request` | the request page, `https://openspineconsortium.com/beethoven/request.html` (the browser edition's form sends `product: "bridge"`); `/ashley/request.html`, which older builds open, redirects there | a student asks for access: stored as pending, e-mailed to the maintainer with Approve and Deny links (see [Requests by e-mail](#requests-by-e-mail)), filed as an issue labelled `beethoven-access-request` when `GITHUB_TOKEN` is set; answers pending, approved or denied |
-| `GET` and `POST /decide?t=<token>` | the links in that e-mail | GET shows one question and one button; the button POSTs the decision |
-| `POST /trial` | Beethoven for VS Code (`beethoven.licenseServiceUrl`; `ashley.licenseServiceUrl` in 3.0.0) | a key for a signed-in, approved person; three a day at most; the key's id is written to the approved record |
-| `POST /access_check` | Beethoven (`access_check` in `https://openspineconsortium.com/beethoven/services.json`; 4.0.0 to 6.0.0 read `/ashley/services.json`) | is this one account approved? Yes or no, from the same list; contract in [ACCESS_CHECK.md](ACCESS_CHECK.md) |
+| `GET /allowlist` | Beethoven for VS Code (`beethoven.allowlistUrl`; `ashley.allowlistUrl` in 3.0.0) | the AccessIDs approved for Beethoven (grant `extension`), in the shape of `extension/media/allowlist.json`; cached one minute |
+| `POST /request` | the request page, `https://openspineconsortium.com/beethoven/request.html` (the browser edition's form sends `product: "bridge"`); `/ashley/request.html`, which older builds open, redirects there | a student asks for access: stored as pending with its CV, e-mailed to the maintainer with three decision links and a CV link (see [The request portal](#the-request-portal)), filed as an issue labelled `beethoven-access-request` when `GITHUB_TOKEN` is set; answers pending, approved or denied |
+| `GET` and `POST /decide?t=<token>` | the links in the e-mails: Approve for Beethoven, Lab membership only, Deny; Move the approval, Withdraw approval | GET shows one question and one button; the button POSTs the decision |
+| `GET` and `POST /confirm?t=<token>` | the student's "Confirm it is you" link, when `MAIL_STUDENTS` is `"1"` | GET shows the request and one button; the button confirms it and sends it to the maintainer |
+| `GET` and `POST /cv?t=<token>` | the CV link in the maintainer's e-mail | GET shows what the file is and one button; the button answers the file, once |
+| `POST /trial` | Beethoven for VS Code (`beethoven.licenseServiceUrl`; `ashley.licenseServiceUrl` in 3.0.0) | a key for a signed-in person approved for Beethoven; three a day at most; the key's id is written to the approved record |
+| `POST /access_check` | Beethoven (`access_check` in `https://openspineconsortium.com/beethoven/services.json`; 4.0.0 to 6.0.0 read `/ashley/services.json`) | is this one account approved, on this installation? Yes or no, from the same list; contract in [ACCESS_CHECK.md](ACCESS_CHECK.md) |
 | `GET /revoked` | every installation, daily | the signed revocation list |
 | `POST /report` | installations that allow error reports | an issue labelled `diagnostic-report`; repeats add a count |
-| `/admin/*` | `https://openspineconsortium.com/beethoven/admin.html`, `publish.sh`, `admin.mjs` | `list`, `approve`, `deny`, `add`, `remove`, `revoke-lid`, `notify-test`, behind the bearer token `ADMIN_TOKEN` |
+| `/admin/*` | `https://openspineconsortium.com/beethoven/admin.html`, `publish.sh`, `admin.mjs` | `list`, `approve` (optional `grants`), `deny`, `add` (optional `grants`), `remove`, `grant`, `seat`, `reset-seat`, `seat-rule`, `cv`, `revoke-lid`, `notify-test`, behind the bearer token `ADMIN_TOKEN` |
 | `GET /health` | you | `{"ok":true}` |
 
 ## Two names
@@ -164,13 +167,21 @@ machine's address. The free plan covers a lab.
 
 ## The approved list, day to day
 
-- A student fills in `request.html`: AccessID, name, `AccessID@wayne.edu`, what they will use Beethoven
-  for. The Worker checks the four fields, stores a pending record and e-mails you about it (next
-  section); with `GITHUB_TOKEN` set it also opens an issue titled `Access request: <AccessID>` labelled
-  `beethoven-access-request`.
-- You press Approve or Deny in that e-mail, or open `admin.html` and click Approve (or Deny, with a
-  reason the student does not see). Add puts someone on the list without a request. Every click
-  confirms first.
+- A student fills in `request.html`: AccessID, name, `AccessID@wayne.edu`, the Google account they
+  use in Chrome, what they will use Beethoven for, and a CV if they like (PDF or Word, 5 MB at most).
+  The Worker checks the fields, stores a pending record (the CV beside it) and e-mails you about it
+  ([The request portal](#the-request-portal)); with `GITHUB_TOKEN` set it also opens an issue titled
+  `Access request: <AccessID>` labelled `beethoven-access-request`.
+- You press Approve for Beethoven, Lab membership only, or Deny in that e-mail, or open `admin.html`
+  and click Approve (or Deny, with a reason the student does not see). Add puts someone on the list
+  without a request. Every click confirms first. An approved record carries `grants`: `["extension",
+  "lab"]` for Beethoven (and Beethoven for VS Code) and lab membership, `["lab"]` for lab membership
+  only; `admin.mjs grant <id> extension,lab` or `lab` sets them, `admin.mjs approve-lab <id>` approves a
+  request for the lab only. A record written before grants existed counts as both. A lab member who
+  later asks for Beethoven through the form gets a new request, and the e-mail says they are a lab
+  member already.
+- After Approve for Beethoven, add the student's Google account to the Google Group of the private
+  listing ([The private listing](#the-private-listing)); that is what lets them install Beethoven.
 - In Beethoven for VS Code the student runs the wizard: the Wayne State sign-in step fetches `/allowlist`, finds them, and the
   trial button asks `/trial` for a key. The Worker asks Microsoft who they are, requires the approved
   record, and signs a key for `TRIAL_DAYS` days (365) with the trial key; a person can be issued three
@@ -188,23 +199,123 @@ machine's address. The free plan covers a lab.
   the next check answers no and the extension stops starting workers. The checks on record (who, from
   which portal, which version, when, the decision) are the `checks` list in `admin.mjs list` and in
   `GET /admin/list`. [ACCESS_CHECK.md](ACCESS_CHECK.md) is the contract.
+- One approved account, one installation. Beethoven 8.0.0 sends the random identifier it made when it
+  was installed; the first installation to check binds the account, a second one is refused ("This
+  account is already set up on another computer. Ask your lab lead to move it here.") and you get one
+  e-mail a day about it with **Move the approval to the new installation** and **Withdraw approval**.
+  One installation also serves one account. `admin.mjs seat <id>` shows the binding by fingerprint,
+  `admin.mjs reset-seat <id>` frees it, and a reinstall or a new computer is a new installation, so
+  expect to move approvals now and then. [ACCESS_CHECK.md, Installations](ACCESS_CHECK.md#installations)
+  has the rules and what they do not stop.
 - The mock portal the store reviewers run signs in as `st1234`; that name is on the approved list
-  (note "store-reviewer mock username") so the reviewers' copy is approved by the real service.
+  (note "store-reviewer mock username") so the reviewers' copy is approved by the real service. Each
+  reviewer installs their own copy, so `st1234` is exempt from the one-installation rule:
+  `admin.mjs seat-rule st1234 any` (set on 2026-09-30).
 
-## Requests by e-mail
+## The request portal
 
-Every request the form stores is e-mailed to you, one e-mail per AccessID a day at most: pressing the
-button again the same day adds nothing to your inbox, and a repeat after 24 hours sends one reminder.
+**What the form sends.** Since 2026-09-30 the request page posts this to `/request` (JSON, 7 MiB + 16
+KiB at most; every other route keeps its 8 KiB cap):
+
+```json
+{"v":2,"access_id":"ab1234","name":"A. Student","email":"ab1234@wayne.edu",
+ "google_account":"a.student@gmail.com","purpose":"spine segmentation for my thesis",
+ "cv":{"name":"cv.pdf","type":"application/pdf","base64":"JVBERi0x..."},"product":"bridge"}
+```
+
+| Field | Rule |
+|---|---|
+| `access_id` | two letters and four digits |
+| `email` | exactly `<access_id>@wayne.edu` |
+| `name` | 2 to 80 characters |
+| `google_account` | required: the address the person signs in to Chrome with (lower-cased, 120 characters at most); it is the one to add to the private listing's Google Group |
+| `purpose` | required: what they will use Beethoven for, 2 to 500 characters |
+| `cv` | optional: `base64` is the file (a `data:...;base64,` prefix is allowed), 5 MB at most once decoded. The kind is read from the file's first bytes (`%PDF-` a PDF, `PK 03 04` Word .docx, `D0 CF 11 E0 A1 B1 1A E1` Word .doc); anything else is refused. `name` is kept as text (120 characters); `type` is ignored |
+| `product` | optional: `bridge` from Beethoven's page; shown in the e-mail only |
+
+The older form's body (`accessId`, `name`, `email`, `note`, `product`; no `v`) is still taken, for a
+page cached before the change, and answered as before.
+
+| Status | Body | When |
+|---|---|---|
+| 202 | `{"status":"pending","mailbox":"not_verified"}` | stored; the maintainer is e-mailed now (the older body gets `{"status":"pending"}`) |
+| 202 | `{"status":"pending","mailbox":"confirm"}` | stored; `MAIL_STUDENTS` is `"1"` and a "Confirm it is you" e-mail went to `<access_id>@wayne.edu` (the page says "Sent. Check your Wayne State mail for a confirmation link.") |
+| 200 | `{"status":"approved"}` or `{"status":"denied"}` | already decided; nothing stored. A lab member only is not "approved" here: their request is stored like any other |
+| 400 | `{"error":"..."}` | a field above; the error is a plain phrase the page can show after "Not sent: " |
+| 413 | `{"error":"too much text"}` | a body over the cap |
+| 429 | `{"error":"too many requests from this connection today; ..."}` | ten requests per connection a day |
+| 429 | `{"error":"three confirmation e-mails went to ab1234@wayne.edu today; ..."}` | `MAIL_STUDENTS` on: three confirmation e-mails an AccessID a day; nothing is changed |
+
+**The CV.** Stored as the file's bytes under `cv:<AccessID>` in KV ACCESS, with its name, kind, size and
+upload time as metadata; a new request with a CV replaces it, one without keeps it. It is kept 12
+months from the request, and again 12 months from the decision (Approve for Beethoven or Lab
+membership only); Deny, Remove and Withdraw approval delete it at once. The maintainer's e-mail carries
+a **View the CV** link (14 days, one use): opening it shows the file's name, kind and size and one
+button; the button answers the file, a PDF shown in the browser tab, a Word file as a download, always
+under the service's own name for it (`ab1234-cv.pdf`) and with the type the service chose from the
+bytes, `X-Content-Type-Options: nosniff`, no caching and no Referer. A PDF shown in the tab gets only
+`frame-ancestors 'none'` as its policy, because a sandbox can stop a browser's PDF viewer from opening
+it; a download gets `default-src 'none'; sandbox`. After the one view, `node tools/intake/admin.mjs cv
+<AccessID>` saves the file as often as needed, and `/admin/cv` answers it to the admin page.
+
+**Mailbox proof.** Anyone can type an AccessID. With `MAIL_STUDENTS` `"1"` in `wrangler.toml`, the
+Worker first e-mails the student at `<AccessID>@wayne.edu`: what was asked in their name (name, Google
+account, purpose, the CV's name) and a **Confirm it is you** link (24 hours, one use; GET shows the
+request and one button, so Safe Links opening it confirms nothing). The request reaches you only when
+they press it, and your e-mail then says `Mailbox: confirmed <time>`. The link matches only the request
+as it was sent: if the form is sent again, the earlier link says the request has changed. If Resend
+refuses the student's address, the request goes to you at once as not verified. With `MAIL_STUDENTS`
+anything else (it is `"0"` today) nobody but you is e-mailed, and every e-mail says `Mailbox: not
+verified. Anyone can type an AccessID; check with the person before approving`. Turn it on only after
+the domain is verified at Resend (below): until then Resend refuses every address but the account
+owner's, so each request would fall back to "not verified" anyway.
+
+**A sign-in instead, later.** The stronger proof is a Wayne State sign-in on the request page: Microsoft
+Entra ID (Wayne State's tenant) would tell the Worker who the person is, the way `/trial` already asks
+Microsoft Graph for the VS Code edition. It needs an application registration in Wayne State's tenant,
+which only Wayne State's C&IT can grant (a redirect address on the site, the `User.Read` permission,
+and their consent for the tenant). It is not built; the mailbox proof above is what exists.
+
+**The maintainer's e-mail.** Every request the form stores is e-mailed to you, one e-mail per AccessID
+a day at most: pressing the button again the same day adds nothing to your inbox, and a repeat after
+24 hours sends one reminder. With `MAIL_STUDENTS` on, the e-mail waits for the student's confirmation.
 The e-mail, from `Beethoven access` with the subject `Beethoven access request: <AccessID> (<name>)`
 ("asked for access to Beethoven", or "to Beethoven for VS Code" when the form names that edition, product
-`ashley`, `vscode` or `beethoven-vscode`; an "Asked from" line then names it), says who asked (name, AccessID,
-e-mail, what for, when, and which product sent them when the form says so) and carries an Approve link,
-a Deny link and the admin page's address. A link opens a page with one question and one button; nothing
-is decided until the button is pressed. Approve writes the same approved record the admin page writes,
-with `by: "e-mail link"` in place of `"admin"`; Deny writes the same denied record, with no reason. The
-audit line says the same. The student is not e-mailed either way; tell them. Sending is best effort: if
-the mail provider fails, the request is still stored and answered pending, the Worker logs the
-provider's status (never the key or an address), and the admin page lists the request as before.
+`ashley`, `vscode` or `beethoven-vscode`; an "Asked from" line then names it), says who asked (name,
+AccessID, e-mail, Google account, what for, the CV's name, kind and size, the mailbox status, "Already:
+a lab member" when that is so, when, and which product sent them) and carries three decision links,
+**Approve for Beethoven**, **Lab membership only** and **Deny**, the **View the CV** link when there is
+a CV, the step after approving (add the Google account to the private listing's group) and the admin
+page's address. A link opens a page with one question and one button; nothing is decided until the
+button is pressed, and the question page shows the request as it stands when you open it. Approve for
+Beethoven writes the same approved record the admin page writes, with `grants: ["extension","lab"]` and
+`by: "e-mail link"` in place of `"admin"`; Lab membership only writes `grants: ["lab"]` (added to what
+the person had); Deny writes the same denied record, with no reason, deletes the CV, and leaves a lab
+member's membership in place. The audit line says the same. The student is not e-mailed about the
+decision; tell them. Sending is best effort: if the mail provider fails, the request is still stored
+and answered pending, the Worker logs the provider's status (never the key or an address), and the
+admin page lists the request as before.
+
+## The private listing
+
+Beethoven is published on the Chrome Web Store with **Private** visibility, installable only by the
+people the listing's Google Group names, and on no other store. The group is the list of who may
+install; the approval check is what lets an installation work. Both are needed.
+
+1. At https://groups.google.com, signed in with your own Google account, create a group (for example
+   "Beethoven testers"). Set who can join to "Only invited users", and who can see members to "Group
+   managers".
+2. In the Chrome Web Store developer dashboard, open Beethoven, Distribution: Visibility **Private**,
+   and name the group as its trusted testers (the dashboard takes the group's address).
+3. After you press Approve for Beethoven, add the Google account from the request e-mail to the group
+   (Members, Add members, directly, without an invitation to accept if the dashboard allows it). The
+   student then opens the listing's address while signed in to Chrome with that account.
+4. When someone leaves, Remove (or Withdraw approval) stops Beethoven at its next check; take their
+   account out of the group too, so they cannot install it again.
+
+The dashboard's exact words for step 2, and whether it takes a group from a developer account that is
+not a Google Workspace one, were not checked when this was written: confirm them in the dashboard the
+first time.
 
 The mail goes through Resend's HTTP API (the domain's DNS is at Spaceship, not Cloudflare, so
 Cloudflare's own mail sending is not available). Until the key exists, nothing is sent, the Worker logs
@@ -240,11 +351,16 @@ records Resend lists at Spaceship; once Resend says Verified, write a sender suc
 
 **The link.** `https://<worker>/decide?t=<payload>.<signature>`, where `payload` is the base64url of
 the JSON `{"v":1,"access_id":"ab1234","decision":"approve","nonce":"<22 characters>","exp":<seconds>}`
-and `signature` is the base64url of HMAC-SHA256 over `payload` with `DECIDE_KEY`. `exp` is 14 days
-after the e-mail was sent. The two links in one e-mail share the nonce, so once either is used, both
-are spent. The link carries the AccessID and the decision only; the person's name is read from the
-record when the page opens. The pages have no scripts, are not cached (`Cache-Control: no-store`), and
-send no Referer, so following the admin-page link from them does not pass the token on.
+and `signature` is the base64url of HMAC-SHA256 over `payload` with `DECIDE_KEY`. `decision` is
+`approve`, `lab` or `deny` in a request e-mail, `move` (which adds `"install_id"`, the installation to
+move to) or `withdraw` in the e-mail about a second installation; `/cv` takes `cv` and `/confirm` takes
+`confirm` (which adds `"ref"`, the version of the request it confirms), and a link of one kind opened at
+another address is "not valid". `exp` is 14 days after the e-mail was sent (24 hours for a
+confirmation). The decision links in one e-mail share the nonce, so once one is used, all are spent;
+the CV link and the confirmation link have their own. The link carries the AccessID and the decision
+only; the person's name is read from the record when the page opens. The pages have no scripts, are not
+cached (`Cache-Control: no-store`), and send no Referer, so following the admin-page link from them
+does not pass the token on.
 
 **What a link scanner can and cannot do.** Mail programs and scanners (Microsoft's Safe Links at
 Wayne State, for one) often open links before you do. Opening a link (GET) only shows the question: it
@@ -281,15 +397,21 @@ withdrew reach installations through `/revoked`.
 
 | Store | Key | Value | Retention |
 |---|---|---|---|
-| ACCESS | `approved:<AccessID>` | name, e-mail, note, when and by whom, the ids of the keys issued | until removed |
-| ACCESS | `pending:<AccessID>` | name, e-mail, note, when asked | until approved or denied |
-| ACCESS | `denied:<AccessID>` | the same, plus when and why | until removed or approved |
+| ACCESS | `approved:<AccessID>` | name, e-mail, note, the Google account, when and by whom, the ids of the keys issued, `grants`, `any_installation` when set | until removed |
+| ACCESS | `pending:<AccessID>` | name, e-mail, note (the purpose), the Google account, the product that sent them, when asked, the CV's name, kind and size, the mailbox status (`not_verified`, `waiting`, `confirmed`) and, once confirmed, when (`verified_at`), and `ref` (the version the confirmation link matches) | until approved or denied |
+| ACCESS | `denied:<AccessID>` | name, e-mail, note, the Google account, when asked, when and why denied | until removed or approved |
+| ACCESS | `cv:<AccessID>` | the CV's bytes; metadata: name, kind, size, when sent, when decided | 12 months from the request, renewed for 12 months at the decision; deleted at once on Deny, Remove or Withdraw approval |
+| ACCESS | `seat:<AccessID>` | the installation the account is bound to: its identifier, first and last check, product, version; after a move, when and by whom | until moved, reset or removed |
+| ACCESS | `install:<identifier>` | the account an installation is bound to, and since when | as long as that seat |
+| ACCESS | `conflict:<AccessID>` | refusals: kind, count, first and last, the fingerprint of the last refused installation | 12 months from the last refusal, or until moved, reset or removed |
+| ACCESS | `conflict_notified:<AccessID>` | when the last e-mail about a second installation went | 24 hours |
+| ACCESS | `confirm_mail:<AccessID>:<day>` | confirmation e-mails sent to the student that day (3 at most) | 2 days |
 | ACCESS | `revoked`, `revoked_signed` | the withdrawn key ids; the signed list | until replaced |
-| ACCESS | `audit:<time>` | action, AccessID, by | for the record |
+| ACCESS | `audit:<time>:<4 hex>` | action, AccessID, by (and the grants of an approval) | for the record |
 | ACCESS | `req:<hash>:<day>` | requests from one connection (a salted hash; the address itself is never stored) | 2 days |
 | ACCESS | `notified:<AccessID>` | when the last e-mail about this person's request was sent | 24 hours |
-| ACCESS | `decide:<nonce>` | a used e-mail link: AccessID, decision, when | 30 days (a link lives 14) |
-| ACCESS | `seen:<product>:<AccessID>` | the last access check for that product and account: portal, version, time of the first and the last check, how many, the salted hash of the address, the decision, when the decision last changed | until the maintainer deletes it |
+| ACCESS | `decide:<nonce>` | a used e-mail link (a decision, a CV view, a confirmation): AccessID, decision, when | 30 days (a link lives 14 days at most) |
+| ACCESS | `seen:<product>:<AccessID>` | the last access check for that product and account: portal, version, time of the first and the last check, how many, the salted hash of the address, the decision and its reason, when the decision last changed | until the maintainer deletes it |
 | ACCESS | `chk:<AccessID>:<day>`, `chkip:<hash>:<day>` | access checks that day per account (120 at most) and per connection (2000 at most) | 2 days |
 | TRIALS | `<AccessID>` | the last key issued: time, key id, e-mail, end date | for the record |
 | TRIALS | `issue:<AccessID>:<day>` | keys issued that day | 2 days |
@@ -304,9 +426,12 @@ set, which it is not today.
 
 Reports are capped at 64 KB, ten per installation per day; every string is stripped of hidden
 comments and zero-width characters and truncated. Requests: the AccessID is two letters and four
-digits, the e-mail must be `AccessID@wayne.edu`, the name 2 to 80 characters, the note 500 at most,
-ten requests per connection per day; the issue body carries the AccessID, name and note, not the
-e-mail. Keys require a Microsoft account in the allowed domains (`ALLOWED_DOMAINS`, default
+digits, the e-mail must be `AccessID@wayne.edu`, the name 2 to 80 characters, the purpose (note) 500 at
+most and required on the current form, the Google account required on the current form, a CV 5 MB at
+most and a PDF or a Word file by its bytes, ten requests per connection per day; the issue body
+carries the AccessID, name and note, not the e-mail. A CV costs the Worker CPU time to decode: tens of
+milliseconds for 5 MB in plain JavaScript (measured in Node on the maintainer's machine: parse about
+15 ms, decode about 50 ms), less where the runtime has `Uint8Array.fromBase64`. Keys require a Microsoft account in the allowed domains (`ALLOWED_DOMAINS`, default
 `wayne.edu`) whose user name, or on-premises account name, is an AccessID, and an approved record
 for it; anything else is answered with a message that says what to do. `/request` and `/admin/*`
 answer browsers from `SITE_ORIGIN` only. `/access_check` answers any origin (the caller is a browser
@@ -329,7 +454,11 @@ not the Windows one, set `BEETHOVEN_VENDOR_DIR=/mnt/c/Users/grego/.beethoven-ven
 node --test tools/intake/worker.test.mjs tools/license/vendor.test.mjs
 ```
 
-An in-memory KV, stubbed Microsoft Graph and GitHub, and the test signing key as the trial key; what
-the Worker signs is checked with `grid/license.js`, the verifier Beethoven for VS Code and the grid
-ship, in both spellings of the prefixes (`KEY_PREFIX` unset, `ashley` and `beethoven`).
-`vendor.test.mjs` checks the order in which the vendor folder is found.
+An in-memory KV (binary values and metadata included), stubbed Microsoft Graph, GitHub and Resend
+(which can refuse one address, as it refuses students' before the domain is verified), and the test
+signing key as the trial key; what the Worker signs is checked with `grid/license.js`, the verifier
+Beethoven for VS Code and the grid ship, in both spellings of the prefixes (`KEY_PREFIX` unset,
+`ashley` and `beethoven`). The installation rule, grants, the v2 request with and without a CV, the CV
+link, the three decision links, the second-installation e-mail and its two links, the mailbox proof
+with `MAIL_STUDENTS` on and off, and the admin routes `seat`, `reset-seat`, `seat-rule`, `grant` and
+`cv` each have their tests. `vendor.test.mjs` checks the order in which the vendor folder is found.
