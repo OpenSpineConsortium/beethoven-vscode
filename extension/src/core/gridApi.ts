@@ -1,7 +1,8 @@
-// Everything the laptop asks the grid to do, as typed calls over `ssh <alias> ~/.ashley/bin/ashley ...`.
+// Everything the laptop asks the grid to do, as typed calls over `ssh <alias> ~/.beethoven/bin/beethoven ...`
+// (gridCli in shell.ts: an account not yet moved answers with ~/.ashley/bin/ashley).
 // Shared by the extension, the MCP server and the CLI.
-import { ssh, RunResult, RunOptions, shq, remotePath } from './shell';
-import { AshleyRequest, AshleyResult, WorkerState, makeRequest, PermissionMode } from './protocol';
+import { ssh, RunResult, RunOptions, shq, remotePath, gridCli } from './shell';
+import { BeethovenRequest, BeethovenResult, WorkerState, makeRequest, PermissionMode } from './protocol';
 import { parseSqueue, SqueueRow, SQUEUE_FORMAT, workerStartArgs, WorkerJobSpec } from './slurm';
 import { GridRelay } from './relay';
 
@@ -22,9 +23,9 @@ export interface GridStatus {
   error?: string;
 }
 
-/** `ashley claude status --json`: whether Claude Code's own sign-in exists on the grid, never the credential. */
+/** `beethoven claude status --json`: whether Claude Code's own sign-in exists on the grid, never the credential. */
 export interface GridClaudeStatus {
-  /** Claude Code's credential file exists in ~/.ashley/claude */
+  /** Claude Code's credential file exists in ~/.beethoven/claude */
   dir_present: boolean;
   /** the student answered Claude Code's Remote Control question (phone access) */
   consent: boolean;
@@ -44,9 +45,9 @@ export class GridApi {
    */
   constructor(public alias: string, private log: (line: string) => void = () => {}, public relay?: GridRelay) {}
 
-  ashley(args: string[], opts: RunOptions = {}): Promise<RunResult> {
-    this.log(`$ ssh ${this.alias} ashley ${args.join(' ')}`);
-    return ssh(this.alias, ['~/.ashley/bin/ashley', ...args], opts);
+  beethoven(args: string[], opts: RunOptions = {}): Promise<RunResult> {
+    this.log(`$ ssh ${this.alias} beethoven ${args.join(' ')}`);
+    return ssh(this.alias, gridCli(args), opts);
   }
 
   async hostname(): Promise<{ ok: boolean; hostname: string; error: string }> {
@@ -55,9 +56,9 @@ export class GridApi {
   }
 
   async status(): Promise<GridStatus> {
-    const r = await this.ashley(['status', '--json'], { timeoutMs: 90_000 });
+    const r = await this.beethoven(['status', '--json'], { timeoutMs: 90_000 });
     if (r.code !== 0) {
-      return { ready: false, error: r.code === 127 || /No such file/.test(r.stderr) ? 'Ashley is not installed on the grid yet' : (r.stderr || r.stdout).trim() };
+      return { ready: false, error: r.code === 127 || /No such file/.test(r.stderr) ? 'Beethoven is not installed on the grid yet' : (r.stderr || r.stdout).trim() };
     }
     return parseLastJson<GridStatus>(r.stdout) ?? { ready: false, error: 'status did not return JSON' };
   }
@@ -70,76 +71,76 @@ export class GridApi {
 
   /** The lab's shared container library, if this account can read it. */
   async library(): Promise<{ available: boolean; root?: string; default?: string; containers: Record<string, { purpose?: string; claude_version?: string; gpu?: boolean; image?: string; built?: string }> }> {
-    const r = await this.ashley(['library', '--json'], { timeoutMs: 60_000 });
+    const r = await this.beethoven(['library', '--json'], { timeoutMs: 60_000 });
     const j = r.code === 0 ? parseLastJson<any>(r.stdout) : null;
     if (!j || !j.available) return { available: false, containers: {} };
     return { available: true, root: j.root, default: j.library?.default, containers: j.library?.containers ?? {} };
   }
 
   async claudeStatus(): Promise<GridClaudeStatus | null> {
-    const r = await this.ashley(['claude', 'status', '--json'], { timeoutMs: 60_000 });
+    const r = await this.beethoven(['claude', 'status', '--json'], { timeoutMs: 60_000 });
     return r.code === 0 ? parseLastJson(r.stdout) : null;
   }
 
   async accessWhoami(): Promise<{ user: string; admin: boolean; lab_admin: string; granted: boolean; state: string } | null> {
-    const r = await this.ashley(['access', 'whoami', '--json'], { timeoutMs: 60_000 });
+    const r = await this.beethoven(['access', 'whoami', '--json'], { timeoutMs: 60_000 });
     return r.code === 0 ? parseLastJson(r.stdout) : null;
   }
 
   async accessList(): Promise<Array<{ user: string; state: string; note?: string; message?: string; requested?: string; decided?: string }>> {
-    const r = await this.ashley(['access', 'admin', 'list', '--json'], { timeoutMs: 60_000 });
+    const r = await this.beethoven(['access', 'admin', 'list', '--json'], { timeoutMs: 60_000 });
     return (r.code === 0 && parseLastJson<{ requests: any[] }>(r.stdout)?.requests) || [];
   }
 
   async accessRequirements(): Promise<{ ok: boolean; missing: string[] }> {
-    const r = await this.ashley(['access', 'requirements', '--json'], { timeoutMs: 120_000 });
+    const r = await this.beethoven(['access', 'requirements', '--json'], { timeoutMs: 120_000 });
     return parseLastJson<{ ok: boolean; missing: string[] }>(r.stdout) ?? { ok: false, missing: ['the grid did not answer'] };
   }
 
   async access(args: string[]): Promise<string> {
-    const r = await this.ashley(['access', ...args], { timeoutMs: 120_000 });
+    const r = await this.beethoven(['access', ...args], { timeoutMs: 120_000 });
     return (r.stdout + r.stderr).trim();
   }
 
   /** Phone access (Claude Code Remote Control hosted by a worker). */
   async phone(action: 'on' | 'off', worker = 'default'): Promise<string> {
-    const r = await this.ashley(['phone', action, '--worker', worker], { timeoutMs: 60_000 });
+    const r = await this.beethoven(['phone', action, '--worker', worker], { timeoutMs: 60_000 });
     return (r.stdout + r.stderr).trim();
   }
 
   async phoneStatus(worker = 'default'): Promise<{ job_running: boolean; enabled: boolean; status: { phase: string; url?: string | null; session_url?: string | null; message?: string; attempts?: number } } | null> {
-    const r = await this.ashley(['phone', 'status', '--worker', worker, '--json'], { timeoutMs: 60_000 });
+    const r = await this.beethoven(['phone', 'status', '--worker', worker, '--json'], { timeoutMs: 60_000 });
     return r.code === 0 ? parseLastJson(r.stdout) : null;
   }
 
   async phoneCode(code: string, worker = 'default'): Promise<string> {
-    const r = await this.ashley(['phone', 'code', '--worker', worker], { input: code + '\n', timeoutMs: 60_000 });
+    const r = await this.beethoven(['phone', 'code', '--worker', worker], { input: code + '\n', timeoutMs: 60_000 });
     return (r.stdout + r.stderr).trim();
   }
 
   async workers(): Promise<WorkerState[]> {
-    const r = await this.ashley(['worker', 'list', '--json'], { timeoutMs: 60_000 });
+    const r = await this.beethoven(['worker', 'list', '--json'], { timeoutMs: 60_000 });
     return (r.code === 0 && parseLastJson<{ workers: WorkerState[] }>(r.stdout)?.workers) || [];
   }
 
   async workerStart(spec: WorkerJobSpec): Promise<{ ok: boolean; jobId?: string; message: string }> {
-    const r = await this.ashley(workerStartArgs(spec), { timeoutMs: 120_000 });
+    const r = await this.beethoven(workerStartArgs(spec), { timeoutMs: 120_000 });
     const m = /job (\d+)/.exec(r.stdout);
     return { ok: r.code === 0, jobId: m?.[1], message: (r.stdout + r.stderr).trim() };
   }
 
   async workerStop(name: string): Promise<string> {
-    const r = await this.ashley(['worker', 'stop', '--name', name], { timeoutMs: 60_000 });
+    const r = await this.beethoven(['worker', 'stop', '--name', name], { timeoutMs: 60_000 });
     return (r.stdout + r.stderr).trim();
   }
 
   async workerLog(name: string, lines = 80): Promise<string> {
-    const r = await this.ashley(['worker', 'log', '--name', name, '--lines', String(lines)], { timeoutMs: 60_000 });
+    const r = await this.beethoven(['worker', 'log', '--name', name, '--lines', String(lines)], { timeoutMs: 60_000 });
     return (r.stdout + r.stderr).trim();
   }
 
   /** Queue a prompt; returns the request id immediately. */
-  async send(req: Partial<AshleyRequest> & { prompt: string }, worker = 'default'): Promise<{ id: string; message: string }> {
+  async send(req: Partial<BeethovenRequest> & { prompt: string }, worker = 'default'): Promise<{ id: string; message: string }> {
     const full = makeRequest({ ...req, from: req.from ?? 'laptop' });
     if (this.relay) {
       try {
@@ -149,13 +150,13 @@ export class GridApi {
         this.log(`relay send failed (${(e as Error).message}); using a fresh ssh`);
       }
     }
-    const r = await this.ashley(['send', '--worker', worker, '--json'], { input: JSON.stringify(full), timeoutMs: 60_000 });
+    const r = await this.beethoven(['send', '--worker', worker, '--json'], { input: JSON.stringify(full), timeoutMs: 60_000 });
     if (r.code !== 0) throw new Error(`send failed: ${(r.stderr || r.stdout).trim()}`);
     return { id: full.id, message: r.stdout.trim() };
   }
 
   /** Fetch a result if it exists (null otherwise). */
-  async result(id: string, worker = 'default'): Promise<AshleyResult | null> {
+  async result(id: string, worker = 'default'): Promise<BeethovenResult | null> {
     if (this.relay) {
       try {
         return await this.relay.result(id, worker);
@@ -163,9 +164,9 @@ export class GridApi {
         this.log(`relay result failed (${(e as Error).message}); using a fresh ssh`);
       }
     }
-    const r = await this.ashley(['result', '--worker', worker, id], { timeoutMs: 60_000 });
+    const r = await this.beethoven(['result', '--worker', worker, id], { timeoutMs: 60_000 });
     if (r.code !== 0) return null;
-    return parseLastJson<AshleyResult>(r.stdout);
+    return parseLastJson<BeethovenResult>(r.stdout);
   }
 
   /**
@@ -173,12 +174,12 @@ export class GridApi {
    * The grid CLI prints `EVENT {json}` lines as Claude works and a final `RESULT {json}`.
    */
   async ask(
-    req: Partial<AshleyRequest> & { prompt: string },
+    req: Partial<BeethovenRequest> & { prompt: string },
     worker = 'default',
     timeoutSec = 3600,
     events: AskEvents = {},
     signal?: AbortSignal,
-  ): Promise<AshleyResult> {
+  ): Promise<BeethovenResult> {
     const full = makeRequest({ ...req, from: req.from ?? 'laptop' });
     if (this.relay) {
       try {
@@ -188,8 +189,8 @@ export class GridApi {
       }
     }
     let buffer = '';
-    let result: AshleyResult | null = null;
-    const r = await this.ashley(['ask', '--worker', worker, '--json', '--stream', '--timeout', String(timeoutSec)], {
+    let result: BeethovenResult | null = null;
+    const r = await this.beethoven(['ask', '--worker', worker, '--json', '--stream', '--timeout', String(timeoutSec)], {
       input: JSON.stringify(full),
       timeoutMs: (timeoutSec + 120) * 1000,
       signal,
@@ -248,7 +249,7 @@ export class GridApi {
   }
 
   async sessions(): Promise<Array<{ session: string; session_id: string; cwd: string; updated: string; account?: string }>> {
-    const r = await this.ashley(['sessions', '--json'], { timeoutMs: 60_000 });
+    const r = await this.beethoven(['sessions', '--json'], { timeoutMs: 60_000 });
     return (r.code === 0 && parseLastJson<{ sessions: Array<{ session: string; session_id: string; cwd: string; updated: string }> }>(r.stdout)?.sessions) || [];
   }
 }

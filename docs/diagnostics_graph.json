@@ -77,7 +77,7 @@
    "layer": "laptop",
    "dependsOn": [],
    "assumption": "Windows 10/11, macOS or Linux on x64 or arm64",
-   "manualFix": "Ashley supports Windows, macOS and Linux laptops",
+   "manualFix": "Beethoven supports Windows, macOS and Linux laptops",
    "futureRisk": "a new OS release changing OpenSSH or the keychain",
    "source": "extension/src/extension.ts",
    "autoRepair": false,
@@ -181,7 +181,7 @@
    "dependsOn": [
     "vscode.version"
    ],
-   "assumption": "terminal.integrated.shellIntegration.enabled is on (Ashley reads the Claude token from the terminal)",
+   "assumption": "terminal.integrated.shellIntegration.enabled is on (Beethoven reads the Claude token from the terminal)",
    "manualFix": "Settings: Terminal > Integrated > Shell Integration: Enabled",
    "futureRisk": "",
    "source": "extension/src/vscode/panel.ts (runCapturing)",
@@ -242,30 +242,30 @@
     "vscode.version"
    ],
    "assumption": "the current version of the agreement and privacy statement was accepted in the signing dialog, and the record with the texts is on this laptop",
-   "manualFix": "run any Ashley command: the signing dialog appears; Ashley: Read the license terms shows the text",
+   "manualFix": "run any Beethoven command: the signing dialog appears; Beethoven: Read the license terms shows the text",
    "futureRisk": "a new terms version (every installation is asked again); the record folder deleted by hand",
    "source": "extension/src/core/terms.ts, extension/src/vscode/termsPanel.ts",
    "autoRepair": false,
    "fixCommand": {
-    "command": "ashley.terms",
+    "command": "beethoven.terms",
     "title": "Accept the terms"
    },
    "slow": false
   },
   {
    "id": "laptop.license",
-   "title": "Ashley license",
+   "title": "Beethoven license",
    "layer": "account",
    "dependsOn": [
     "laptop.terms"
    ],
    "assumption": "a license key signed by a key this release trusts, in date (or in its grace period), not withdrawn",
-   "manualFix": "Ashley: License, then paste the key your lead sent; a new key if it ended or was withdrawn",
+   "manualFix": "Beethoven: License, then paste the key your lead sent; a new key if it ended or was withdrawn",
    "futureRisk": "the signing key rotating (a new release trusts the new key); the revocation list address moving",
    "source": "grid/license.js, extension/src/core/license.ts, extension/src/vscode/licenseGate.ts",
    "autoRepair": false,
    "fixCommand": {
-    "command": "ashley.license",
+    "command": "beethoven.license",
     "title": "Enter the key"
    },
    "slow": false
@@ -278,13 +278,13 @@
     "laptop.license",
     "account.wsu"
    ],
-   "assumption": "the AccessID (or e-mail) in the license matches the Wayne State sign-in Ashley recorded",
+   "assumption": "the AccessID (or e-mail) in the license matches the Wayne State sign-in Beethoven recorded",
    "manualFix": "sign in with the account the license names (setup step \"Sign in with Wayne State\"), or ask your lead for a license in your name",
    "futureRisk": "Wayne State changing the sign-in e-mail format (AccessID@wayne.edu)",
    "source": "grid/license.js (identityMatches), extension/src/core/wizard.ts (stepWsuSignIn)",
    "autoRepair": false,
    "fixCommand": {
-    "command": "ashley.wsuSignIn",
+    "command": "beethoven.wsuSignIn",
     "title": "Sign in with Wayne State"
    },
    "slow": false
@@ -303,7 +303,7 @@
    "source": "extension/src/core/wizard.ts (stepWsuSignIn)",
    "autoRepair": false,
    "fixCommand": {
-    "command": "ashley.wsuSignIn",
+    "command": "beethoven.wsuSignIn",
     "title": "Sign in with Wayne State"
    },
    "slow": false
@@ -316,12 +316,12 @@
     "account.wsu"
    ],
    "assumption": "GitHub token stored in the keychain and accepted by the service",
-   "manualFix": "press Renew next to \"GitHub personal access token\" in the setup panel, or click its row in the Ashley view",
+   "manualFix": "press Renew next to \"GitHub personal access token\" in the setup panel, or click its row in the Beethoven view",
    "futureRisk": "token formats or scopes changing",
    "source": "extension/src/core/wizard.ts (tokenStep)",
    "autoRepair": false,
    "fixCommand": {
-    "command": "ashley.renewToken",
+    "command": "beethoven.renewToken",
     "title": "Renew"
    },
    "slow": false
@@ -334,12 +334,12 @@
     "account.wsu"
    ],
    "assumption": "Hugging Face token stored in the keychain and accepted by the service",
-   "manualFix": "press Renew next to \"Hugging Face access token\" in the setup panel, or click its row in the Ashley view",
+   "manualFix": "press Renew next to \"Hugging Face access token\" in the setup panel, or click its row in the Beethoven view",
    "futureRisk": "token formats or scopes changing",
    "source": "extension/src/core/wizard.ts (tokenStep)",
    "autoRepair": false,
    "fixCommand": {
-    "command": "ashley.renewToken",
+    "command": "beethoven.renewToken",
     "title": "Renew"
    },
    "slow": false
@@ -352,13 +352,13 @@
     "account.wsu",
     "vscode.claude-binary"
    ],
-   "assumption": "Claude Code on this laptop is signed in with the student's own Claude Pro or Max subscription (Ashley reads status only)",
+   "assumption": "Claude Code on this laptop is signed in with the student's own Claude Pro or Max subscription (Beethoven reads status only)",
    "manualFix": "sign in to Claude Code on this laptop (setup step \"Claude on this laptop\")",
    "futureRisk": "claude auth status changing its output; plan names changing",
    "source": "extension/src/core/wizard.ts (stepClaudeLocal)",
    "autoRepair": false,
    "fixCommand": {
-    "command": "ashley.claudeLocalSignIn",
+    "command": "beethoven.claudeLocalSignIn",
     "title": "Sign in"
    },
    "slow": false
@@ -386,7 +386,7 @@
    "dependsOn": [
     "laptop.ssh-key"
    ],
-   "assumption": "the Ashley block in ~/.ssh/config is current (jump host, MACs +hmac-sha1, AddressFamily inet, *.nas.grid.wayne.edu)",
+   "assumption": "the Beethoven block in ~/.ssh/config is current (jump host, MACs +hmac-sha1, AddressFamily inet, *.nas.grid.wayne.edu)",
    "manualFix": "run the wizard step \"SSH configuration\"",
    "futureRisk": "the grid dropping hmac-sha1 or renaming nodes",
    "source": "extension/src/core/sshConfig.ts",
@@ -418,7 +418,7 @@
     "grid.relay"
    ],
    "assumption": "one persistent ssh session carries prompts in tens of milliseconds",
-   "manualFix": "Ashley falls back to one ssh per prompt; check the grid relay node",
+   "manualFix": "Beethoven falls back to one ssh per prompt; check the grid relay node",
    "futureRisk": "",
    "source": "extension/src/core/relay.ts",
    "autoRepair": false,
@@ -427,30 +427,30 @@
   },
   {
    "id": "grid.scripts",
-   "title": "Ashley scripts on the grid",
+   "title": "Beethoven scripts on the grid",
    "layer": "grid-login",
    "dependsOn": [
     "network.grid-login"
    ],
    "assumption": "the grid has this extension's scripts (same version, LF line endings)",
    "manualFix": "run the wizard step \"Install on the grid\"",
-   "futureRisk": "a home directory restore or clean-up removing ~/.ashley",
-   "source": "grid/ashley (cmd_diag)",
+   "futureRisk": "a home directory restore or clean-up removing ~/.beethoven",
+   "source": "grid/beethoven (cmd_diag)",
    "autoRepair": true,
    "fixCommand": null,
    "slow": false
   },
   {
    "id": "grid.bashrc-block",
-   "title": "Ashley block in ~/.bashrc",
+   "title": "Beethoven block in ~/.bashrc",
    "layer": "grid-login",
    "dependsOn": [
     "grid.scripts"
    ],
    "assumption": "the block exporting the VS Code sysroot variables and PATH",
-   "manualFix": "ssh wsu-grid \"~/.ashley/bin/ashley install\"",
+   "manualFix": "ssh wsu-grid \"~/.beethoven/bin/beethoven install\"",
    "futureRisk": "a new default .bashrc from C&IT",
-   "source": "grid/ashley (cmd_diag)",
+   "source": "grid/beethoven (cmd_diag)",
    "autoRepair": true,
    "fixCommand": null,
    "slow": false
@@ -465,7 +465,7 @@
    "assumption": "/wsu/apps/vscode sysroot and patchelf exist at the paths in the block",
    "manualFix": "ask hpc@wayne.edu where the VS Code sysroot moved",
    "futureRisk": "Wayne State moving or upgrading the sysroot (repair rediscovers it)",
-   "source": "grid/ashley (cmd_diag)",
+   "source": "grid/beethoven (cmd_diag)",
    "autoRepair": true,
    "fixCommand": null,
    "slow": false
@@ -477,10 +477,10 @@
    "dependsOn": [
     "grid.scripts"
    ],
-   "assumption": "no container build leftovers (rootfs-*, build-temp-*, apptainer*) or files over 50 MB of yours under /tmp on the login node, which C&IT keeps free of user files; Ashley builds containers only inside Slurm jobs with node-local temp and cache",
+   "assumption": "no container build leftovers (rootfs-*, build-temp-*, apptainer*) or files over 50 MB of yours under /tmp on the login node, which C&IT keeps free of user files; Beethoven builds containers only inside Slurm jobs with node-local temp and cache",
    "manualFix": "ssh wsu-grid and remove your files under /tmp (repair removes the recognisable leftovers)",
    "futureRisk": "a container command run by hand on the login node; a build job killed before its cleanup trap",
-   "source": "grid/ashley (cmd_diag)",
+   "source": "grid/beethoven (cmd_diag)",
    "autoRepair": true,
    "fixCommand": null,
    "slow": false
@@ -495,7 +495,7 @@
    "assumption": "sbatch, squeue, sacct, scancel work on the login node",
    "manualFix": "contact hpc@wayne.edu",
    "futureRisk": "a Slurm upgrade changing output formats",
-   "source": "grid/ashley (cmd_diag)",
+   "source": "grid/beethoven (cmd_diag)",
    "autoRepair": true,
    "fixCommand": null,
    "slow": false
@@ -507,10 +507,10 @@
    "dependsOn": [
     "grid.slurm"
    ],
-   "assumption": "Slurm PrivateData=none (the admin sees held ashley_access jobs)",
+   "assumption": "Slurm PrivateData=none (the admin sees the held access-request jobs)",
    "manualFix": "the admin can grant directly without a request",
    "futureRisk": "C&IT enabling PrivateData=jobs",
-   "source": "grid/ashley (cmd_diag)",
+   "source": "grid/beethoven (cmd_diag)",
    "autoRepair": true,
    "fixCommand": null,
    "slow": false
@@ -525,7 +525,7 @@
    "assumption": "the account has the requeue or secondary QoS",
    "manualFix": "ask your lead / hpc@wayne.edu for the QoS",
    "futureRisk": "QoS renamed by C&IT",
-   "source": "grid/ashley (cmd_diag)",
+   "source": "grid/beethoven (cmd_diag)",
    "autoRepair": true,
    "fixCommand": null,
    "slow": false
@@ -540,7 +540,7 @@
    "assumption": "HTTPS from the login node; curl reads secrets from stdin (-K -)",
    "manualFix": "contact hpc@wayne.edu",
    "futureRisk": "a proxy introduced on the grid",
-   "source": "grid/ashley (cmd_diag)",
+   "source": "grid/beethoven (cmd_diag)",
    "autoRepair": true,
    "fixCommand": null,
    "slow": false
@@ -555,7 +555,7 @@
    "assumption": "POSIX ACL tools present (lab access)",
    "manualFix": "contact hpc@wayne.edu",
    "futureRisk": "the lab volume moved to a filesystem without ACLs",
-   "source": "grid/ashley (cmd_diag)",
+   "source": "grid/beethoven (cmd_diag)",
    "autoRepair": true,
    "fixCommand": null,
    "slow": false
@@ -570,7 +570,7 @@
    "assumption": "home below 98 % of its soft quota",
    "manualFix": "delete or move large files; ask your lead for lab storage",
    "futureRisk": "quota policy changes",
-   "source": "grid/ashley (cmd_diag)",
+   "source": "grid/beethoven (cmd_diag)",
    "autoRepair": true,
    "fixCommand": null,
    "slow": false
@@ -586,7 +586,7 @@
    "assumption": "the grid copy of the GitHub token verifies",
    "manualFix": "press Renew next to GitHub",
    "futureRisk": "GitHub token expiry policies",
-   "source": "grid/ashley (cmd_diag)",
+   "source": "grid/beethoven (cmd_diag)",
    "autoRepair": true,
    "fixCommand": null,
    "slow": false
@@ -602,7 +602,7 @@
    "assumption": "the grid copy of the Hugging Face token verifies",
    "manualFix": "press Renew next to Hugging Face",
    "futureRisk": "Hugging Face token changes",
-   "source": "grid/ashley (cmd_diag)",
+   "source": "grid/beethoven (cmd_diag)",
    "autoRepair": true,
    "fixCommand": null,
    "slow": false
@@ -615,29 +615,29 @@
     "grid.scripts",
     "account.claude"
    ],
-   "assumption": "Claude Code on the grid reports its own sign-in (made by the student with ashley claude login; Ashley never touches the credential)",
-   "manualFix": "run Ashley: Sign in to Claude on the grid (the sign-in lasts about a month)",
+   "assumption": "Claude Code on the grid reports its own sign-in (made by the student with beethoven claude login; Beethoven never touches the credential)",
+   "manualFix": "run Beethoven: Sign in to Claude on the grid (the sign-in lasts about a month)",
    "futureRisk": "Anthropic changing the login flow or its lifetime",
-   "source": "grid/ashley (cmd_diag)",
+   "source": "grid/beethoven (cmd_diag)",
    "autoRepair": true,
    "fixCommand": {
-    "command": "ashley.claudeSignIn",
+    "command": "beethoven.claudeSignIn",
     "title": "Sign in on the grid"
    },
    "slow": false
   },
   {
    "id": "grid.license",
-   "title": "Ashley license on the grid",
+   "title": "Beethoven license on the grid",
    "layer": "grid-login",
    "dependsOn": [
     "grid.scripts",
     "account.license-identity"
    ],
    "assumption": "the grid has the same license key as this laptop, and every running worker accepts it for this grid account",
-   "manualFix": "Troubleshoot and repair copies it; a worker started before licensing needs a restart (Ashley: Stop a worker, then Start)",
+   "manualFix": "Troubleshoot and repair copies it; a worker started before licensing needs a restart (Beethoven: Stop a worker, then Start)",
    "futureRisk": "a worker template older than the license check",
-   "source": "grid/ashley (cmd_diag, license_fp), grid/ashleyd.js (checkLicense)",
+   "source": "grid/beethoven (cmd_diag, license_fp), grid/beethovend.js (checkLicense)",
    "autoRepair": true,
    "fixCommand": null,
    "slow": false
@@ -650,9 +650,9 @@
     "grid.claude-login"
    ],
    "assumption": "one subscription token per person, no copied logins, and every account shares one session history (so a conversation survives a move to your API key)",
-   "manualFix": "Troubleshoot and repair links the history; remove extra accounts with: ssh wsu-grid \"ashley accounts remove NAME\"",
+   "manualFix": "Troubleshoot and repair links the history; remove extra accounts with: ssh wsu-grid \"beethoven accounts remove NAME\"",
    "futureRisk": "Claude Code moving where --resume looks for transcripts",
-   "source": "grid/ashley (cmd_diag)",
+   "source": "grid/beethoven (cmd_diag)",
    "autoRepair": true,
    "fixCommand": null,
    "slow": false
@@ -670,7 +670,7 @@
    "assumption": "the lab folder is readable (approved), or a request is pending",
    "manualFix": "the last wizard step: Join the lab",
    "futureRisk": "the lab folder moving",
-   "source": "grid/ashley (cmd_diag)",
+   "source": "grid/beethoven (cmd_diag)",
    "autoRepair": true,
    "fixCommand": null,
    "slow": false
@@ -685,7 +685,7 @@
    "assumption": "the configured apptainer executable exists (repair switches to the current module)",
    "manualFix": "ask your lead to republish the container",
    "futureRisk": "Wayne State upgrading or removing the apptainer module",
-   "source": "grid/ashley (cmd_diag)",
+   "source": "grid/beethoven (cmd_diag)",
    "autoRepair": true,
    "fixCommand": null,
    "slow": false
@@ -698,10 +698,10 @@
     "grid.lab-access",
     "grid.runtime"
    ],
-   "assumption": "the lab container is adopted (repair runs ashley adopt)",
+   "assumption": "the lab container is adopted (repair runs beethoven adopt)",
    "manualFix": "wait for lab access",
    "futureRisk": "a republished container at a new path",
-   "source": "grid/ashley (cmd_diag)",
+   "source": "grid/beethoven (cmd_diag)",
    "autoRepair": true,
    "fixCommand": null,
    "slow": false
@@ -713,10 +713,10 @@
    "dependsOn": [
     "grid.scripts"
    ],
-   "assumption": "ashley relay answers PING",
-   "manualFix": "reinstall Ashley on the grid",
+   "assumption": "beethoven relay answers PING",
+   "manualFix": "reinstall Beethoven on the grid",
    "futureRisk": "bash changes on the login node",
-   "source": "grid/ashley (cmd_diag)",
+   "source": "grid/beethoven (cmd_diag)",
    "autoRepair": true,
    "fixCommand": null,
    "slow": false
@@ -729,9 +729,9 @@
     "grid.acl-tools"
    ],
    "assumption": "the lab folder is closed to other users and requests go through Slurm",
-   "manualFix": "ssh wsu-grid \"ashley access init\"",
+   "manualFix": "ssh wsu-grid \"beethoven access init\"",
    "futureRisk": "someone widening permissions by hand",
-   "source": "grid/ashley (cmd_diag)",
+   "source": "grid/beethoven (cmd_diag)",
    "autoRepair": true,
    "fixCommand": null,
    "slow": false
@@ -745,9 +745,9 @@
     "grid.qos"
    ],
    "assumption": "every running worker job has a daemon that answers (heartbeat under 90 s)",
-   "manualFix": "Ashley: Stop a worker, then Start a worker",
+   "manualFix": "Beethoven: Stop a worker, then Start a worker",
    "futureRisk": "node images changing under the container",
-   "source": "grid/ashleyd.js, grid/worker.sbatch.tpl",
+   "source": "grid/beethovend.js, grid/worker.sbatch.tpl",
    "autoRepair": true,
    "fixCommand": null,
    "slow": false
@@ -762,7 +762,7 @@
    "assumption": "the worker's Claude can submit and watch Slurm jobs from inside its container (the host client, its library, munge and the config are bound in)",
    "manualFix": "Troubleshoot and repair restarts a worker started before version 3; if it still fails, tell your lead (the detail names the missing piece)",
    "futureRisk": "Wayne State moving the Slurm client, its library, munge or slurm.conf; a Slurm upgrade that needs more host libraries",
-   "source": "grid/ashley (cmd_diag)",
+   "source": "grid/beethoven (cmd_diag)",
    "autoRepair": true,
    "fixCommand": null,
    "slow": false
@@ -777,7 +777,7 @@
    "assumption": "inside a worker: the container runs node and Claude Code, has a pseudo-terminal and HTTPS",
    "manualFix": "restart the worker; if it persists tell your lead",
    "futureRisk": "a node OS or kernel update breaking the container",
-   "source": "grid/ashley (cmd_diag)",
+   "source": "grid/beethoven (cmd_diag)",
    "autoRepair": true,
    "fixCommand": null,
    "slow": true
@@ -790,7 +790,7 @@
     "grid.worker"
    ],
    "assumption": "when turned on, the worker's Remote Control session runs",
-   "manualFix": "Ashley: Phone access (sign in again if asked)",
+   "manualFix": "Beethoven: Phone access (sign in again if asked)",
    "futureRisk": "Remote Control flags or login flow changing",
    "source": "grid/phone.js",
    "autoRepair": false,
@@ -805,8 +805,8 @@
     "vscode.claude-binary",
     "network.grid-login"
    ],
-   "assumption": "the ashley MCP server is registered with Claude Code and connects",
-   "manualFix": "Ashley: Connect the Claude Code extension to the grid",
+   "assumption": "the beethoven MCP server is registered with Claude Code and connects",
+   "manualFix": "Beethoven: Connect the Claude Code extension to the grid",
    "futureRisk": "claude mcp CLI changes; Electron-as-node removed from VS Code",
    "source": "extension/src/vscode/mcpRegister.ts",
    "autoRepair": true,

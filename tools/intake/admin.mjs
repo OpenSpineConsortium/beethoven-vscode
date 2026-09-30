@@ -6,24 +6,18 @@
 //   node tools/intake/admin.mjs deny <accessId> ["<reason>"]
 //   node tools/intake/admin.mjs remove <accessId>                                 withdraws approval and revokes the person's keys
 //   node tools/intake/admin.mjs notify-test                                       sends the maintainer a test e-mail; prints the provider's answer
-// The service address comes from docs/site/services.json (license_service minus /trial, or
-// ASHLEY_SERVICE_URL); the admin token from $ASHLEY_VENDOR_DIR/admin_token (default ~/.ashley-vendor),
-// read from the file and sent in a header, never taken from an argument.
+// The service address: service.mjs (BEETHOVEN_SERVICE_URL, the site's beethoven/services.json, or the
+// primary Worker's address). The admin token: admin_token in the vendor folder (../license/vendor.mjs:
+// BEETHOVEN_VENDOR_DIR, else ~/.beethoven-vendor, the old names still read), read from the file and sent
+// in a header, never taken from an argument.
 import * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { vendorFolder } from '../license/vendor.mjs';
+import { serviceOrigin } from './service.mjs';
 
-const HERE = path.dirname(fileURLToPath(import.meta.url));
-const REPO = path.resolve(HERE, '..', '..');
-const vendor = process.env.ASHLEY_VENDOR_DIR || path.join(os.homedir(), '.ashley-vendor');
-const token = fs.readFileSync(path.join(vendor, 'admin_token'), 'utf8').replace(/[\r\n]/g, '');
-let base = process.env.ASHLEY_SERVICE_URL || '';
-if (!base) {
-  const svc = JSON.parse(fs.readFileSync(path.join(REPO, 'docs', 'site', 'services.json'), 'utf8'));
-  base = String(svc.license_service || '').replace(/\/trial$/, '');
-}
-if (!base) { console.error('no service address: fill docs/site/services.json or set ASHLEY_SERVICE_URL'); process.exit(2); }
+const token = fs.readFileSync(path.join(vendorFolder(), 'admin_token'), 'utf8').replace(/[\r\n]/g, '');
+const { origin: base, from } = serviceOrigin();
+process.stderr.write(`service: ${base} (from ${from})\n`);
 
 const [cmd, a1, a2, a3, a4] = process.argv.slice(2);
 async function call(route, body) {

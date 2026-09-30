@@ -15,7 +15,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { SERVICES, ServiceConfig, SecretId, normaliseAccessId, gridHome } from './services';
 import { upsertBlock, hasBlock, SshTargets } from './sshConfig';
-import { run, ssh, scp, expandHome, isWindows } from './shell';
+import { run, ssh, scp, expandHome, isWindows, gridCli, gridCliLine, GRID_HOME_PICK } from './shell';
 import { parseSbatchId } from './slurm';
 import { KEY_PATTERN, LicenseCheck, Identity, describeLicense } from './license';
 import * as crypto from 'node:crypto';
@@ -125,7 +125,7 @@ export interface WizardEnv {
   extraRequirements?(): Promise<string[]>;
   /** Install the public key with a password + code typed in the UI (ssh2). */
   installKeyWithPassword?(pub: string): Promise<{ ok: boolean; detail: string; authFailure?: boolean }>;
-  /** The Ashley license on this computer (extension: the gate; CLI: the files in ~/.ashley-local). */
+  /** The Beethoven license on this computer (extension: the gate; CLI: the files in ~/.beethoven-local, core/localDir.ts). */
   license?: WizardLicense;
 }
 
@@ -198,7 +198,7 @@ const WSU_EMAIL = /@([a-z0-9-]+\.)*wayne\.edu$/i;
 export const stepLicense: WizardStep = {
   id: 'license',
   title: 'Access',
-  blurb: 'Your access key: after your Wayne State sign-in, Ashley asks the lab for a key in your name.',
+  blurb: 'Your access key: after your Wayne State sign-in, Beethoven asks the lab for a key in your name.',
   async check(env) {
     if (!env.license) return report(this.id, this.title, 'done', 'not checked by this host');
     const c = env.license.check(true);
@@ -221,7 +221,7 @@ export const stepLicense: WizardStep = {
       } else if (tr.notApproved) {
         const id = env.license.identity()?.accessId ?? 'your AccessID';
         const page = tr.requestPage || (env.services ? (await env.services()).request_page : '');
-        const pick = await env.ui.confirm(`${id} is not approved for Ashley yet. Ask for access on the lab's page (it takes a minute); when your lead approves you, run this step again and the key arrives by itself. If your lead gave you a key instead, choose "I have a key".`, page ? 'Ask for access' : 'I have a key', 'I have a key');
+        const pick = await env.ui.confirm(`${id} is not approved for Beethoven yet. Ask for access on the lab's page (it takes a minute); when your lead approves you, run this step again and the key arrives by itself. If your lead gave you a key instead, choose "I have a key".`, page ? 'Ask for access' : 'I have a key', 'I have a key');
         if (pick && page) {
           await env.ui.openUrl(page);
           return report(this.id, this.title, 'todo', `${id} is not approved yet: asked for access; run this step again once approved`);
@@ -231,9 +231,9 @@ export const stepLicense: WizardStep = {
       }
     }
     for (let attempt = 0; attempt < 3; attempt++) {
-      const text = await askToken(env.ui, attempt ? `That key was not accepted (${why}). Paste your Ashley key again` : 'Your Ashley key (if your lead sent you one)', {
+      const text = await askToken(env.ui, attempt ? `That key was not accepted (${why}). Paste your Beethoven key again` : 'Your Beethoven key (if your lead sent you one)', {
         pattern: KEY_PATTERN,
-        instructions: 'Your lead sends it to you. It starts with ASHLEY1. and is one long line; copying it is enough, Ashley notices. A Full Edition key opens its own agreement to accept.',
+        instructions: 'Your lead sends it to you. It starts with ASHLEY1. or BEETHOVEN1. and is one long line; copying it is enough, Beethoven notices. A Full Edition key opens its own agreement to accept.',
       });
       if (!text) return report(this.id, this.title, 'skipped', 'no key entered');
       const c = await env.license.set(text);
@@ -251,12 +251,12 @@ export const stepWsuSignIn: WizardStep = {
   async check(env) {
     const id = normaliseAccessId(env.settings.accessId ?? '');
     if (!id || !env.settings.wsuEmail) return report(this.id, this.title, 'todo', 'not signed in');
-    // the license is checked against a sign-in Ashley saw happen, not against settings
-    if (env.license && !env.license.identity()) return report(this.id, this.title, 'todo', 'sign in once more: Ashley checks your license against it');
+    // the license is checked against a sign-in Beethoven saw happen, not against settings
+    if (env.license && !env.license.identity()) return report(this.id, this.title, 'todo', 'sign in once more: Beethoven checks your license against it');
     const lic = env.license?.check(true);
     if (lic && lic.status === 'wrong-person') return report(this.id, this.title, 'failed', lic.detail);
     const list = env.allowlist ? await env.allowlist() : null;
-    if (list && !list.includes(id) && !(lic?.ok && lic.payload?.sub === id)) return report(this.id, this.title, 'failed', `${id} is not approved for Ashley yet; ask for access on the lab's page`);
+    if (list && !list.includes(id) && !(lic?.ok && lic.payload?.sub === id)) return report(this.id, this.title, 'failed', `${id} is not approved for Beethoven yet; ask for access on the lab's page`);
     return report(this.id, this.title, 'done', `${env.settings.wsuEmail} (AccessID ${id}; grid home ${gridHome(id)})`);
   },
   async run(env) {
@@ -290,7 +290,7 @@ export const stepWsuSignIn: WizardStep = {
     }
     const lic2 = env.license?.check();
     const list = env.allowlist ? await env.allowlist() : null;
-    if (list && !list.includes(id) && !(lic2?.ok && lic2.payload?.sub === id)) return report(this.id, this.title, 'failed', `${id} is not approved for Ashley yet; ask for access on the lab's page, then sign in again`);
+    if (list && !list.includes(id) && !(lic2?.ok && lic2.payload?.sub === id)) return report(this.id, this.title, 'failed', `${id} is not approved for Beethoven yet; ask for access on the lab's page, then sign in again`);
     await env.saveSetting('accessId', id);
     await env.saveSetting('wsuEmail', email ?? `${id}@wayne.edu`);
     env.settings.accessId = id;
@@ -369,7 +369,7 @@ export const stepSshKey: WizardStep = {
     fs.mkdirSync(path.dirname(key), { recursive: true });
     if (fs.existsSync(key) && fs.existsSync(key + '.pub')) return report(this.id, this.title, 'done', key);
     env.ui.progress('Generating the key...');
-    const r = await run('ssh-keygen', ['-t', 'ed25519', '-N', '', '-C', `${env.settings.accessId}@wayne.edu ashley`, '-f', key], { timeoutMs: 60_000 });
+    const r = await run('ssh-keygen', ['-t', 'ed25519', '-N', '', '-C', `${env.settings.accessId}@wayne.edu beethoven`, '-f', key], { timeoutMs: 60_000 });
     if (r.code !== 0 || !fs.existsSync(key + '.pub')) return report(this.id, this.title, 'failed', `ssh-keygen failed: ${(r.stderr || r.stdout).trim()}`);
     if (!isWindows()) fs.chmodSync(key, 0o600);
     return report(this.id, this.title, 'done', `created ${key}`);
@@ -391,7 +391,7 @@ export const stepSshConfig: WizardStep = {
     const text = fs.existsSync(p) ? fs.readFileSync(p, 'utf8') : '';
     const next = upsertBlock(text, targets(env.settings));
     if (next !== text) {
-      if (text) fs.copyFileSync(p, p + '.ashley.bak');
+      if (text) fs.copyFileSync(p, p + '.beethoven.bak');
       fs.writeFileSync(p, next, { mode: 0o600 });
     }
     return report(this.id, this.title, 'done', `wrote ${p}`);
@@ -431,9 +431,9 @@ export const stepInstallKey: WizardStep = {
     }
     let t = await testConnection(env.settings.sshAlias);
     if (!t.ok) {
-      const remote = `umask 077; mkdir -p ~/.ssh; touch ~/.ssh/authorized_keys; grep -qF '${pub}' ~/.ssh/authorized_keys || echo '${pub}' >> ~/.ssh/authorized_keys; echo ASHLEY-KEY-INSTALLED`;
+      const remote = `umask 077; mkdir -p ~/.ssh; touch ~/.ssh/authorized_keys; grep -qF '${pub}' ~/.ssh/authorized_keys || echo '${pub}' >> ~/.ssh/authorized_keys; echo BEETHOVEN-KEY-INSTALLED`;
       await env.ui.info('A terminal will ask for your grid PASSWORD, then the six-digit Google Authenticator CODE. Once.');
-      const code = await env.ui.runInteractive('Ashley: install key on the grid', 'ssh', [
+      const code = await env.ui.runInteractive('Beethoven: install key on the grid', 'ssh', [
         '-o', 'MACs=+hmac-sha1', '-o', 'PubkeyAuthentication=no', '-o', 'StrictHostKeyChecking=accept-new', `${env.settings.accessId}@${env.settings.loginHost}`, remote,
       ]);
       if (code !== null && code !== 0) return report(this.id, this.title, 'failed', `ssh exited with ${code}`);
@@ -446,7 +446,7 @@ export const stepInstallKey: WizardStep = {
 export async function validateToken(svc: ServiceConfig, token: string): Promise<{ ok: boolean; detail: string; network: boolean }> {
   if (!svc.validate) return { ok: true, detail: 'no online check for this service', network: false };
   try {
-    const headers: Record<string, string> = { 'User-Agent': 'ashley-wsu' };
+    const headers: Record<string, string> = { 'User-Agent': 'beethoven-wsu' };
     if (svc.validate.header === 'Authorization') headers.Authorization = `Bearer ${token}`;
     else headers['X-Api-Key'] = token;
     if (svc.id === 'anthropicApiKey') headers['anthropic-version'] = '2023-06-01';
@@ -541,19 +541,19 @@ export async function localClaudeStatus(exe: string): Promise<{ ok: boolean; log
 export const stepClaudeLocal: WizardStep = {
   id: 'claudeLocal',
   title: 'Claude on this laptop',
-  blurb: 'Claude Code here is signed in with your own Claude Pro or Max subscription (Ashley only checks; it stores nothing).',
+  blurb: 'Claude Code here is signed in with your own Claude Pro or Max subscription (Beethoven only checks; it stores nothing).',
   async check(env) {
     const s = await localClaudeStatus(env.settings.claudeExecutable);
     if (!s.ok) return report(this.id, this.title, 'todo', s.detail);
     if (!s.loggedIn) return report(this.id, this.title, 'todo', 'Claude Code on this laptop is not signed in');
-    if (!s.subscription) return report(this.id, this.title, 'failed', `${s.detail}; Ashley needs Claude Pro or Max (the account made with your Wayne State e-mail)`);
+    if (!s.subscription) return report(this.id, this.title, 'failed', `${s.detail}; Beethoven needs Claude Pro or Max (the account made with your Wayne State e-mail)`);
     return report(this.id, this.title, 'done', s.detail);
   },
   async run(env) {
     const cur = await this.check(env);
     if (cur.status === 'done') return cur;
     const who = env.settings.accessId ? `${env.settings.accessId}@wayne.edu` : 'your Wayne State e-mail';
-    const go = await env.ui.confirm(`Sign in to Claude Code on this laptop with the Claude account you made with ${who} (Claude Pro at the minimum). Claude Code opens the browser and keeps its own sign-in; Ashley never sees it.`, 'Sign in', 'Not now');
+    const go = await env.ui.confirm(`Sign in to Claude Code on this laptop with the Claude account you made with ${who} (Claude Pro at the minimum). Claude Code opens the browser and keeps its own sign-in; Beethoven never sees it.`, 'Sign in', 'Not now');
     if (!go) return report(this.id, this.title, 'skipped', 'not signed in');
     await env.ui.runInteractive('Claude sign-in', env.settings.claudeExecutable, ['auth', 'login']);
     return this.check(env);
@@ -565,7 +565,7 @@ export const stepClaudeGrid: WizardStep = {
   title: 'Sign in to Claude on the grid',
   blurb: 'Once, in a terminal: Claude Code signs you in inside your own grid account, for your worker and your phone.',
   async check(env) {
-    const r = await ssh(env.settings.sshAlias, ['~/.ashley/bin/ashley', 'claude', 'status', '--json'], { timeoutMs: 60_000 });
+    const r = await ssh(env.settings.sshAlias, gridCli(['claude', 'status', '--json']), { timeoutMs: 60_000 });
     if (r.code !== 0) return report(this.id, this.title, 'todo', 'the grid did not answer (install on the grid first)');
     try {
       const j = JSON.parse(r.stdout.trim().split('\n').pop() ?? '{}') as { dir_present?: boolean; consent?: boolean; login?: { loggedIn?: boolean; detail?: string; email?: string } | null };
@@ -580,12 +580,12 @@ export const stepClaudeGrid: WizardStep = {
   async run(env) {
     const who = env.settings.accessId ? `${env.settings.accessId}@wayne.edu` : 'your Wayne State e-mail';
     const go = await env.ui.confirm(
-      `A terminal opens on the grid and Claude Code signs you in there, inside your own account: click the link it prints, sign in with the Claude account you made with ${who}, press Authorize, paste the code back into the terminal. Claude Code keeps its own sign-in in ~/.ashley/claude; Ashley never sees, copies or stores it. It lasts about a month; Ashley tells you when to repeat it.`,
+      `A terminal opens on the grid and Claude Code signs you in there, inside your own account: click the link it prints, sign in with the Claude account you made with ${who}, press Authorize, paste the code back into the terminal. Claude Code keeps its own sign-in in ~/.beethoven/claude; Beethoven never sees, copies or stores it. It lasts about a month; Beethoven tells you when to repeat it.`,
       'Open the terminal',
       'Not now',
     );
     if (!go) return report(this.id, this.title, 'skipped', 'not signed in');
-    await env.ui.runInteractive('Sign in to Claude on the grid', 'ssh', ['-t', env.settings.sshAlias, '~/.ashley/bin/ashley', 'claude', 'login']);
+    await env.ui.runInteractive('Sign in to Claude on the grid', 'ssh', ['-t', env.settings.sshAlias, gridCliLine(['claude', 'login'])]);
     return this.check(env);
   },
 };
@@ -600,10 +600,10 @@ export function gridScriptFiles(dir: string): string[] {
 }
 
 
-/** Is Ashley installed on the grid and reachable without a prompt? */
+/** Is Beethoven installed on the grid and reachable without a prompt? */
 export async function gridInstalled(env: WizardEnv): Promise<boolean> {
   if (!env.settings.accessId) return false;
-  const r = await ssh(env.settings.sshAlias, ['~/.ashley/bin/ashley', 'version'], { timeoutMs: 40_000 });
+  const r = await ssh(env.settings.sshAlias, gridCli(['version']), { timeoutMs: 40_000 });
   return r.code === 0;
 }
 
@@ -613,25 +613,44 @@ export async function pushTokens(env: WizardEnv): Promise<{ ok: boolean; detail:
   // the worker runs only with the license of the account it runs under; the revocation lists go along
   const lic = env.license?.key();
   if (lic) {
-    const r0 = await ssh(alias, ['bash', '-c', 'umask 077; mkdir -p ~/.ashley; cat > ~/.ashley/license.key.part && mv ~/.ashley/license.key.part ~/.ashley/license.key'], { input: lic + '\n' });
+    const r0 = await ssh(alias, ['bash', '-c', `${GRID_HOME_PICK} umask 077; mkdir -p $h; cat > $h/license.key.part && mv $h/license.key.part $h/license.key`], { input: lic + '\n' });
     if (r0.code !== 0) return { ok: false, detail: `copying the license: ${r0.stderr.trim()}` };
     const rev = env.license!.revocationTexts();
-    if (rev.trim()) await ssh(alias, ['bash', '-c', 'umask 077; cat > ~/.ashley/license.revoked'], { input: rev + '\n' });
+    if (rev.trim()) await ssh(alias, ['bash', '-c', `${GRID_HOME_PICK} umask 077; cat > $h/license.revoked`], { input: rev + '\n' });
   }
   const apiKey = await env.getSecret('anthropicApiKey');
   const gh = await env.getSecret('github');
   const hf = await env.getSecret('huggingface');
   const secrets = [gh ? `GITHUB_TOKEN=${gh}\nGH_TOKEN=${gh}` : '', hf ? `HF_TOKEN=${hf}` : ''].filter(Boolean).join('\n') + '\n';
-  let r = await ssh(alias, ['bash', '-c', 'umask 077; mkdir -p ~/.ashley; cat > ~/.ashley/secrets.env'], { input: secrets });
+  let r = await ssh(alias, ['bash', '-c', `${GRID_HOME_PICK} umask 077; mkdir -p $h; cat > $h/secrets.env`], { input: secrets });
   if (r.code !== 0) return { ok: false, detail: `writing secrets.env: ${r.stderr.trim()}` };
-  // Ashley stores no Claude credential and copies none: an earlier version's stored token is deleted
-  await ssh(alias, ['bash', '-c', 'rm -f ~/.ashley/accounts/*/token ~/.ashley/accounts/*/minted_at ~/.ashley/accounts/*/.credentials.json 2>/dev/null; true']);
+  // Beethoven stores no Claude credential and copies none: an earlier version's stored token is deleted
+  await ssh(alias, ['bash', '-c', `${GRID_HOME_PICK} rm -f $h/accounts/*/token $h/accounts/*/minted_at $h/accounts/*/.credentials.json 2>/dev/null; true`]);
   if (apiKey) {
-    r = await ssh(alias, ['bash', '-c', 'if [ -x ~/.ashley/bin/ashley ]; then ~/.ashley/bin/ashley accounts add-key apikey; else umask 077; mkdir -p ~/.ashley/accounts/apikey; cat > ~/.ashley/accounts/apikey/apikey; fi'], { input: apiKey + '\n' });
+    r = await ssh(alias, ['bash', '-c', `${GRID_HOME_PICK} if [ -x $h/bin/beethoven ]; then $h/bin/beethoven accounts add-key apikey; elif [ -x $h/bin/ashley ]; then $h/bin/ashley accounts add-key apikey; else umask 077; mkdir -p $h/accounts/apikey; cat > $h/accounts/apikey/apikey; fi`], { input: apiKey + '\n' });
     if (r.code !== 0) return { ok: false, detail: `writing the API key: ${r.stderr.trim()}` };
   }
   return { ok: true, detail: 'tokens updated on the grid' };
 }
+
+/**
+ * The grid folder was ~/.ashley before the rename. The first grid install of this version moves it to
+ * ~/.beethoven in one step, so the Claude sign-in, the license and the workers' records move with it and
+ * nothing is entered again, and leaves ~/.ashley as a link to the new folder: older builds still name
+ * ~/.ashley (Ashley for VS Code 3.0.0, the browser edition up to 7.0.0, worker job files written before).
+ * It never moves while one of our jobs runs, never moves a link, and never deletes anything.
+ * Prints MOVED when it moved and BUSY when it could not. BOTH: both are folders already; the new
+ * grid command's `migrate` then moves the old folder's contents in (grid/beethoven, migrate_home).
+ */
+export const GRID_HOME_MOVE = [
+  'cd "$HOME" || exit 1;',
+  'if [ -d .ashley ] && [ ! -L .ashley ]; then',
+  "if squeue -h -u \"$USER\" -t RUNNING -o %j 2>/dev/null | grep -Eq '^(ashley|beethoven)_'; then echo BUSY; exit 3; fi;",
+  'if [ -e .beethoven ] || [ -L .beethoven ]; then echo BOTH; else mv .ashley .beethoven || exit 5; ln -s .beethoven .ashley && echo MOVED; fi;',
+  'fi;',
+  'mkdir -p .beethoven/bin .beethoven/log .beethoven/accounts/default .beethoven/workers .beethoven/sessions || exit 6;',
+  '[ -e .ashley ] || [ -L .ashley ] || ln -s .beethoven .ashley',
+].join(' '); // one line: it reaches the grid through ssh and Windows argument quoting as a single argument
 
 function bundledGridVersion(env: WizardEnv): string {
   try {
@@ -646,12 +665,12 @@ export const stepGridInstall: WizardStep = {
   title: 'Install on the grid',
   blurb: 'Everything above goes to the grid in one pass: scripts, your tokens (private files), the VS Code settings.',
   async check(env) {
-    const r = await ssh(env.settings.sshAlias, ['~/.ashley/bin/ashley', 'status', '--json'], { timeoutMs: 60_000 });
+    const r = await ssh(env.settings.sshAlias, gridCli(['status', '--json']), { timeoutMs: 60_000 });
     if (r.code !== 0) return report(this.id, this.title, 'todo', 'not installed on the grid');
     try {
       const j = JSON.parse(r.stdout.trim().split('\n').pop() ?? '{}');
       const want = bundledGridVersion(env);
-      if (want && String(j.version) !== want) return report(this.id, this.title, 'todo', `the grid has Ashley v${j.version}; this extension brings v${want}`);
+      if (want && String(j.version) !== want) return report(this.id, this.title, 'todo', `the grid has Beethoven v${j.version}; this extension brings v${want}`);
       const missing: string[] = [];
       const gridSecrets: string[] = Array.isArray(j.secrets) ? j.secrets : [];
       const gridAccounts: string[] = Array.isArray(j.accounts) ? j.accounts.map((a: { name: string }) => a.name) : [];
@@ -673,24 +692,34 @@ export const stepGridInstall: WizardStep = {
     const alias = env.settings.sshAlias;
     const files = gridScriptFiles(env.settings.gridScriptsDir);
     if (files.length === 0) return report(this.id, this.title, 'failed', `no grid scripts found in ${env.settings.gridScriptsDir}`);
+    env.ui.progress('Preparing your folder on the grid...');
+    let r = await ssh(alias, ['bash', '-c', GRID_HOME_MOVE], { timeoutMs: 60_000 });
+    if (/\bBUSY\b/.test(r.stdout)) return report(this.id, this.title, 'failed', 'a Claude worker or another job of yours from this tool is running on the grid; your grid folder gets its new name once, while none runs. Stop the worker (Beethoven: Stop a Claude worker), then run this step again');
+    const both = /\bBOTH\b/.test(r.stdout);
+    if (r.code !== 0) return report(this.id, this.title, 'failed', `cannot create ~/.beethoven: ${(r.stderr || r.stdout).trim()}`);
+    if (/\bMOVED\b/.test(r.stdout)) env.ui.progress('Your grid folder is now ~/.beethoven (the old name still leads there).');
     env.ui.progress('Uploading the grid scripts...');
-    let r = await ssh(alias, ['mkdir', '-p', '~/.ashley/bin', '~/.ashley/log', '~/.ashley/accounts/default', '~/.ashley/workers', '~/.ashley/sessions']);
-    if (r.code !== 0) return report(this.id, this.title, 'failed', `cannot create ~/.ashley: ${r.stderr.trim()}`);
-    r = await scp(alias, files, '~/.ashley/bin/');
+    r = await scp(alias, files, '~/.beethoven/bin/');
     if (r.code !== 0) return report(this.id, this.title, 'failed', `upload failed: ${r.stderr.trim()}`);
+    if (both) {
+      // ~/.ashley and ~/.beethoven were both folders: the new grid command moves the old one's contents in
+      env.ui.progress('Moving the contents of your old grid folder into the new one...');
+      r = await ssh(alias, gridCli(['migrate']), { timeoutMs: 120_000 });
+      if (r.code !== 0) return report(this.id, this.title, 'failed', `your grid account has an old folder (~/.ashley) beside the new one (~/.beethoven), and moving it in did not work: ${(r.stderr || r.stdout).trim()}`);
+    }
     env.ui.progress('Writing your tokens to your grid home (private files, never on a command line)...');
     const pr = await pushTokens(env);
     if (!pr.ok) return report(this.id, this.title, 'failed', pr.detail);
     env.ui.progress('Installing on the grid...');
-    const installArgs = ['~/.ashley/bin/ashley', 'install'];
+    const installArgs = ['install'];
     if (env.settings.gridRoot) installArgs.push('--root', env.settings.gridRoot);
-    r = await ssh(alias, installArgs, { timeoutMs: 180_000 });
-    if (r.code !== 0) return report(this.id, this.title, 'failed', `ashley install: ${(r.stderr || r.stdout).trim()}`);
+    r = await ssh(alias, gridCli(installArgs), { timeoutMs: 180_000 });
+    if (r.code !== 0) return report(this.id, this.title, 'failed', `beethoven install: ${(r.stderr || r.stdout).trim()}`);
     const jobId = parseSbatchId(r.stdout) ?? (/bootstrap job (\d+)/.exec(r.stdout)?.[1] ?? null);
     const already = /already ready/i.test(r.stdout);
     const awaiting = /comes with lab access/i.test(r.stdout);
     const adopted = /adopted shared container/i.test(r.stdout);
-    const verify = await ssh(alias, ['~/.ashley/bin/ashley', 'verify-tokens'], { timeoutMs: 90_000 });
+    const verify = await ssh(alias, gridCli(['verify-tokens']), { timeoutMs: 90_000 });
     const verified = verify.code === 0 ? verify.stdout.trim().split('\n').filter(Boolean).join('; ') : '';
     const head = already ? 'grid already ready' : adopted ? "adopted the lab's shared container (nothing to build)" : awaiting ? "installed; the lab's container comes with lab access, the last step" : jobId ? `bootstrap job ${jobId} submitted (5 to 15 minutes)` : r.stdout.trim().split('\n').pop() ?? 'submitted';
     return report(this.id, this.title, 'done', head + (verified ? `; tokens on the grid: ${verified}` : ''));
@@ -708,7 +737,7 @@ export const stepLabAccess: WizardStep = {
   title: 'Join the lab (shared folder and containers)',
   blurb: 'Last: one request to your lead once everything above works; approval opens the lab folder.',
   async check(env) {
-    const r = await ssh(env.settings.sshAlias, ['~/.ashley/bin/ashley', 'access', 'whoami', '--json'], { timeoutMs: 60_000 });
+    const r = await ssh(env.settings.sshAlias, gridCli(['access', 'whoami', '--json']), { timeoutMs: 60_000 });
     if (r.code !== 0) return report(this.id, this.title, 'todo', 'the grid part is not installed yet');
     let j: { admin?: boolean; granted?: boolean; state?: string; lab_admin?: string } = {};
     try {
@@ -719,12 +748,12 @@ export const stepLabAccess: WizardStep = {
     if (j.admin) return report(this.id, this.title, 'done', 'you are the lab admin');
     if (j.granted) {
       // access arrived since the last install: adopt the lab's container now (a second, nothing to build)
-      await ssh(env.settings.sshAlias, ['~/.ashley/bin/ashley', 'install'], { timeoutMs: 120_000 });
+      await ssh(env.settings.sshAlias, gridCli(['install']), { timeoutMs: 120_000 });
       return report(this.id, this.title, 'done', "granted; you use the lab's shared container");
     }
     if (j.state === 'pending') return report(this.id, this.title, 'done', `requested; waiting for ${j.lab_admin ?? 'your lead'} to decide`);
     if (j.state === 'denied' || j.state === 'removed') {
-      const s = await ssh(env.settings.sshAlias, ['~/.ashley/bin/ashley', 'access', 'status', '--json'], { timeoutMs: 60_000 });
+      const s = await ssh(env.settings.sshAlias, gridCli(['access', 'status', '--json']), { timeoutMs: 60_000 });
       const msg = /"message":"([^"]*)"/.exec(s.stdout)?.[1];
       return report(this.id, this.title, 'failed', `${j.state}${msg ? `: ${msg}` : ''}; ask your lead to reset your request to ask again`);
     }
@@ -739,7 +768,7 @@ export const stepLabAccess: WizardStep = {
     }
     if (env.extraRequirements) missing.push(...(await env.extraRequirements()));
     if (!missing.length) {
-      const r = await ssh(env.settings.sshAlias, ['~/.ashley/bin/ashley', 'access', 'requirements', '--json'], { timeoutMs: 120_000 });
+      const r = await ssh(env.settings.sshAlias, gridCli(['access', 'requirements', '--json']), { timeoutMs: 120_000 });
       try {
         const j = JSON.parse(r.stdout.trim().split('\n').pop() ?? '{}');
         if (Array.isArray(j.missing)) missing.push(...j.missing);
@@ -753,9 +782,9 @@ export const stepLabAccess: WizardStep = {
     }
     const note = await env.ui.ask('Everything checks out. One request to your lead (you can ask once). A note for them: your project and lead, or anything they should know.', { placeholder: 'e.g. pelvic width project, lead: Ashley' });
     if (note === undefined) return report(this.id, this.title, 'skipped', 'cancelled');
-    const r = await ssh(env.settings.sshAlias, ['~/.ashley/bin/ashley', 'access', 'request', '--note', note], { timeoutMs: 120_000 });
+    const r = await ssh(env.settings.sshAlias, gridCli(['access', 'request', '--note', note]), { timeoutMs: 120_000 });
     if (r.code !== 0) return report(this.id, this.title, 'failed', (r.stderr || r.stdout).trim());
-    return report(this.id, this.title, 'done', 'requested; your lead approves it in Ashley; then sign in to Claude on the grid (the next step)');
+    return report(this.id, this.title, 'done', 'requested; your lead approves it in Beethoven; then sign in to Claude on the grid (the next step)');
   },
 };
 

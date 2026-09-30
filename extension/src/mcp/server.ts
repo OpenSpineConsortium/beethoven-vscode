@@ -5,8 +5,9 @@
 // password, and nothing heavy runs on the login node.
 //
 // Configuration comes from the environment Claude Code passes:
-//   ASHLEY_GRID        ssh alias (default wsu-grid)
-//   ASHLEY_WORKER      default worker name (default "default")
+//   BEETHOVEN_GRID        ssh alias (default wsu-grid)
+//   BEETHOVEN_WORKER      default worker name (default "default")
+// (ASHLEY_GRID and ASHLEY_WORKER, the names before the rename, are still read.)
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
@@ -19,14 +20,14 @@ import * as path from 'node:path';
 import { checkLicense, readIdentity, unlicensedMessage } from '../core/license';
 import { readTermsRecord, TERMS_REFUSAL } from '../core/terms';
 
-const alias = process.env.ASHLEY_GRID || 'wsu-grid';
-const defaultWorker = process.env.ASHLEY_WORKER || 'default';
+const alias = process.env.BEETHOVEN_GRID || process.env.ASHLEY_GRID || 'wsu-grid';
+const defaultWorker = process.env.BEETHOVEN_WORKER || process.env.ASHLEY_WORKER || 'default';
 // One relay session for the life of this server: prompts cost a network round trip, not an ssh handshake.
 const relay = new GridRelay(alias, { onStatus: (s, d) => process.stderr.write(`relay ${s} ${d ?? ''}\n`) });
 const grid = new GridApi(alias, (l) => process.stderr.write(l + '\n'), relay);
 process.on('exit', () => relay.close());
 
-const server = new McpServer({ name: 'ashley', version: '2.0.0' });
+const server = new McpServer({ name: 'beethoven', version: process.env.BEETHOVEN_VERSION ?? 'dev' });
 
 // Every tool refuses without a valid license on this computer, checked on each call (a key entered
 // or renewed in VS Code takes effect at once). The identity is the Wayne State sign-in the extension recorded.
@@ -41,7 +42,7 @@ function licenseRefusal(): string | null {
   if (!readTermsRecord()) return TERMS_REFUSAL;
   const c = checkLicense({ identity: readIdentity(), bundledRevoked: bundledRevoked() });
   if (!c.ok) return unlicensedMessage(c);
-  if (c.identity === null) return 'Ashley is licensed on this computer, but the setup is not finished: run the Ashley setup in VS Code (Sign in with Wayne State).';
+  if (c.identity === null) return 'Beethoven is licensed on this computer, but the setup is not finished: run the Beethoven setup in VS Code (Sign in with Wayne State).';
   return null;
 }
 const registerTool = server.registerTool.bind(server);
@@ -57,28 +58,28 @@ function text(t: string) {
 }
 
 server.registerTool(
-  'ashley_status',
+  'beethoven_status',
   {
     title: 'Grid status',
     description:
-      'Status of the Wayne State grid for this student: whether Ashley is installed and ready, running Slurm jobs, Claude workers (node, queue, accounts), home quota. Call this first.',
+      'Status of the Wayne State grid for this student: whether Beethoven is installed and ready, running Slurm jobs, Claude workers (node, queue, accounts), home quota. Call this first.',
     inputSchema: {},
   },
   async () => text(JSON.stringify(await grid.status(), null, 2)),
 );
 
 server.registerTool(
-  'ashley_workers',
+  'beethoven_workers',
   { title: 'List Claude workers', description: 'List the persistent Claude Code workers (Slurm jobs) and their heartbeat state.', inputSchema: {} },
   async () => text(JSON.stringify(await grid.workers(), null, 2)),
 );
 
 server.registerTool(
-  'ashley_worker_start',
+  'beethoven_worker_start',
   {
     title: 'Start a Claude worker',
     description:
-      'Submit a Slurm job that runs a persistent Claude Code worker in a Singularity container. Returns the job id; the worker is usable once its state is idle (see ashley_workers). Use a GPU only when the work needs one.',
+      'Submit a Slurm job that runs a persistent Claude Code worker in a Singularity container. Returns the job id; the worker is usable once its state is idle (see beethoven_workers). Use a GPU only when the work needs one.',
     inputSchema: {
       name: z.string().default('default').describe('worker name'),
       hours: z.number().int().min(1).max(720).default(24),
@@ -96,11 +97,11 @@ server.registerTool(
 );
 
 server.registerTool(
-  'ashley_ask',
+  'beethoven_ask',
   {
     title: 'Ask the grid Claude (wait for the answer)',
     description:
-      'Send a prompt to the persistent Claude Code worker on the grid and wait for its answer. The worker runs with the student\'s own Claude subscription, in the given working directory on the grid, and can read/write files, run Python, submit Slurm jobs, download data. Use a session name to continue a conversation later. Long tasks: set timeout_sec high, or use ashley_send and fetch with ashley_result.',
+      'Send a prompt to the persistent Claude Code worker on the grid and wait for its answer. The worker runs with the student\'s own Claude subscription, in the given working directory on the grid, and can read/write files, run Python, submit Slurm jobs, download data. Use a session name to continue a conversation later. Long tasks: set timeout_sec high, or use beethoven_send and fetch with beethoven_result.',
     inputSchema: {
       prompt: z.string().describe('what the grid Claude should do'),
       session: z.string().default('default').describe('conversation to continue (resumable by name)'),
@@ -124,10 +125,10 @@ server.registerTool(
 );
 
 server.registerTool(
-  'ashley_send',
+  'beethoven_send',
   {
     title: 'Queue a prompt for the grid Claude (do not wait)',
-    description: 'Queue a prompt for the worker and return the request id at once. Fetch the answer later with ashley_result.',
+    description: 'Queue a prompt for the worker and return the request id at once. Fetch the answer later with beethoven_result.',
     inputSchema: {
       prompt: z.string(),
       session: z.string().default('default'),
@@ -144,10 +145,10 @@ server.registerTool(
 );
 
 server.registerTool(
-  'ashley_result',
+  'beethoven_result',
   {
     title: 'Fetch a queued answer',
-    description: 'Return the result of a request queued with ashley_send, or say it is not finished yet.',
+    description: 'Return the result of a request queued with beethoven_send, or say it is not finished yet.',
     inputSchema: { id: z.string(), worker: z.string().default(defaultWorker) },
   },
   async (a) => {
@@ -157,13 +158,13 @@ server.registerTool(
 );
 
 server.registerTool(
-  'ashley_sessions',
+  'beethoven_sessions',
   { title: 'List conversations', description: 'List the named, resumable conversations kept on the grid and the directory each is bound to.', inputSchema: {} },
   async () => text(JSON.stringify(await grid.sessions(), null, 2)),
 );
 
 server.registerTool(
-  'ashley_read_file',
+  'beethoven_read_file',
   {
     title: 'Read a small file on the grid',
     description: 'Read up to max_bytes of a file in the student\'s grid home (logs, results, CSV heads). Reading is cheap on the login node; large data is not.',
@@ -173,19 +174,19 @@ server.registerTool(
 );
 
 server.registerTool(
-  'ashley_list_dir',
+  'beethoven_list_dir',
   { title: 'List a directory on the grid', description: 'ls -la of a directory in the grid home.', inputSchema: { path: z.string() } },
   async (a) => text((await grid.listDir(a.path)).text),
 );
 
 server.registerTool(
-  'ashley_squeue',
+  'beethoven_squeue',
   { title: 'My Slurm jobs', description: 'squeue for the student: job id, name, state, node, elapsed, limit, partition, reason.', inputSchema: {} },
   async () => text(JSON.stringify(await grid.squeue(), null, 2)),
 );
 
 server.registerTool(
-  'ashley_sbatch',
+  'beethoven_sbatch',
   {
     title: 'Submit a job script',
     description:
@@ -204,6 +205,6 @@ async function main() {
 }
 
 main().catch((e) => {
-  process.stderr.write(`ashley mcp server failed: ${e}\n`);
+  process.stderr.write(`beethoven mcp server failed: ${e}\n`);
   process.exit(1);
 });

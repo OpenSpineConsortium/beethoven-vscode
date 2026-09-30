@@ -71,7 +71,7 @@ test('a key for a whole domain, or one claiming the site edition, is refused for
   // one signed by hand under a trusted key, shaped like the keys issued before 2026-09-29
   const b64u = (s: string | Buffer) => Buffer.from(s).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
   const handSigned = (extra: Record<string, unknown>) => {
-    const body = b64u(JSON.stringify({ v: 1, kid: 'k1', lid: 'L-handsigned01', product: 'ashley', iat: NOW - DAY, exp: NOW + 30 * DAY, ...extra }));
+    const body = b64u(JSON.stringify({ v: 1, kid: 'k1', lid: 'L-handsigned01', product: 'beethoven', iat: NOW - DAY, exp: NOW + 30 * DAY, ...extra }));
     return `ASHLEY1.${body}.${b64u(crypto.sign(null, Buffer.from(`ASHLEY1.${body}`, 'ascii'), key1))}`;
   };
   const site = handSigned({ edition: 'site', domain: 'wayne.edu', name: 'testers' });
@@ -114,6 +114,25 @@ test('the wrong product or version is refused', () => {
   assert.throws(() => L.signLicense({ kid: 'k1', exp: NOW } as never, key1), /names a person/);
 });
 
+test('both key prefixes verify: ASHLEY1 (issued) and BEETHOVEN1 (accepted since the rename); both list prefixes too', () => {
+  const old = issue();
+  assert.match(old, /^ASHLEY1\./, 'the issuers keep the old prefix by default');
+  const now = L.signLicense({ kid: 'k1', sub: 'ab1234', iat: NOW - DAY, exp: NOW + DAY } as never, key1, { prefix: 'beethoven' });
+  assert.match(now, /^BEETHOVEN1\./);
+  assert.equal(check(now, { identity: { accessId: 'ab1234' } }).status, 'valid');
+  assert.equal(L.findKey(`your key: ${now}`), now, 'found in pasted text');
+  assert.match(now, L.KEY_PATTERN);
+  // a new-prefix key does not validate if the prefix is swapped: the signature covers it
+  assert.equal(check(now.replace(/^BEETHOVEN1\./, 'ASHLEY1.')).ok, false);
+  const lid = check(now).payload!.lid;
+  const list = L.signRevocationList([lid], 'k1', key1, NOW, { prefix: 'beethoven' });
+  assert.match(list, /^BEETHOVENREV1\./);
+  assert.deepEqual(L.verifyRevocationList(list, KEYS).revoked, [lid]);
+  assert.equal(check(now, { revoked: L.verifyRevocationList(list, KEYS).revoked }).status, 'revoked');
+  // the laptop's scrubber hides a key of either prefix in an error report
+  // (core/diagReport.ts; tested there on its own)
+});
+
 test('keys are found in pasted text; the clock never runs backwards', () => {
   const k = issue();
   assert.equal(L.findKey(`Hello,\n\nyour key:\n${k}\n\nthanks`), k);
@@ -125,8 +144,8 @@ test('keys are found in pasted text; the clock never runs backwards', () => {
 // ---- the laptop files (core/license.ts) ------------------------------------------------------
 let dir = '';
 before(() => {
-  dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ashley-lic-'));
-  process.env.ASHLEY_LICENSE_DIR = dir;
+  dir = fs.mkdtempSync(path.join(os.tmpdir(), 'beethoven-lic-'));
+  process.env.BEETHOVEN_LICENSE_DIR = dir;
 });
 after(() => {
   fs.rmSync(dir, { recursive: true, force: true });

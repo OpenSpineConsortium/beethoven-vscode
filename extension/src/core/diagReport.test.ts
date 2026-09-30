@@ -7,11 +7,19 @@ import type { DiagReport } from './diagnostics';
 const ctx = { accessId: 'go2432', email: 'gregory.schwing@med.wayne.edu', home: 'C:\\Users\\grego', words: ['DESKTOP-ABC', 'grego'] };
 
 test('identity, paths, hosts, tokens and addresses are replaced', () => {
-  const s = scrub('user go2432: ssh go2432@warrior.grid.wayne.edu failed for gregory.schwing@med.wayne.edu; key C:\\Users\\grego\\.ssh\\id_ed25519_wsu; home /wsu/home/go/go24/go2432/.ashley; node asx1 job 40486902 at 10.0.0.5; token sk-ant-oat01-abcdefghijklmnopqrstuvwxyz0123456789 and ghp_abcdefghijklmnopqrstuvwxyz0123456789 and ASHLEY1.eyJhbGciOiJFZDI1NTE5In0abcdefghijklmnop.c2lnbmF0dXJlLXNpZ25hdHVyZS1zaWduYXR1cmUtc2lnbmF0dXJl', ctx);
+  const s = scrub('user go2432: ssh go2432@warrior.grid.wayne.edu failed for gregory.schwing@med.wayne.edu; key C:\\Users\\grego\\.ssh\\id_ed25519_wsu; home /wsu/home/go/go24/go2432/.beethoven; node asx1 job 40486902 at 10.0.0.5; token sk-ant-oat01-abcdefghijklmnopqrstuvwxyz0123456789 and ghp_abcdefghijklmnopqrstuvwxyz0123456789 and ASHLEY1.eyJhbGciOiJFZDI1NTE5In0abcdefghijklmnop.c2lnbmF0dXJlLXNpZ25hdHVyZS1zaWduYXR1cmUtc2lnbmF0dXJl', ctx);
   for (const bad of ['go2432', 'gregory.schwing', 'med.wayne.edu', 'C:\\Users', 'grego\\.ssh', '/wsu/home', 'asx1', '40486902', '10.0.0.5', 'sk-ant-oat01', 'ghp_', 'ASHLEY1.', 'DESKTOP-ABC']) {
     assert.ok(!s.includes(bad), `${bad} must not survive: ${s}`);
   }
   for (const good of ['<id>', '<email>', '<path>', '<host>', 'job <n>', '<ip>', '<token>']) assert.ok(s.includes(good), `${good} placeholder present: ${s}`);
+});
+
+test('a license key or list of either prefix is replaced', () => {
+  for (const p of ['ASHLEY1', 'BEETHOVEN1', 'ASHLEYREV1', 'BEETHOVENREV1']) {
+    const s = scrub(`key ${p}.eyJ2IjoxLCJraWQiOiJrMSJ9abcdefgh.c2lnbmF0dXJlLXNpZ25hdHVyZS1zaWduYXR1cmU here`, {});
+    assert.ok(!s.includes(p + '.'), `${p} must not survive: ${s}`);
+    assert.ok(s.includes('<token>'));
+  }
 });
 
 test('an AccessID pattern is replaced even when it is not the known one; ordinary words survive', () => {
@@ -33,7 +41,7 @@ test('the shared report carries verdicts and scrubbed details, and only failures
     ],
   };
   rep.rootCauses = [rep.reports[1]];
-  const out = buildSharedReport(rep, { installId: '11111111-2222-4333-8444-555555555555', product: 'ashley', version: '2.0.0', vscode: '1.139.1', os: 'win32 10.0', arch: 'x64', errorLines: ['ERROR ashley.ask: ssh go2432@warrior: timeout'] }, ctx);
+  const out = buildSharedReport(rep, { installId: '11111111-2222-4333-8444-555555555555', product: 'beethoven-vscode', version: '4.0.0', vscode: '1.139.1', os: 'win32 10.0', arch: 'x64', errorLines: ['ERROR beethoven.ask: ssh go2432@warrior: timeout'] }, ctx);
   assert.equal(out.nodes[0].detail, '', 'passing checks carry no detail');
   assert.ok(!JSON.stringify(out).includes('go2432'), 'no AccessID anywhere');
   assert.ok(!JSON.stringify(out).includes('warrior.grid'), 'no hostname anywhere');

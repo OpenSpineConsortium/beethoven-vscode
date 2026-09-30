@@ -3,10 +3,10 @@
 import * as assert from 'node:assert/strict';
 import * as vscode from 'vscode';
 
-suite('Ashley live troubleshooter', () => {
+suite('Beethoven live troubleshooter', () => {
   test('walks the whole graph against the grid and names root causes', async function () {
-    if (process.env.ASHLEY_LIVE !== '1') this.skip();
-    const ext = vscode.extensions.getExtension('openspineconsortium.ashley')!;
+    if (process.env.BEETHOVEN_LIVE !== '1') this.skip();
+    const ext = vscode.extensions.getExtension('openspineconsortium.beethoven')!;
     await ext.activate();
     const { buildGraph, runDiagnostics, formatReport, makeCtx, storeFor } = (ext.exports as any)._internal;
     const ctx = makeCtx(storeFor(), true, (l: string) => console.log(`  [log] ${l}`));

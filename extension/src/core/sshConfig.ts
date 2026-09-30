@@ -11,8 +11,18 @@ export interface SshTargets {
   includeGridAlias: boolean;
 }
 
-export const BLOCK_START = '# >>> ashley (managed; rerun "Ashley: Set up" to change) >>>';
-export const BLOCK_END = '# <<< ashley <<<';
+export const BLOCK_START = '# >>> beethoven (managed; rerun "Beethoven: Set up" to change) >>>';
+export const BLOCK_END = '# <<< beethoven <<<';
+/**
+ * The block's markers before the rename (Ashley for VS Code). A block with them is recognised and
+ * replaced by the new one, so an upgrade never leaves two "Host wsu-grid" blocks behind.
+ */
+export const OLD_BLOCK_START = '# >>> ashley (managed; rerun "Ashley: Set up" to change) >>>';
+export const OLD_BLOCK_END = '# <<< ashley <<<';
+const MARKERS: Array<[string, string]> = [
+  [BLOCK_START, BLOCK_END],
+  [OLD_BLOCK_START, OLD_BLOCK_END],
+];
 
 /**
  * Why each line is there:
@@ -78,13 +88,22 @@ export function definesHost(configText: string, name: string): boolean {
   return false;
 }
 
+/** The config without our managed block(s), under either name. */
 export function stripBlock(configText: string): string {
-  const s = configText.indexOf(BLOCK_START);
-  if (s < 0) return configText;
-  const e = configText.indexOf(BLOCK_END, s);
-  if (e < 0) return configText.slice(0, s);
-  const after = configText.slice(e + BLOCK_END.length).replace(/^\r?\n/, '');
-  return configText.slice(0, s) + after;
+  let text = configText;
+  for (const [start, end] of MARKERS) {
+    for (;;) {
+      const s = text.indexOf(start);
+      if (s < 0) break;
+      const e = text.indexOf(end, s);
+      if (e < 0) {
+        text = text.slice(0, s);
+        break;
+      }
+      text = text.slice(0, s) + text.slice(e + end.length).replace(/^\r?\n/, '');
+    }
+  }
+  return text;
 }
 
 /** Insert or replace the managed block. The block goes FIRST so its Host entries win
@@ -97,8 +116,9 @@ export function upsertBlock(configText: string, t: SshTargets): string {
   return block + (trimmed.length ? '\n' + trimmed : '');
 }
 
+/** Is a managed block present, under either name? */
 export function hasBlock(configText: string): boolean {
-  return configText.includes(BLOCK_START) && configText.includes(BLOCK_END);
+  return MARKERS.some(([start, end]) => configText.includes(start) && configText.includes(end));
 }
 
 /** Node name -> Remote-SSH host string. Accepts "voh3", "voh3.nas.grid.wayne.edu". */

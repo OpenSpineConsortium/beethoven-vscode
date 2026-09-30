@@ -2,6 +2,49 @@
 
 The format follows Keep a Changelog; versions follow Semantic Versioning.
 
+## 4.0.0 (2026-09-30)
+
+### Changed
+- The name: Ashley for VS Code is now **Beethoven for VS Code**, published under a new Marketplace
+  id (`openspineconsortium.beethoven`; the old listing, `openspineconsortium.ashley`, is retired).
+  Commands are `beethoven.*` (category "Beethoven"), settings `beethoven.*`, the activity-bar view
+  "Beethoven", the MCP server `beethoven` with tools `beethoven_*`, the terminal tool
+  `beethoven-cli`.
+- New agreement texts (Trial and Full Edition version 5, privacy statement version 5): the product's
+  name, and access keys beginning `ASHLEY1.` or `BEETHOVEN1.`. The terms version is 5, so the
+  signing dialog is shown once more.
+- The grid folder is `~/.beethoven` and the grid command `~/.beethoven/bin/beethoven` (grid scripts
+  version 7). The first grid install moves `~/.ashley` there in one step, while no worker runs, and
+  leaves `~/.ashley` as a link to it; the Claude sign-in on the grid moves with it.
+- Pages and `services.json` are read from openspineconsortium.com/beethoven/.
+
+### Kept, so nothing breaks
+- A setting still set under its old name (`ashley.*`) is read while the new one is unset; every
+  change is written under the new name.
+- The old command ids (`ashley.*`) run as hidden aliases of the new ones while Ashley for VS Code
+  itself is not installed (two extensions cannot hold one command id).
+- A computer that ran Ashley keeps its `~/.ashley-local` folder (access key, sign-in record,
+  accepted terms, the CLI's settings); new computers use `~/.beethoven-local`.
+  `BEETHOVEN_LICENSE_DIR` is read before the older `ASHLEY_LICENSE_DIR`.
+- The `~/.ssh/config` block written by Ashley is recognised and replaced, never doubled.
+- A grid account the move has not reached answers through `~/.ashley/bin/ashley` until the next grid
+  install; files the laptop writes there go to whichever folder the account has.
+- Access keys and withdrawn-key lists with either prefix verify; the access service still issues
+  the old prefix, which Ashley for VS Code 3.0.0 and grid scripts before 7 require.
+- Terminals get `BEETHOVEN_GRID` and, for older copies of the terminal forwarder, `ASHLEY_GRID`.
+
+### Added
+- While Ashley for VS Code is still installed, a notice (at most daily) offers to uninstall it: the
+  two would otherwise keep reinstalling their own grid scripts. The `ashley` registration with
+  Claude Code, which points at the old extension, is removed whenever Beethoven registers its own
+  while Ashley is not installed (the wizard, Troubleshoot and repair, Connect the Claude Code
+  extension to the grid) and by Reset; if Ashley is uninstalled later, run Connect the Claude Code
+  extension to the grid once.
+
+### Not carried over
+- GitHub and Hugging Face tokens kept in the keychain by Ashley: VS Code keeps secrets per extension
+  id, so they are entered again once (the wizard's token steps).
+
 ## 3.0.0 (2026-09-28)
 
 ### Changed

@@ -3,7 +3,7 @@
 // ship: source maps, test fixtures, the test signing key, a missing licence or notices file, the
 // wrong licence field, a copyleft dependency, run-time code construction outside two known
 // dependency uses, or the old credential capture.
-// Usage: node tools/release_check.mjs dist/ashley-2.0.0.vsix [--unpack dist/unpacked]
+// Usage: node tools/release_check.mjs dist/beethoven-4.0.0.vsix [--unpack dist/unpacked]
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as zlib from 'node:zlib';
@@ -53,8 +53,12 @@ export function checkVsix(file, opts = {}) {
     if (n.startsWith('extension/src/')) problems.push(`source shipped: ${n}`);
     if (/\.pem$/.test(n)) problems.push(`private key material shipped: ${n}`);
   }
-  for (const n of ['extension/package.json', 'extension/LICENSE.txt', 'extension/LICENSE-FULL.txt', 'extension/PRIVACY.md', 'extension/THIRD_PARTY_NOTICES.md', 'extension/dist/extension.js', 'extension/dist/mcp-server.js', 'extension/dist/ashley-cli.js', 'extension/dist/grid/license.js', 'extension/dist/grid/license_keys.json', 'extension/dist/grid/ashley', 'extension/dist/grid/ashleyd.js']) {
+  for (const n of ['extension/package.json', 'extension/LICENSE.txt', 'extension/LICENSE-FULL.txt', 'extension/PRIVACY.md', 'extension/THIRD_PARTY_NOTICES.md', 'extension/dist/extension.js', 'extension/dist/mcp-server.js', 'extension/dist/beethoven-cli.js', 'extension/dist/grid/license.js', 'extension/dist/grid/license_keys.json', 'extension/dist/grid/beethoven', 'extension/dist/grid/beethovend.js']) {
     if (!has(n)) problems.push(`missing: ${n}`);
+  }
+  // the grid scripts' names before the rename must not ship beside the new ones (the wizard would upload both)
+  for (const n of ['extension/dist/grid/ashley', 'extension/dist/grid/ashleyd.js', 'extension/dist/ashley-cli.js']) {
+    if (has(n)) problems.push(`a file under its name before the rename shipped: ${n}`);
   }
   if (has('extension/package.json')) {
     const pj = JSON.parse(text('extension/package.json'));
@@ -78,13 +82,13 @@ export function checkVsix(file, opts = {}) {
     if (testRaw && Object.values(keys).includes(testRaw)) problems.push('the TEST signing key is trusted by the release');
     notes.push(`trusted signing keys: ${kids.join(', ') || 'none'}`);
   }
-  for (const b of ['extension/dist/extension.js', 'extension/dist/mcp-server.js', 'extension/dist/ashley-cli.js']) {
+  for (const b of ['extension/dist/extension.js', 'extension/dist/mcp-server.js', 'extension/dist/beethoven-cli.js']) {
     if (!has(b)) continue;
     const js = text(b);
     if (/sourceMappingURL/.test(js)) problems.push(`${b} references a source map`);
     if (!/Licensed software/.test(js.slice(0, 600))) problems.push(`${b} lacks the licence notice`);
     if (testRaw && js.includes(testRaw)) problems.push(`${b} embeds the TEST signing key`);
-    if (/\bsetup-token\b/.test(js)) problems.push(`${b} still contains the setup-token capture (Ashley must not handle Claude credentials)`);
+    if (/\bsetup-token\b/.test(js)) problems.push(`${b} still contains the setup-token capture (Beethoven must not handle Claude credentials)`);
     if (/sk-ant-oat01-[A-Za-z0-9_-]{30,}/.test(js)) problems.push(`${b} contains a token-shaped string`);
     // the patterns the Marketplace's scanners and reviewers treat as loaders: none of them ship
     for (const [re, why] of [[/\beval\s*\(/, 'eval('], [/require\s*\(\s*["']inspector["']\s*\)/, 'require("inspector")'], [/child_process[^\n]{0,80}(curl|wget)\s/, 'a curl/wget download']]) {

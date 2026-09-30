@@ -1,6 +1,7 @@
-// ashley-cli: the same wizard and grid calls from a terminal, for people who do not use
+// beethoven-cli: the same wizard and grid calls from a terminal, for people who do not use
 // VS Code (Xcode users on macOS, or anyone who prefers a shell). Settings live in
-// ~/.ashley-local/settings.json; secrets in ~/.ashley-local/secrets.json (mode 600). The
+// ~/.beethoven-local/settings.json; secrets in ~/.beethoven-local/secrets.json (mode 600); on a computer
+// that ran an earlier Ashley, in ~/.ashley-local, which stays in use (core/localDir.ts). The
 // OS keychain is only used by the VS Code extension; here a 600 file is the honest option.
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -14,11 +15,12 @@ import { TerminalUI } from './terminalUi';
 import { renderBlock } from '../core/sshConfig';
 import { installPublicKey, probeWithKey } from '../core/sshInstall';
 import { expandHome } from '../core/shell';
+import { localDir } from '../core/localDir';
 import { checkLicense, readIdentity, unlicensedMessage, readLicenseKey, writeLicenseKey, removeLicenseKey, writeIdentity, findKey, describeLicense, LicenseCheck, Identity, cachedRevocationText } from '../core/license';
 import { AFFIRMATIONS, AGREE_BUTTON, FULL_TERMS_REFUSAL, TERMS_VERSION, TERMS_REFUSAL, acceptanceComplete, editionForKey, readTermsRecord, sha256, writeTermsRecord } from '../core/terms';
 import * as crypto from 'node:crypto';
 
-const LOCAL = path.join(os.homedir(), '.ashley-local');
+const LOCAL = localDir();
 const SETTINGS = path.join(LOCAL, 'settings.json');
 const SECRETS = path.join(LOCAL, 'secrets.json');
 
@@ -64,7 +66,7 @@ const cliLicense = {
   check: () => licenseNow(),
   async set(text: string): Promise<LicenseCheck> {
     const key = findKey(text);
-    if (!key) return { ok: false, status: 'invalid', detail: 'that is not an Ashley license key (it starts with ASHLEY1.)', identity: null } as LicenseCheck;
+    if (!key) return { ok: false, status: 'invalid', detail: 'that is not a Beethoven for VS Code license key (it starts with ASHLEY1. or BEETHOVEN1.)', identity: null } as LicenseCheck;
     const c = licenseNow(key);
     if (c.ok) writeLicenseKey(key);
     return c;
@@ -139,7 +141,7 @@ async function main(argv: string[]): Promise<number> {
       return 3;
     }
     if (c.identity === null) {
-      console.error('Ashley is licensed here, but the setup is not finished: run ashley-cli setup (or the setup in VS Code).');
+      console.error('Beethoven is licensed here, but the setup is not finished: run beethoven-cli setup (or the setup in VS Code).');
       return 3;
     }
   }
@@ -156,12 +158,12 @@ async function main(argv: string[]): Promise<number> {
       const have = readTermsRecord();
       if (argv[1] === 'status' || (have && argv[1] !== 'accept')) {
         const full = readTermsRecord('full');
-        console.log(have ? `Trial Edition agreement version ${have.terms_version} accepted ${have.accepted_at} by "${have.signed_name}" (${have.surface})` : 'the terms have not been accepted on this computer (ashley-cli terms accept)');
+        console.log(have ? `Trial Edition agreement version ${have.terms_version} accepted ${have.accepted_at} by "${have.signed_name}" (${have.surface})` : 'the terms have not been accepted on this computer (beethoven-cli terms accept)');
         if (full) console.log(`Full Edition agreement version ${full.terms_version} accepted ${full.accepted_at} by "${full.signed_name}" (${full.surface})`);
         return have ? 0 : 2;
       }
       if (!process.stdin.isTTY) {
-        console.error('ashley-cli terms accept needs a terminal: the agreement is read and signed by a person');
+        console.error('beethoven-cli terms accept needs a terminal: the agreement is read and signed by a person');
         return 3;
       }
       console.log(license + '\n\n==================== PRIVACY STATEMENT ====================\n\n' + privacy);
@@ -184,7 +186,7 @@ async function main(argv: string[]): Promise<number> {
         return 2;
       }
       const rec = writeTermsRecord(
-        { v: 1, terms_version: TERMS_VERSION, license_sha256: sha256(license), privacy_sha256: sha256(privacy), accepted_at: new Date().toISOString(), surface: 'terminal', button_label: AGREE_BUTTON, affirmations, signed_name: name.trim(), scrolled_to_end: true, diagnostics: /^n/i.test((diag ?? '').trim()) ? 'off' : 'on', product_version: '2.0.0', host: 'ashley-cli', host_version: process.version, platform: `${os.platform()} ${os.release()} ${os.arch()}`, locale: Intl.DateTimeFormat().resolvedOptions().locale, install_id: crypto.randomUUID() },
+        { v: 1, terms_version: TERMS_VERSION, license_sha256: sha256(license), privacy_sha256: sha256(privacy), accepted_at: new Date().toISOString(), surface: 'terminal', button_label: AGREE_BUTTON, affirmations, signed_name: name.trim(), scrolled_to_end: true, diagnostics: /^n/i.test((diag ?? '').trim()) ? 'off' : 'on', product_version: process.env.BEETHOVEN_VERSION ?? 'dev', host: 'beethoven-cli', host_version: process.version, platform: `${os.platform()} ${os.release()} ${os.arch()}`, locale: Intl.DateTimeFormat().resolvedOptions().locale, install_id: crypto.randomUUID() },
         { license, privacy },
       );
       console.log(`accepted; record ${rec}`);
@@ -195,7 +197,7 @@ async function main(argv: string[]): Promise<number> {
       if (sub === 'set') {
         const text = argv[2] ?? (process.stdin.isTTY ? '' : fs.readFileSync(0, 'utf8'));
         // the Full Edition agreement is accepted in VS Code's signing dialog; the terminal cannot show it
-        const ed = (text.match(/ASHLEY1\.([A-Za-z0-9_-]+)\./) || [])[1];
+        const ed = (text.match(/(?:ASHLEY1|BEETHOVEN1)\.([A-Za-z0-9_-]+)\./) || [])[1];
         let claimedEdition: string | undefined;
         try {
           claimedEdition = ed ? (JSON.parse(Buffer.from(ed.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8')) as { edition?: string }).edition : undefined;
@@ -227,7 +229,7 @@ async function main(argv: string[]): Promise<number> {
     }
     case 'doctor': {
       print(await checkAll(env(ui)));
-      const r = await grid.ashley(['doctor'], { timeoutMs: 120_000 });
+      const r = await grid.beethoven(['doctor'], { timeoutMs: 120_000 });
       console.log((r.stdout + r.stderr).trim());
       return 0;
     }
@@ -245,7 +247,7 @@ async function main(argv: string[]): Promise<number> {
         const t0 = Date.now();
         const q = await relay.send(req, worker);
         console.log(`ack_relay,${i},${Date.now() - t0}`);
-        const r = await new Promise<import('../core/protocol').AshleyResult | null>(async (resolve) => {
+        const r = await new Promise<import('../core/protocol').BeethovenResult | null>(async (resolve) => {
           for (let k = 0; k < 120; k++) {
             const x = await relay.result(req.id, worker);
             if (x) return resolve(x);
@@ -287,9 +289,9 @@ async function main(argv: string[]): Promise<number> {
     case 'help':
     case '-h':
     case '--help':
-      console.log(`ashley-cli <command>
+      console.log(`beethoven-cli <command>
   terms [status|accept]               the license terms: read and sign them in the terminal (once per version)
-  license [status|set <key>|remove]   the Ashley license on this computer (a key can also come on stdin)
+  license [status|set <key>|remove]   the Beethoven license on this computer (a key can also come on stdin)
   setup [--force] [--only step,step]   the wizard in the terminal (license, wsuSignIn, github, huggingface, claudeLocal, gridTwoFactor, sshKey, sshConfig, installKey, gridInstall, labAccess, claudeGrid)
   doctor               every check, laptop and grid
   ssh-config           print the ~/.ssh/config block
@@ -300,7 +302,7 @@ async function main(argv: string[]): Promise<number> {
 Settings: ${SETTINGS}; secrets: ${SECRETS} (mode 600)`);
       return 0;
     default: {
-      const r = await grid.ashley(argv, { timeoutMs: 600_000, input: process.stdin.isTTY ? undefined : fs.readFileSync(0, 'utf8') });
+      const r = await grid.beethoven(argv, { timeoutMs: 600_000, input: process.stdin.isTTY ? undefined : fs.readFileSync(0, 'utf8') });
       process.stdout.write(r.stdout);
       process.stderr.write(r.stderr);
       return r.code ?? 1;

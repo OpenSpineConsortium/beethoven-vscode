@@ -4,8 +4,8 @@
   <meta charset="utf-8" />
   <meta name="generator" content="pandoc" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
-  <meta name="dcterms.date" content="2026-09-28" />
-  <title>Ashley</title>
+  <meta name="dcterms.date" content="2026-09-30" />
+  <title>Beethoven for VS Code</title>
   <style>
 
 code{white-space: pre-wrap;}
@@ -117,10 +117,10 @@ a { color: var(--accent); }
 </head>
 <body>
 <header id="title-block-header">
-<h1 class="title">Ashley</h1>
+<h1 class="title">Beethoven for VS Code</h1>
 <p class="subtitle">The Wayne State grid and Claude Code, from one
-wizard. Manual, version 1.0.0</p>
-<p class="date">2026-09-28</p>
+wizard. Manual for version 4.0.0</p>
+<p class="date">2026-09-30</p>
 </header>
 <nav id="TOC" role="doc-toc">
 <ul>
@@ -136,13 +136,14 @@ you cannot</a></li>
 </ul>
 </nav>
 <blockquote>
-<p>Ashley is a VS Code extension for medical students in
-OpenSpineConsortium projects. It sets up the laptop for the Wayne State
-HPC grid, keeps a Claude Code worker running there on the student’s own
-subscription, and lets the Claude Code extension on the laptop hand work
-to it. This manual is the pitch, the first hour, how it works, what you
-can and cannot ask, installation, and troubleshooting. The design notes
-and the research behind them are in the repository
+<p>Beethoven for VS Code (called Ashley for VS Code until version 3.0.0)
+is a VS Code extension for medical students in OpenSpineConsortium
+projects. It sets up the laptop for the Wayne State HPC grid, keeps a
+Claude Code worker running there on the student’s own subscription, and
+lets the Claude Code extension on the laptop hand work to it. This
+manual is the pitch, the first hour, how it works, what you can and
+cannot ask, installation, and troubleshooting. The design notes and the
+research behind them are in the repository
 (<code>docs/ARCHITECTURE.md</code>, <code>docs/RESEARCH.md</code>).</p>
 </blockquote>
 <h1 id="why">Why</h1>
@@ -237,13 +238,13 @@ may use, the Claude containers, and the software. You
 <strong>read</strong> that folder; you never write to it. All of your
 science happens in <strong>your own grid account</strong>: your home
 directory, your jobs, your Claude worker, with your own tokens and your
-own Claude subscription. Ashley sets that up and keeps it working; it
+own Claude subscription. Beethoven sets that up and keeps it working; it
 never asks you to build or install anything under the hood.</p>
 <h3 id="before-you-open-vs-code">Before you open VS Code</h3>
 <ol type="1">
 <li><strong>Your Wayne State account</strong> (AccessID@wayne.edu). Your
 lead adds your AccessID to the list of students allowed to use
-Ashley.</li>
+Beethoven.</li>
 <li><strong>Accounts, made with your WSU e-mail:</strong> Claude (Pro at
 the minimum; Max if your lead says so), GitHub, Hugging Face. The lab
 assumes your Claude account is the one made with
@@ -254,10 +255,37 @@ through both.</li>
 </ol>
 <h3 id="install">Install</h3>
 <p>VS Code, then the extensions <strong>Claude Code</strong>,
-<strong>Remote - SSH</strong>, and <code>ashley-2.0.0.vsix</code>
-(Extensions view, <code>...</code>, <em>Install from VSIX</em>). Ashley
-offers its wizard on first start; or press Ctrl/Cmd+Shift+P and type
-<strong>Ashley: Set up my research environment</strong>.</p>
+<strong>Remote - SSH</strong>, and <strong>Beethoven for VS
+Code</strong> (from the Marketplace, or
+<code>beethoven-4.0.0.vsix</code>: Extensions view, <code>...</code>,
+<em>Install from VSIX</em>). Beethoven offers its wizard on first start;
+or press Ctrl/Cmd+Shift+P and type <strong>Beethoven: Set up my research
+environment</strong>.</p>
+<h3 id="coming-from-ashley-for-vs-code">Coming from Ashley for VS
+Code</h3>
+<p>Beethoven for VS Code was called Ashley for VS Code until version
+3.0.0; it is the same tool under a new name and a new Marketplace
+listing. What you set up with Ashley carries over:</p>
+<ul>
+<li>your settings (Beethoven reads them from their old names until you
+change them);</li>
+<li>your access key, your Wayne State sign-in record and your SSH setup
+on this laptop;</li>
+<li>everything in your grid account. The first grid install of this
+version renames your grid folder from <code>~/.ashley</code> to
+<code>~/.beethoven</code>, in one step, while no worker runs, and leaves
+the old name pointing at the new folder. Your Claude sign-in on the
+grid, your license and your workers’ records move with it, so you do not
+sign in again there.</li>
+</ul>
+<p>Two things are asked again, once: the agreement (a new version, shown
+in the signing dialog), and your GitHub and Hugging Face tokens, because
+VS Code keeps each extension’s stored tokens apart. Run the wizard: its
+GitHub step is one click in the browser and its Hugging Face step one
+copy.</p>
+<p>Then uninstall Ashley for VS Code (Beethoven offers to do it). While
+both are installed, each puts its own version of the grid scripts back
+into your grid account.</p>
 <h3 id="the-setup-panel">The setup panel</h3>
 <p>One panel: the steps on the left with their state, the current
 question on the right, a progress bar on top, the log one click away.
@@ -295,11 +323,11 @@ page</td>
 <td>2 Access</td>
 <td>a spinner, then your key’s end date; or a button <em>Ask for
 access</em></td>
-<td>nothing, normally: Ashley asks the lab’s access service for a key in
-your name and keeps it. Not approved yet? <em>Ask for access</em> opens
-the lab’s page; when your lead approves you, run this step again. A key
-your lead sent can be pasted here too (a Full Edition key opens its own
-agreement)</td>
+<td>nothing, normally: Beethoven asks the lab’s access service for a key
+in your name and keeps it. Not approved yet? <em>Ask for access</em>
+opens the lab’s page; when your lead approves you, run this step again.
+A key your lead sent can be pasted here too (a Full Edition key opens
+its own agreement)</td>
 </tr>
 <tr>
 <td>3 GitHub</td>
@@ -316,8 +344,8 @@ it</td>
 <td>5 Claude on this laptop</td>
 <td>a check of Claude Code’s own sign-in</td>
 <td>sign in to Claude Code with the account you made with your WSU
-e-mail (Claude Pro at the minimum). Ashley only looks at whether you are
-signed in</td>
+e-mail (Claude Pro at the minimum). Beethoven only looks at whether you
+are signed in</td>
 </tr>
 <tr>
 <td>6 Grid account and Authenticator</td>
@@ -352,44 +380,46 @@ license go to the grid in one pass</td>
 <td>11 Join the lab</td>
 <td>a note field, only when everything above is green</td>
 <td>a sentence for your lead (project, lead). One request; your lead
-approves it in Ashley, and from then on you read the lab folder and your
-workers use the lab’s Claude container</td>
+approves it in Beethoven, and from then on you read the lab folder and
+your workers use the lab’s Claude container</td>
 </tr>
 <tr>
 <td>12 Sign in to Claude on the grid</td>
 <td>a terminal on the grid</td>
 <td>Claude Code signs you in inside your own grid account: click the
 link it prints, sign in with the same Claude account, press Authorize,
-paste the code back. Once a month or so; Ashley says when. Ashley never
-sees this sign-in</td>
+paste the code back. Once a month or so; Beethoven says when. Beethoven
+never sees this sign-in</td>
 </tr>
 </tbody>
 </table>
-<p>The first time Ashley runs it shows the Trial Edition license
+<p>The first time Beethoven runs it shows the Trial Edition license
 agreement and the privacy statement in a signing dialog. You read the
 full text (scroll to its end), tick four statements that must be true,
-choose whether Ashley may send its maintainer error reports, type your
-name, and choose <strong>Accept and Continue</strong>. That click forms
-the agreement; nothing happens before it. Ashley keeps a record of what
-you accepted (the version, the text, what you ticked, your name, the
-time) in <code>~/.ashley-local</code>, where you can read, copy and
-print it, and <strong>Ashley: License</strong> opens the text again at
-any time. The Trial Edition is free: nothing is paid, nothing converts
-to a paid license, and it can be withdrawn or ended with notice. The
-agreement sends disputes to Michigan courts after 60 days of written
-notice, with a class-action waiver and a jury waiver. If a paid Full
-Edition is offered later, registering its key shows its own agreement in
-the same dialog; nothing obliges you to buy it. An error report says
-which check failed and why, with names, paths and anything secret
-replaced; never your prompts, files, tokens or AccessID. Say no in the
-dialog, or later in Settings, and nothing is ever sent. <strong>Ashley:
-Error reports</strong> shows exactly what a report contains.</p>
+choose whether Beethoven may send its maintainer error reports, type
+your name, and choose <strong>Accept and Continue</strong>. That click
+forms the agreement; nothing happens before it. Beethoven keeps a record
+of what you accepted (the version, the text, what you ticked, your name,
+the time) in <code>~/.beethoven-local</code> (on a laptop that ran
+Ashley, in <code>~/.ashley-local</code>), where you can read, copy and
+print it, and <strong>Beethoven: License</strong> opens the text again
+at any time. The Trial Edition is free: nothing is paid, nothing
+converts to a paid license, and it can be withdrawn or ended with
+notice. The agreement sends disputes to Michigan courts after 60 days of
+written notice, with a class-action waiver and a jury waiver. If a paid
+Full Edition is offered later, registering its key shows its own
+agreement in the same dialog; nothing obliges you to buy it. An error
+report says which check failed and why, with names, paths and anything
+secret replaced; never your prompts, files, tokens or AccessID. Say no
+in the dialog, or later in Settings, and nothing is ever sent.
+<strong>Beethoven: Error reports</strong> shows exactly what a report
+contains.</p>
 <p>Every step has a button next to it. <strong>Renew</strong> next to a
 token signs you in again and updates the grid copy in the same click;
-Ashley checks your tokens once a day and offers Renew when one stops
+Beethoven checks your tokens once a day and offers Renew when one stops
 working. <strong>Run again</strong> reruns any other step.</p>
-<p>The Ashley view (the Ashley icon in the activity bar) shows the same
-things as rows: your tokens under <em>Tokens on this laptop</em>,
+<p>The Beethoven view (the Beethoven icon in the activity bar) shows the
+same things as rows: your tokens under <em>Tokens on this laptop</em>,
 <em>Claude on this laptop</em>, <em>Claude on the grid</em>, and
 <em>Wayne State sign-in</em> when that is what is missing. When a row
 says <strong>missing</strong>, <strong>expired</strong> or <strong>not
@@ -399,30 +429,30 @@ button next to a failing check.</p>
 <h3 id="your-first-worker-and-your-first-question">Your first worker and
 your first question</h3>
 <ol type="1">
-<li><strong>Ashley: Start a Claude worker on the grid</strong> (after
+<li><strong>Beethoven: Start a Claude worker on the grid</strong> (after
 your lead approved step 10): name <code>default</code>, CPU node, 24
 hours.</li>
-<li><strong>Ashley: Ask the grid Claude</strong>: <em>“Create a folder
-hello in my home with a README that says which node you are on and what
-Python version you have.”</em> The answer streams in; tool calls appear
-as italics.</li>
-<li><strong>Ashley: Open my grid files on a compute node</strong>: a new
-VS Code window opens on the node. It shows a banner that the OS is
+<li><strong>Beethoven: Ask the grid Claude</strong>: <em>“Create a
+folder hello in my home with a README that says which node you are on
+and what Python version you have.”</em> The answer streams in; tool
+calls appear as italics.</li>
+<li><strong>Beethoven: Open my grid files on a compute node</strong>: a
+new VS Code window opens on the node. It shows a banner that the OS is
 unsupported: expected on the grid’s CentOS 7 (Wayne State supplies the
 compatibility libraries); dismiss it.</li>
 </ol>
 <h3 id="from-your-phone">From your phone</h3>
-<p><strong>Ashley: Phone access</strong> turns on Claude Code’s Remote
-Control on your worker. The first time, your browser opens claude.ai:
-sign in with the same account, press <em>Authorize</em>, press
-<em>Copy</em> next to the code the page shows; Ashley hands it to the
-worker. The session then appears in the Claude app on your phone (and at
-claude.ai/code) whenever the worker runs, exactly like
+<p><strong>Beethoven: Phone access</strong> turns on Claude Code’s
+Remote Control on your worker. The first time, your browser opens
+claude.ai: sign in with the same account, press <em>Authorize</em>,
+press <em>Copy</em> next to the code the page shows; Beethoven hands it
+to the worker. The session then appears in the Claude app on your phone
+(and at claude.ai/code) whenever the worker runs, exactly like
 <code>/remote-control</code> in a Claude Code session on your laptop.
 The sign-in lasts about 30 days; the same command renews it.</p>
 <h3 id="talking-to-it-from-claude-code">Talking to it from Claude
 Code</h3>
-<p><strong>Ashley: Connect the Claude Code extension to the
+<p><strong>Beethoven: Connect the Claude Code extension to the
 grid</strong> registers the bridge (the wizard does it for you). Then,
 in the Claude Code panel: <em>“Check the grid status and tell me whether
 my worker is idle,”</em> or <em>“Ask the grid Claude, in session
@@ -430,11 +460,11 @@ my worker is idle,”</em> or <em>“Ask the grid Claude, in session
 report the mean.”</em></p>
 <h3 id="starting-over-or-showing-a-friend">Starting over, or showing a
 friend</h3>
-<p><strong>Ashley: Reset this laptop (emulate a fresh install)</strong>
-forgets, as you choose, the tokens, the key and config block, the
-settings, the Claude Code registration, and Ashley on the grid. After a
-reload, VS Code looks the way it does to a brand-new student. For a
-brand-new VS Code as well:
+<p><strong>Beethoven: Reset this laptop (emulate a fresh
+install)</strong> forgets, as you choose, the tokens, the key and config
+block, the settings, the Claude Code registration, and Beethoven on the
+grid. After a reload, VS Code looks the way it does to a brand-new
+student. For a brand-new VS Code as well:
 <code>code --user-data-dir %TEMP%\fresh-vscode --extensions-dir %TEMP%\fresh-ext</code>.</p>
 <h3 id="every-day-after-that">Every day after that</h3>
 <ul>
@@ -444,7 +474,7 @@ day.</li>
 folder.</li>
 <li>Let the worker write scripts and Slurm job files; you read them; you
 say “submit”.</li>
-<li>If something is off: the Ashley item in the status bar turns red;
+<li>If something is off: the Beethoven item in the status bar turns red;
 <strong>Troubleshoot</strong> finds the broken piece and repairs what it
 can; <strong>Show log</strong> has the details.</li>
 </ul>
@@ -796,6 +826,20 @@ it does not, and why. The diagnostics node
 <code>&lt;worker&gt;/params</code>; <code>ashley worker restart</code>
 stops the job and starts it again from the current template with those
 settings, so an upgrade of the template reaches running workers.</p>
+<p>Grid etiquette, as C&amp;IT stated it on 2026-09-28: nothing
+container-related runs on the login node, and nothing of ours is left
+under its <code>/tmp</code> (a build there once left 7 GB of
+<code>rootfs-*</code>). <code>bootstrap.sbatch</code> refuses to run
+outside a Slurm job and puts <code>APPTAINER_TMPDIR</code>,
+<code>APPTAINER_CACHEDIR</code> and their <code>SINGULARITY_</code>
+twins on the compute node’s local disk (<code>$SLURM_TMPDIR</code> or
+<code>/tmp</code>), removed by a trap however the job ends; the worker
+template points the runtime’s temp and cache at its
+<code>/dev/shm</code> scratch; <code>cmd_diag_node</code> refuses off a
+job; the diagnostic <code>grid.login-tmp</code> finds leftovers under
+the login node’s <code>/tmp</code> and removes the recognisable ones on
+repair. Temp that must be shared between nodes goes under
+<code>/wsu/tmp</code>.</p>
 <h3 id="the-shared-container-library">The shared container library</h3>
 <p>Containers are read-only at run time (every account’s sessions,
 settings and caches live in its own home), so one copy serves the whole
@@ -1367,19 +1411,19 @@ Install or update Ashley on the grid</strong> to push new grid scripts
 changed).</p>
 <h1 id="troubleshooting">Troubleshooting</h1>
 <h3 id="the-troubleshooter">The troubleshooter</h3>
-<p>Ashley keeps an item in the status bar. It shows a tick when
+<p>Beethoven keeps an item in the status bar. It shows a tick when
 everything works, a warning when something needs attention soon, and the
 name of the broken piece when something is broken. Click it for four
 actions:</p>
 <ul>
-<li><strong>Troubleshoot and repair</strong> walks every piece Ashley
+<li><strong>Troubleshoot and repair</strong> walks every piece Beethoven
 depends on, in order: your laptop, VS Code, the network, your accounts,
 the grid, the container and the workers. When a piece is broken, the
 pieces that depend on it are marked <em>blocked</em> and name it as the
 cause, so you see one problem, not twenty. Where a repair is safe it
 runs the repair and checks again.</li>
 <li><strong>Show log</strong> opens the full record: every check, its
-result, and every command Ashley ran.</li>
+result, and every command Beethoven ran.</li>
 <li><strong>Investigate with Claude</strong> hands the failing check,
 its log and the known fixes to Claude Code on your laptop, which
 searches the web and writes a short report. Nothing is changed.</li>
@@ -1387,9 +1431,9 @@ searches the web and writes a short report. Nothing is changed.</li>
 </ul>
 <p>A quick check (no repairs) runs by itself 45 seconds after VS Code
 starts and then every hour, so the status bar notices an expired token
-or a stopped worker before you do. <strong>Ashley: Check everything (no
-repairs)</strong> runs the full check by hand.</p>
-<p>Ashley repairs by itself: missing VS Code extensions, the SSH
+or a stopped worker before you do. <strong>Beethoven: Check everything
+(no repairs)</strong> runs the full check by hand.</p>
+<p>Beethoven repairs by itself: missing VS Code extensions, the SSH
 configuration, the scripts on the grid, tokens missing from the grid (it
 copies them from your laptop), a moved VS Code library or container
 runtime on the grid, a stopped worker, the Claude Code connection, and
@@ -1415,7 +1459,8 @@ approval from your lead.</p>
 <tr>
 <td>Step 1: “not on the lab’s pre-approved list”</td>
 <td>your lead has not added your AccessID yet</td>
-<td>ask your lead; they add it and send you a new Ashley</td>
+<td>ask your lead; they approve you on the lab’s page, then run the step
+again</td>
 </tr>
 <tr>
 <td>Step 1: the Microsoft sign-in does not accept your account</td>
@@ -1434,15 +1479,15 @@ pre-filled</td>
 <td>paste it into the field; the check is the same</td>
 </tr>
 <tr>
-<td>A token shows <em>no longer accepted</em>, or its row in the Ashley
-view says <em>expired</em></td>
+<td>A token shows <em>no longer accepted</em>, or its row in the
+Beethoven view says <em>expired</em></td>
 <td>it expired or was revoked</td>
 <td>press <strong>Renew</strong> next to it, or click the row: one click
 in the browser, and the grid copy is updated too</td>
 </tr>
 <tr>
 <td><code>no matching MAC found. Their offer: hmac-sha1</code></td>
-<td>your SSH configuration lacks the Ashley block</td>
+<td>your SSH configuration lacks the Beethoven block</td>
 <td>run step 7 again (it writes the block with
 <code>MACs +hmac-sha1</code>)</td>
 </tr>
@@ -1464,7 +1509,8 @@ terminal for the same two prompts</td>
 <td><code>Permission denied (publickey...)</code> after step 8</td>
 <td>the key was not added to <code>authorized_keys</code></td>
 <td>run step 8 again; on the grid,
-<code>cat ~/.ssh/authorized_keys</code> should contain “ashley”</td>
+<code>cat ~/.ssh/authorized_keys</code> should contain “beethoven” (a
+key made by Ashley says “ashley”)</td>
 </tr>
 <tr>
 <td>Step 10 (<em>Join the lab</em>) refuses</td>
@@ -1473,21 +1519,21 @@ terminal for the same two prompts</td>
 again</td>
 </tr>
 <tr>
-<td>Ashley view: <em>Waiting for lab access</em></td>
+<td>Beethoven view: <em>Waiting for lab access</em></td>
 <td>your request is pending</td>
-<td>your lead approves it in Ashley; nothing to do</td>
+<td>your lead approves it in Beethoven; nothing to do</td>
 </tr>
 <tr>
 <td>Worker shows PENDING for a long time</td>
 <td>the <code>requeue</code> pool is busy</td>
 <td>start it with the <code>secp</code>/<code>secondary</code> settings
-(<code>ashley.worker.partition</code>,
-<code>ashley.worker.qos</code>)</td>
+(<code>beethoven.worker.partition</code>,
+<code>beethoven.worker.qos</code>)</td>
 </tr>
 <tr>
 <td>A prompt returns <em>Claude is not signed in on the grid</em></td>
 <td>you have not done step 12, or the sign-in ended (about a month)</td>
-<td>run <strong>Ashley: Sign in to Claude on the grid</strong></td>
+<td>run <strong>Beethoven: Sign in to Claude on the grid</strong></td>
 </tr>
 <tr>
 <td>Step 5 says <em>signed in with an API key, not a Claude
@@ -1497,28 +1543,29 @@ subscription</em></td>
 account</td>
 </tr>
 <tr>
-<td>Ashley refuses every command and says <em>license needed</em></td>
+<td>Beethoven refuses every command and says <em>license
+needed</em></td>
 <td>no key, an ended trial, or a key for someone else</td>
-<td><strong>Ashley: License</strong>: enter your key, or ask your lead.
-A trial ends by itself and cannot be repeated</td>
+<td><strong>Beethoven: License</strong>: enter your key, or ask your
+lead. A trial ends by itself and cannot be repeated</td>
 </tr>
 <tr>
-<td>Ashley says the terms have not been accepted</td>
+<td>Beethoven says the terms have not been accepted</td>
 <td>the first-run dialog was closed with <em>Not now</em></td>
-<td>run any Ashley command; the dialog returns</td>
+<td>run any Beethoven command; the dialog returns</td>
 </tr>
 <tr>
 <td>Phone access says <em>need_consent</em></td>
 <td>Claude Code’s one-time Remote Control question has not been
 answered</td>
-<td><strong>Ashley: Phone access</strong> opens the terminal; type y
+<td><strong>Beethoven: Phone access</strong> opens the terminal; type y
 when asked</td>
 </tr>
 <tr>
 <td>A prompt returns <code>rate_limited</code> with a time</td>
 <td>your subscription window is used up</td>
-<td>wait for the time shown; Ashley never switches to another person’s
-account</td>
+<td>wait for the time shown; Beethoven never switches to another
+person’s account</td>
 </tr>
 <tr>
 <td>Phone access: <em>Claude did not accept that code</em></td>
@@ -1529,19 +1576,20 @@ again</td>
 <tr>
 <td>Phone access: <em>hosted by worker …</em></td>
 <td>phone access is on for another of your workers</td>
-<td>run <strong>Ashley: Phone access</strong> and pick this worker; it
-moves, and the other one turns off</td>
+<td>run <strong>Beethoven: Phone access</strong> and pick this worker;
+it moves, and the other one turns off</td>
 </tr>
 <tr>
 <td>Phone access worked yesterday, not today</td>
 <td>the worker job ended, or the 30-day sign-in expired</td>
-<td>start a worker; run <strong>Ashley: Phone access</strong> again</td>
+<td>start a worker; run <strong>Beethoven: Phone access</strong>
+again</td>
 </tr>
 <tr>
 <td>Remote-SSH: <em>Connecting with SSH timed out</em></td>
 <td>the compute node’s sshd needs about 25 s per session; the first
 connection also downloads the server</td>
-<td>Ashley sets <code>remote.SSH.connectTimeout</code> to 300 when it
+<td>Beethoven sets <code>remote.SSH.connectTimeout</code> to 300 when it
 opens a node; if you connect by hand, set it in Settings and connect
 again</td>
 </tr>
@@ -1563,7 +1611,7 @@ above any <code>[ -z &quot;$PS1&quot; ] &amp;&amp; return</code></td>
 <tr>
 <td>VS Code connects to <code>warrior</code> instead of a node</td>
 <td>no job was running</td>
-<td>start a worker; Ashley connects only to nodes where you hold a
+<td>start a worker; Beethoven connects only to nodes where you hold a
 job</td>
 </tr>
 <tr>
@@ -1576,28 +1624,62 @@ job</td>
 <td>the bridge was not registered, or Claude Code was open before
 registration</td>
 <td><strong>Troubleshoot and repair</strong> registers it; start a new
-conversation</td>
+conversation. The tools are named <code>beethoven_*</code> (they were
+<code>ashley_*</code> before the rename)</td>
+</tr>
+<tr>
+<td>Install on the grid: <em>a Claude worker … is running on the
+grid</em></td>
+<td>your grid folder gets its new name (<code>~/.ashley</code> becomes
+<code>~/.beethoven</code>) once, while none of your workers runs</td>
+<td><strong>Beethoven: Stop a Claude worker</strong>, then run the step
+again; the worker’s queued requests wait in its inbox</td>
+</tr>
+<tr>
+<td>The grid scripts keep going back to an older version</td>
+<td>Ashley for VS Code is still installed beside Beethoven, and each
+installs its own scripts</td>
+<td>uninstall Ashley for VS Code, then run <strong>Install on the
+grid</strong> once more</td>
+</tr>
+<tr>
+<td>After the upgrade, a token row says <em>missing</em></td>
+<td>VS Code keeps each extension’s stored tokens apart, so the tokens
+Ashley stored are not visible to Beethoven</td>
+<td>run the wizard’s GitHub and Hugging Face steps once (or click the
+row)</td>
+</tr>
+<tr>
+<td>Claude Code lists an MCP server <code>ashley</code> that fails to
+connect</td>
+<td>Ashley for VS Code registered it and was uninstalled afterwards; the
+entry points at its removed folder</td>
+<td>run <strong>Beethoven: Connect the Claude Code extension to the
+grid</strong> once (it removes the <code>ashley</code> entry when Ashley
+is not installed)</td>
 </tr>
 </tbody>
 </table>
 <h3 id="logs">Logs</h3>
 <ul>
 <li>Laptop: the status bar item’s <strong>Show log</strong> (the same as
-<em>View, Output, Ashley</em>): every check and every command with its
-exit code. Each troubleshooter run is also saved as a report.</li>
-<li>Grid: <code>~/.ashley/workers/&lt;name&gt;/log/ashleyd.log</code>,
-<code>~/.ashley/workers/&lt;name&gt;/log/slurm_&lt;job&gt;.out</code>,
+<em>View, Output, Beethoven</em>): every check and every command with
+its exit code. Each troubleshooter run is also saved as a report.</li>
+<li>Grid:
+<code>~/.beethoven/workers/&lt;name&gt;/log/beethovend.log</code>,
+<code>~/.beethoven/workers/&lt;name&gt;/log/slurm_&lt;job&gt;.out</code>,
 every request’s <code>outbox/&lt;id&gt;.events.jsonl</code>, and for
 phone access <code>rc/session.log</code> in the worker’s folder.</li>
 <li>Remote-SSH: <em>View, Output, Remote - SSH</em>.</li>
 </ul>
 <h3 id="undo">Undo</h3>
 <p>Laptop: remove the block from <code>~/.ssh/config</code> (a
-<code>config.ashley.bak</code> is kept), delete
-<code>~/.ssh/id_ed25519_wsu*</code>, <strong>Ashley: Manage stored
+<code>config.beethoven.bak</code> is kept), delete
+<code>~/.ssh/id_ed25519_wsu*</code>, <strong>Beethoven: Manage stored
 tokens</strong> to delete tokens, uninstall the extension. Grid:
-<code>ashley worker stop</code>, <code>rm -rf ~/.ashley</code>, remove
-the block from <code>~/.bashrc</code>. <strong>Ashley: Reset</strong>
+<code>~/.beethoven/bin/beethoven uninstall</code> stops your workers and
+removes <code>~/.beethoven</code>, the <code>~/.ashley</code> link and
+the block in <code>~/.bashrc</code>. <strong>Beethoven: Reset</strong>
 does this for you: you pick what to forget, and it asks once before
 doing it.</p>
 <h1 id="appendix">Appendix</h1>
@@ -1610,18 +1692,18 @@ findings were independently verified.</li>
 <li><code>docs/DIAGNOSTICS.md</code>: the troubleshooter’s dependency
 graph, the rule that every feature adds its checks before it is
 integrated, and what the dependency study found and fixed.</li>
-<li><code>docs/DEPENDENCY_MAP.md</code>: every assumption Ashley makes
-(370 entries), with the check, what a failure looks like and how to fix
-it; search it for an error message the troubleshooter does not
+<li><code>docs/DEPENDENCY_MAP.md</code>: every assumption Beethoven
+makes (370 entries), with the check, what a failure looks like and how
+to fix it; search it for an error message the troubleshooter does not
 name.</li>
-<li><code>docs/research/claude_swap_notes.md</code>: what Ashley took
+<li><code>docs/research/claude_swap_notes.md</code>: what Beethoven took
 from claude-swap and cswap-desktop, and the plan for the next
 release.</li>
 <li><code>docs/CHECKPOINT_2026-09-28.md</code>: the state of the project
 on the day this manual was built, including what was tested and what was
 not.</li>
-<li><code>Student_Projects/RECIPE.md</code>: the lab’s method; Ashley is
-the on-ramp to it.</li>
+<li><code>Student_Projects/RECIPE.md</code>: the lab’s method; Beethoven
+is the on-ramp to it.</li>
 <li>C&amp;IT: “How to SSH to the Grid in Visual Studio Code” and “How do
 I set up and use Google Authenticator for the Grid” (services.wayne.edu
 knowledge base).</li>

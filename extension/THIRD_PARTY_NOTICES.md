@@ -1,10 +1,10 @@
 # Third-party notices
 
-Ashley includes the open-source packages below, bundled into its JavaScript files. Each is used
-under its own licence, reproduced here as that licence requires. Ashley's own licence (LICENSE.txt)
-does not change the terms of these packages.
+Beethoven for VS Code includes the open-source packages below, bundled into its JavaScript files.
+Each is used under its own licence, reproduced here as that licence requires. Its own licence
+(LICENSE.txt) does not change the terms of these packages.
 
-Not distributed by Ashley: Claude Code, Node.js and the container image, which the setup installs on
+Not distributed by Beethoven for VS Code: Claude Code, Node.js and the container image, which the setup installs on
 your own grid account from their public sources under their own terms, and the Visual Studio Code
 extensions it asks you to install.
 
@@ -13,14 +13,14 @@ extensions it asks you to install.
 | @modelcontextprotocol/sdk | 1.30.1 | MIT | mcp-server.js |
 | ajv | 8.20.0 | MIT | mcp-server.js |
 | ajv-formats | 3.0.1 | MIT | mcp-server.js |
-| asn1 | 0.2.6 | MIT | ashley-cli.js, extension.js |
-| bcrypt-pbkdf | 1.0.2 | BSD-3-Clause | ashley-cli.js, extension.js |
+| asn1 | 0.2.6 | MIT | beethoven-cli.js, extension.js |
+| bcrypt-pbkdf | 1.0.2 | BSD-3-Clause | beethoven-cli.js, extension.js |
 | fast-deep-equal | 3.1.3 | MIT | mcp-server.js |
 | fast-uri | 3.1.8 | BSD-3-Clause | mcp-server.js |
 | json-schema-traverse | 1.0.0 | MIT | mcp-server.js |
-| safer-buffer | 2.1.2 | MIT | ashley-cli.js, extension.js |
-| ssh2 | 1.17.0 | MIT | ashley-cli.js, extension.js |
-| tweetnacl | 0.14.5 | Unlicense | ashley-cli.js, extension.js |
+| safer-buffer | 2.1.2 | MIT | beethoven-cli.js, extension.js |
+| ssh2 | 1.17.0 | MIT | beethoven-cli.js, extension.js |
+| tweetnacl | 0.14.5 | Unlicense | beethoven-cli.js, extension.js |
 | zod | 4.6.5 | MIT | mcp-server.js |
 | zod-to-json-schema | 3.25.2 | ISC | mcp-server.js |
 

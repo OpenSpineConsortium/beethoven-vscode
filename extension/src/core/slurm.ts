@@ -1,5 +1,5 @@
 // Parsing of Slurm output and rendering of the few Slurm commands the laptop issues.
-// The grid-side CLI (grid/bin/ashley) does the real work; these helpers keep the laptop
+// The grid-side CLI (grid/bin/beethoven) does the real work; these helpers keep the laptop
 // side to one layer of quoting (a lesson written down in Student_Projects/tools/grid.sh).
 
 export interface SqueueRow {
@@ -55,7 +55,7 @@ export interface WorkerJobSpec {
   container?: string;
 }
 
-/** Arguments for `ashley worker start` on the grid; the grid CLI renders the sbatch file. */
+/** Arguments for `beethoven worker start` on the grid; the grid CLI renders the sbatch file. */
 export function workerStartArgs(s: WorkerJobSpec): string[] {
   const args = [
     'worker', 'start',

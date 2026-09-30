@@ -1,28 +1,28 @@
-# Ashley privacy statement
+# Beethoven for VS Code privacy statement
 
-Version 4, 2026-09-28. Part of the Ashley Trial Edition License Agreement (LICENSE.txt) and of the
-Ashley Full Edition License Agreement (LICENSE-FULL.txt). You can save and print this text; it is
-also on the Ashley support page.
+Version 5, 2026-09-30. Part of the Beethoven for VS Code Trial Edition License Agreement
+(LICENSE.txt) and of the Beethoven for VS Code Full Edition License Agreement (LICENSE-FULL.txt).
+You can save and print this text; it is also on the Beethoven support page.
 
 Who collects: Gregory Schwing, trading as OpenSpineConsortium ("Licensor"), the maintainer of
-Ashley. Questions and requests: the notice address on the Ashley support page (in VS Code:
-Ashley: Support page). Ashley is licensed to individuals; it is not provided by or on behalf of any
-school, and Licensor is not acting for one.
+Beethoven for VS Code. Questions and requests: the notice address on the Beethoven support page (in
+VS Code: Beethoven: Support page). Beethoven for VS Code is licensed to individuals; it is not
+provided by or on behalf of any school, and Licensor is not acting for one.
 
 ## What stays on your laptop
 
 | Data | Where | Why | You control it by |
 |---|---|---|---|
-| Ashley settings (AccessID, hostnames, worker defaults) | VS Code settings | to reach your grid account | editing Settings, or Ashley: Reset |
-| Your GitHub and Hugging Face tokens, and an optional Anthropic Console key | your operating system's credential store (VS Code SecretStorage) | so your own tools can use them on your laptop and, copied, in your grid account | Ashley: Manage stored tokens; revoking the token at the service |
-| Your license key and the institutional identity you signed in with (AccessID, e-mail) | `~/.ashley-local` and VS Code's state | to check that the license names you | Ashley: License (remove the key); Ashley: Reset |
-| Your acceptance of the agreement: its version and text hashes, the statements you ticked with their wording, your typed name, the time, and the exact texts shown | `~/.ashley-local/terms.json` and `terms/<version>/`; VS Code's state | to prove the agreement and its terms, for you and for Licensor | it is yours to read, copy and print; Ashley: Reset removes it |
-| Copies of every error report Ashley prepared, sent or not | the extension's storage folder | so you can read exactly what left your laptop | Ashley: Error reports |
-| Troubleshooter reports and the Ashley log | the extension's storage folder; the Output panel | diagnosis | Ashley: Reset |
+| Beethoven for VS Code settings (AccessID, hostnames, worker defaults) | VS Code settings | to reach your grid account | editing Settings, or Beethoven: Reset |
+| Your GitHub and Hugging Face tokens, and an optional Anthropic Console key | your operating system's credential store (VS Code SecretStorage) | so your own tools can use them on your laptop and, copied, in your grid account | Beethoven: Manage stored tokens; revoking the token at the service |
+| Your license key and the institutional identity you signed in with (AccessID, e-mail) | `~/.beethoven-local` (on a computer that ran an earlier release: `~/.ashley-local`) and VS Code's state | to check that the license names you | Beethoven: License (remove the key); Beethoven: Reset |
+| Your acceptance of the agreement: its version and text hashes, the statements you ticked with their wording, your typed name, the time, and the exact texts shown | `terms.json` and `terms/<version>/` in the same folder; VS Code's state | to prove the agreement and its terms, for you and for Licensor | it is yours to read, copy and print; Beethoven: Reset removes it |
+| Copies of every error report Beethoven for VS Code prepared, sent or not | the extension's storage folder | so you can read exactly what left your laptop | Beethoven: Error reports |
+| Troubleshooter reports and the Beethoven for VS Code log | the extension's storage folder; the Output panel | diagnosis | Beethoven: Reset |
 
-Ashley never reads, stores, copies or relays a Claude credential. Claude Code keeps its own sign-in,
-on your laptop and in your grid account (`~/.ashley/claude`); Ashley reads only Claude Code's
-yes-or-no answer about whether it is signed in.
+Beethoven for VS Code never reads, stores, copies or relays a Claude credential. Claude Code keeps
+its own sign-in, on your laptop and in your grid account (`~/.beethoven/claude`); Beethoven for VS
+Code reads only Claude Code's yes-or-no answer about whether it is signed in.
 
 ## What goes to your own grid account
 
@@ -35,42 +35,45 @@ in your own account under your institution's rules; Licensor has no access to it
 Your own accounts' services receive what your use of them entails: Anthropic (your Claude
 conversations, through Claude Code; while your phone is connected through Remote Control, the
 session transcript is stored on Anthropic's servers), GitHub, Hugging Face, Microsoft (the
-institutional sign-in), and your institution's grid. Those parties' privacy terms apply to that data,
-not this statement.
+institutional sign-in), and your institution's grid. Those parties' privacy terms apply to that
+data, not this statement.
 
-**Address lookups.** About once an hour Ashley reads `services.json` from the Ashley support site
-(GitHub Pages), and about once a day the signed list of withdrawn keys and the list of approved
-AccessIDs from the lab's access service. These requests carry nothing about you beyond what any
-web request carries (your network address); the files hold addresses and lists only, and Ashley
-makes none of these requests before you have accepted the agreement.
+**Address lookups.** About once an hour Beethoven for VS Code reads `services.json` from the
+Beethoven website (openspineconsortium.com/beethoven, on GitHub Pages), and about once a day the
+signed list of withdrawn keys and the list of approved AccessIDs from the lab's access service.
+These requests carry nothing about you beyond what any web request carries (your network address);
+the files hold addresses and lists only, and Beethoven for VS Code makes none of these requests
+before you have accepted the agreement.
 
 ## What may go to Licensor
 
-**Error reports, only if you allow them.** When one of Ashley's own checks fails or is repaired, and
-only if error reports are on in Ashley and telemetry is on in VS Code, and only if your lab has
-configured a report address, Ashley sends one report per distinct failure per day. It contains:
+**Error reports, only if you allow them.** When one of Beethoven for VS Code's own checks fails or
+is repaired, and only if error reports are on in Beethoven for VS Code and telemetry is on in VS
+Code, and only if your lab has configured a report address, Beethoven for VS Code sends one report
+per distinct failure per day. It contains:
 
-- Ashley version, grid-script version, VS Code version, operating system and processor family;
+- Beethoven for VS Code version, grid-script version, VS Code version, operating system and
+  processor family;
 - a random installation identifier created on your laptop (not derived from you or the machine);
 - the time of the check;
 - for each check: its id, verdict and duration;
-- for failing or repaired checks: the check's message, and the last error lines of Ashley's own
-  log, with e-mail addresses, AccessIDs, file paths, hostnames, network addresses, job numbers and
-  anything token-shaped replaced by placeholders;
+- for failing or repaired checks: the check's message, and the last error lines of Beethoven for VS
+  Code's own log, with e-mail addresses, AccessIDs, file paths, hostnames, network addresses, job
+  numbers and anything token-shaped replaced by placeholders;
 - a hash of the failing checks, so the same failure is reported once a day.
 
 It never contains your prompts, files, tokens, AccessID, e-mail or environment values. You choose at
-first use whether to send reports, and can change the choice any time in Settings (Ashley:
-Diagnostics: Share) or with `Ashley: Error reports`, which also shows what a report contains and
-opens the copies kept on your laptop.
+first use whether to send reports, and can change the choice any time in Settings (Beethoven:
+Diagnostics: Share) or with `Beethoven: Error reports`, which also shows what a report
+contains and opens the copies kept on your laptop.
 
-**Access requests and access keys.** If you ask for access on the Ashley support site, the request
-form records what you enter: AccessID, name, Wayne State e-mail, what you will use Ashley for, and
-the time. Obtaining a key carries the Microsoft sign-in token VS Code holds for your institutional
-account, so the access service can ask Microsoft who you are and issue a key in your name only if
-your AccessID is approved. The service records your AccessID, your e-mail, your name as Microsoft
-gives it, the license id and dates, the time, and the approval, denial and withdrawal decisions
-about you. The published list of approved AccessIDs contains AccessIDs only.
+**Access requests and access keys.** If you ask for access on the Beethoven support site, the
+request form records what you enter: AccessID, name, Wayne State e-mail, what you will use Beethoven
+for VS Code for, and the time. Obtaining a key carries the Microsoft sign-in token VS Code holds for
+your institutional account, so the access service can ask Microsoft who you are and issue a key in
+your name only if your AccessID is approved. The service records your AccessID, your e-mail, your
+name as Microsoft gives it, the license id and dates, the time, and the approval, denial and
+withdrawal decisions about you. The published list of approved AccessIDs contains AccessIDs only.
 
 **License records.** When Licensor issues you a key, the record holds your name as given, AccessID,
 e-mail, edition, dates and the key itself. When you accept the agreement, the acceptance record
@@ -82,12 +85,13 @@ claim): what you write in it, kept with your license record.
 
 ## How Licensor uses and keeps it
 
-Error reports are used to find and fix defects in Ashley and to decide what to build next. Reviewing
-them and drafting fixes is assisted by AI tools running on Licensor's own accounts; every change
-proposed that way is reviewed by a person and tested before release. Reports are kept for at most
-365 days. License, trial and acceptance records are kept for the life of the license and six years
-after, to prove the agreement and for accounting and disputes. Nothing is sold or used for advertising. Processors acting for Licensor
-(hosting, the licence service) see only what they need to run the service.
+Error reports are used to find and fix defects in Beethoven for VS Code and to decide what to build
+next. Reviewing them and drafting fixes is assisted by AI tools running on Licensor's own accounts;
+every change proposed that way is reviewed by a person and tested before release. Reports are kept
+for at most 365 days. License, trial and acceptance records are kept for the life of the license and
+six years after, to prove the agreement and for accounting and disputes. Nothing is sold or used for
+advertising. Processors acting for Licensor (hosting, the licence service) see only what they need
+to run the service.
 
 ## Security and breaches
 
@@ -104,9 +108,10 @@ honour and answers others where it reasonably can.
 
 ## Children
 
-Ashley is for adults, or minors with a parent's or guardian's consent (LICENSE.txt section 21).
+Beethoven for VS Code is for adults, or minors with a parent's or guardian's consent (LICENSE.txt
+section 21).
 
 ## Changes
 
-A new version of this statement ships with the Ashley version it applies to and is shown for
-acceptance when it changes materially.
+A new version of this statement ships with the Beethoven for VS Code version it applies to and is
+shown for acceptance when it changes materially.

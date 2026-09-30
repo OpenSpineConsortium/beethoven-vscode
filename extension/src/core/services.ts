@@ -31,7 +31,7 @@ export const SERVICES: ServiceConfig[] = [
     name: 'GitHub personal access token',
     envVars: ['GITHUB_TOKEN', 'GH_TOKEN'],
     tokenUrl:
-      'https://github.com/settings/tokens/new?description=Ashley%20WSU%20grid&scopes=repo,workflow,read:org,gist',
+      'https://github.com/settings/tokens/new?description=Beethoven%20WSU%20grid&scopes=repo,workflow,read:org,gist',
     instructions:
       "Normally you sign in to GitHub in the browser and the token arrives by itself (VS Code's GitHub sign-in). If you have no GitHub account, create one with your WSU email first. This page is the fallback for a pasted token: scopes pre-filled (repo, workflow, read:org, gist).",
     prompt: 'Paste your GitHub token (starts with ghp_ or github_pat_)',
@@ -47,7 +47,7 @@ export const SERVICES: ServiceConfig[] = [
     envVars: ['HF_TOKEN'],
     tokenUrl: 'https://huggingface.co/settings/tokens/new?tokenType=write&name=wsu-grid',
     instructions:
-      'If you have no Hugging Face account yet, create one with your WSU email first (huggingface.co/join). The page that opens is pre-filled: name wsu-grid, type Write. Press Create token, then Copy: Ashley notices the copied token and offers to save it.',
+      'If you have no Hugging Face account yet, create one with your WSU email first (huggingface.co/join). The page that opens is pre-filled: name wsu-grid, type Write. Press Create token, then Copy: Beethoven notices the copied token and offers to save it.',
     prompt: 'Paste your Hugging Face token (starts with hf_)',
     validate: { url: 'https://huggingface.co/api/whoami-v2', header: 'Authorization', expectField: 'name' },
     injectLocally: true,
@@ -87,6 +87,9 @@ export function gridHome(accessId: string): string {
 export function localEnvironment(accessId: string, sshAlias: string): Record<string, string> {
   return {
     WSU_ACCESS_ID: accessId,
+    BEETHOVEN_GRID: sshAlias,
+    BEETHOVEN_GRID_HOME: gridHome(accessId),
+    // the names before the rename: copies of the older terminal forwarder (cli/ashley) read these
     ASHLEY_GRID: sshAlias,
     ASHLEY_GRID_HOME: gridHome(accessId),
   };

@@ -8,10 +8,12 @@ import { WizardEnv, WizardSettings, WizardUI, localClaudeStatus } from '../core/
 import { installPublicKey } from '../core/sshInstall';
 import { isMcpRegistered, registerMcp } from './mcpRegister';
 import type { LicenseGate } from './licenseGate';
+import { settings, Settings } from './settings';
+import { REQUEST_PAGE, SUPPORT_PAGE } from '../core/site';
 
-const SECRET_PREFIX = 'ashley.';
+const SECRET_PREFIX = 'beethoven.';
 /** what the daily token check found, per secret id (VS Code state; cleared when the token changes) */
-const TOKEN_CHECKS_KEY = 'ashley.tokenChecks';
+const TOKEN_CHECKS_KEY = 'beethoven.tokenChecks';
 export const GITHUB_SCOPES = ['repo', 'workflow', 'read:org', 'gist'];
 
 /** missing: nothing stored; expired: stored but the service rejected it at the last daily check; stored: present and not known to be bad */
@@ -31,13 +33,14 @@ interface TokenCheck {
   at: string;
 }
 
-export class AshleyStore {
+export class BeethovenStore {
   /** set by activate(): the license gate the wizard and the diagnostics use */
   licenseGate?: LicenseGate;
   constructor(public readonly context: vscode.ExtensionContext) {}
 
-  get config(): vscode.WorkspaceConfiguration {
-    return vscode.workspace.getConfiguration('ashley');
+  /** beethoven.* settings, reading a value still set under the old name ashley.* (settings.ts) */
+  get config(): Settings {
+    return settings;
   }
 
   settings(): WizardSettings {
@@ -72,7 +75,7 @@ export class AshleyStore {
     await this.recordTokenCheck(id, undefined);
   }
 
-  /** What the daily check (checkTokensQuietly) found for a token; the Ashley view reads this instead of asking the service again. */
+  /** What the daily check (checkTokensQuietly) found for a token; the Beethoven view reads this instead of asking the service again. */
   tokenCheck(id: SecretId): TokenCheck | undefined {
     return this.context.globalState.get<Record<string, TokenCheck>>(TOKEN_CHECKS_KEY, {})[id];
   }
@@ -111,7 +114,7 @@ export class AshleyStore {
   async hydrateEnvironment(): Promise<string[]> {
     const col = this.context.environmentVariableCollection;
     col.persistent = true;
-    col.description = 'Ashley: tokens and grid variables for this laptop';
+    col.description = 'Beethoven: tokens and grid variables for this laptop';
     col.clear();
     const s = this.settings();
     const names: string[] = [];
@@ -144,13 +147,13 @@ export class AshleyStore {
   }
 
   /**
-   * Where the lab's services live: the file at ashley.servicesUrl (published with the support site, so
+   * Where the lab's services live: the file at beethoven.servicesUrl (published with the support site, so
    * the addresses can change without a new release), cached for an hour; a non-empty setting for a
    * particular address always wins. Keys: license_service, allowlist, revocation, report,
    * request_page, support_page. Empty means "not configured".
    */
   async services(): Promise<Record<string, string>> {
-    const cached = this.context.globalState.get<{ at: number; map: Record<string, string> }>('ashley.services');
+    const cached = this.context.globalState.get<{ at: number; map: Record<string, string> }>('beethoven.services');
     let map: Record<string, string> = cached && Date.now() - cached.at < 3_600_000 ? cached.map : {};
     const src = this.config.get<string>('servicesUrl', '').trim();
     if (src && !Object.keys(map).length) {
@@ -159,7 +162,7 @@ export class AshleyStore {
         if (res.ok) {
           const j = (await res.json()) as Record<string, unknown>;
           map = Object.fromEntries(Object.entries(j).filter(([, v]) => typeof v === 'string' && /^https:\/\//.test(v as string)).map(([k, v]) => [k, (v as string).trim()]));
-          await this.context.globalState.update('ashley.services', { at: Date.now(), map });
+          await this.context.globalState.update('beethoven.services', { at: Date.now(), map });
         }
       } catch {
         map = cached?.map ?? {};
@@ -172,8 +175,8 @@ export class AshleyStore {
       allowlist: setting('allowlistUrl') || map.allowlist || '',
       revocation: setting('licenseRevocationUrl') || map.revocation || '',
       report: setting('diagnostics.endpoint') || map.report || '',
-      request_page: map.request_page || String(this.context.extension.packageJSON.homepage ?? '').replace(/\/$/, '') + '/request.html',
-      support_page: map.support_page || String(this.context.extension.packageJSON.homepage ?? '').replace(/\/$/, '') + '/support.html',
+      request_page: map.request_page || REQUEST_PAGE,
+      support_page: map.support_page || SUPPORT_PAGE,
     };
   }
   async serviceUrl(name: 'license_service' | 'allowlist' | 'revocation' | 'report' | 'request_page' | 'support_page'): Promise<string> {
@@ -192,9 +195,10 @@ export class AshleyStore {
     const session = await vscode.authentication.getSession('microsoft', ['VSCODE_TENANT:organizations', 'User.Read'], { createIfNone: true });
     if (!session) return { detail: 'the Wayne State sign-in was cancelled' };
     try {
-      const res = await fetch(url, { method: 'POST', headers: { authorization: `Bearer ${session.accessToken}`, 'content-type': 'application/json' }, body: JSON.stringify({ product: 'ashley', version: this.context.extension.packageJSON.version }), signal: AbortSignal.timeout(30_000) });
+      // the access service's name for this edition (it sent "ashley" before the rename; "beethoven" there is the browser edition)
+      const res = await fetch(url, { method: 'POST', headers: { authorization: `Bearer ${session.accessToken}`, 'content-type': 'application/json' }, body: JSON.stringify({ product: 'beethoven-vscode', version: this.context.extension.packageJSON.version }), signal: AbortSignal.timeout(30_000) });
       const j = (await res.json().catch(() => ({}))) as { key?: string; error?: string; detail?: string; request_page?: string };
-      if (res.status === 403) return { detail: j.detail || 'your AccessID is not approved for Ashley yet', notApproved: true, requestPage: j.request_page || svc.request_page };
+      if (res.status === 403) return { detail: j.detail || 'your AccessID is not approved for Beethoven yet', notApproved: true, requestPage: j.request_page || svc.request_page };
       if (!res.ok || !j.key) return { detail: j.detail || j.error || `the access service answered HTTP ${res.status}` };
       return { key: j.key, detail: j.detail ?? 'access key issued' };
     } catch (e) {

@@ -1,11 +1,11 @@
 // The wire format between a laptop (extension, CLI, MCP server) and a Claude worker on the
 // grid. It is a directory of JSON files on the grid's shared filesystem:
 //
-//   ~/.ashley/workers/<worker>/inbox/<id>.json          request (written .part, then renamed)
-//   ~/.ashley/workers/<worker>/outbox/<id>.events.jsonl claude's stream-json events, live
-//   ~/.ashley/workers/<worker>/outbox/<id>.json          final result
-//   ~/.ashley/workers/<worker>/state.json                daemon heartbeat
-//   ~/.ashley/sessions/<session>.json                    session name -> claude session id
+//   ~/.beethoven/workers/<worker>/inbox/<id>.json          request (written .part, then renamed)
+//   ~/.beethoven/workers/<worker>/outbox/<id>.events.jsonl claude's stream-json events, live
+//   ~/.beethoven/workers/<worker>/outbox/<id>.json          final result
+//   ~/.beethoven/workers/<worker>/state.json                daemon heartbeat
+//   ~/.beethoven/sessions/<session>.json                    session name -> claude session id
 //
 // Why files and not a socket: the laptop only ever talks to the login node over ssh; the
 // daemon runs on whatever compute node Slurm gave it; both see the same home directory.
@@ -16,7 +16,7 @@ export const PROTOCOL_VERSION = 1;
 
 export type PermissionMode = 'default' | 'acceptEdits' | 'plan' | 'bypassPermissions';
 
-export interface AshleyRequest {
+export interface BeethovenRequest {
   v: number;
   id: string;
   prompt: string;
@@ -41,7 +41,7 @@ export interface AshleyRequest {
 
 export type ResultStatus = 'ok' | 'error' | 'rate_limited' | 'timeout' | 'cancelled';
 
-export interface AshleyResult {
+export interface BeethovenResult {
   v: number;
   id: string;
   status: ResultStatus;
@@ -86,7 +86,7 @@ export function newRequestId(now = new Date()): string {
   return `${ts}-${rnd}`;
 }
 
-export function makeRequest(p: Partial<AshleyRequest> & { prompt: string; from: string }): AshleyRequest {
+export function makeRequest(p: Partial<BeethovenRequest> & { prompt: string; from: string }): BeethovenRequest {
   return {
     v: PROTOCOL_VERSION,
     id: p.id ?? newRequestId(),

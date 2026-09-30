@@ -2,7 +2,7 @@
 // Writes extension/THIRD_PARTY_NOTICES.md from what esbuild actually put into the bundles
 // (extension/build-meta/*.json, written by every build): each npm package, its version, its
 // licence and the full licence text. Fails when a package's licence is copyleft or unknown,
-// because Ashley's own code is not open source. Run after `node esbuild.mjs --production`.
+// because Beethoven for VS Code's own code is not open source. Run after `node esbuild.mjs --production`.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -72,11 +72,11 @@ const unique = rows.filter((r) => (seen.has(`${r.name}@${r.version}`) ? false : 
 const lines = [
   '# Third-party notices',
   '',
-  'Ashley includes the open-source packages below, bundled into its JavaScript files. Each is used',
-  'under its own licence, reproduced here as that licence requires. Ashley\'s own licence (LICENSE.txt)',
-  'does not change the terms of these packages.',
+  'Beethoven for VS Code includes the open-source packages below, bundled into its JavaScript files.',
+  'Each is used under its own licence, reproduced here as that licence requires. Its own licence',
+  '(LICENSE.txt) does not change the terms of these packages.',
   '',
-  'Not distributed by Ashley: Claude Code, Node.js and the container image, which the setup installs on',
+  'Not distributed by Beethoven for VS Code: Claude Code, Node.js and the container image, which the setup installs on',
   'your own grid account from their public sources under their own terms, and the Visual Studio Code',
   'extensions it asks you to install.',
   '',

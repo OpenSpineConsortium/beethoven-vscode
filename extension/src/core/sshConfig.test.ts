@@ -6,7 +6,7 @@ const T = { accessId: 'ab1234', loginHost: 'warrior.grid.wayne.edu', alias: 'wsu
 
 test('renderBlock carries the lines the grid needs', () => {
   const b = renderBlock(T);
-  assert.match(b, /^# >>> ashley/m);
+  assert.match(b, /^# >>> beethoven/m);
   assert.match(b, /Host wsu-grid grid\n/);
   assert.match(b, /HostName warrior\.grid\.wayne\.edu/);
   assert.match(b, /User ab1234/);
@@ -41,7 +41,7 @@ test('upsertBlock is idempotent and replaces an old block', () => {
   const changed = upsertBlock(once, { ...T, accessId: 'zz9999' });
   assert.ok(changed.includes('User zz9999'));
   assert.ok(!changed.includes('User ab1234'));
-  assert.equal((changed.match(/# >>> ashley/g) ?? []).length, 1);
+  assert.equal((changed.match(/# >>> beethoven/g) ?? []).length, 1);
 });
 
 test('the grid alias is not duplicated when the student already has Host grid', () => {
@@ -72,4 +72,15 @@ test('the block hands scope back: the student\'s global lines below it stay glob
   assert.equal(lines[lines.length - 2], 'Match all', 'the last directive inside the block resets the scope');
   const merged = upsertBlock('Include config.d/*\nForwardAgent yes\n', targets);
   assert.ok(merged.indexOf('Match all') < merged.indexOf('Include config.d/*'), 'the old global lines follow the reset');
+});
+
+test('a block written before the rename (Ashley for VS Code) is replaced, never doubled', () => {
+  const old = ['# >>> ashley (managed; rerun "Ashley: Set up" to change) >>>', 'Host wsu-grid grid', '    HostName warrior.grid.wayne.edu', '    User ab1234', '# <<< ashley <<<', '', 'Host github.com', '    User git', ''].join('\n');
+  assert.equal(hasBlock(old), true, 'the old markers count as our block');
+  const out = upsertBlock(old, T);
+  assert.ok(out.startsWith(BLOCK_START));
+  assert.equal((out.match(/^Host wsu-grid/gm) ?? []).length, 1, 'one Host wsu-grid block');
+  assert.ok(!out.includes('# >>> ashley'), 'the old block is gone');
+  assert.ok(out.includes('Host github.com'), 'the student\'s own lines stay');
+  assert.equal(stripBlock(old).trim(), 'Host github.com\n    User git');
 });

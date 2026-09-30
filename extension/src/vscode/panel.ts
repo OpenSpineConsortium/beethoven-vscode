@@ -1,4 +1,4 @@
-// The Ashley setup panel: a webview that shows the wizard's steps with their state, asks its
+// The Beethoven setup panel: a webview that shows the wizard's steps with their state, asks its
 // questions inline (text, password, buttons), watches the clipboard for a token the student
 // just copied, and keeps the log one click away. It implements the wizard's UI contract, so
 // the step logic in core/wizard.ts does not know it is talking to a webview.
@@ -18,9 +18,9 @@ export class SetupPanel implements WizardUI, vscode.Disposable {
   /** Set by the extension: the student clicked Renew / Run next to a step. */
   onRunStep?: (id: string) => void;
 
-  constructor(context: vscode.ExtensionContext, private output: vscode.OutputChannel, title = 'Ashley setup') {
-    this.panel = vscode.window.createWebviewPanel('ashley.setup', title, vscode.ViewColumn.One, { enableScripts: true, retainContextWhenHidden: true });
-    this.panel.iconPath = vscode.Uri.joinPath(context.extensionUri, 'media', 'ashley.svg');
+  constructor(context: vscode.ExtensionContext, private output: vscode.OutputChannel, title = 'Beethoven setup') {
+    this.panel = vscode.window.createWebviewPanel('beethoven.setup', title, vscode.ViewColumn.One, { enableScripts: true, retainContextWhenHidden: true });
+    this.panel.iconPath = vscode.Uri.joinPath(context.extensionUri, 'media', 'beethoven.svg');
     this.panel.webview.html = this.html();
     this.panel.webview.onDidReceiveMessage((m) => this.onMessage(m));
     this.panel.onDidDispose(() => {
@@ -217,7 +217,7 @@ export class SetupPanel implements WizardUI, vscode.Disposable {
       this.pending = null;
       this.post({ type: 'prompt', kind: 'none' });
       p?.resolve(undefined);
-    } else if (m.type === 'command' && typeof m.command === 'string' && m.command.startsWith('ashley.')) {
+    } else if (m.type === 'command' && typeof m.command === 'string' && m.command.startsWith('beethoven.')) {
       void vscode.commands.executeCommand(m.command);
     } else if (m.type === 'runStep' && typeof m.id === 'string') {
       this.onRunStep?.(m.id);
@@ -259,7 +259,7 @@ export class SetupPanel implements WizardUI, vscode.Disposable {
     const nonce = Math.random().toString(36).slice(2) + Date.now().toString(36);
     const csp = `default-src 'none'; style-src 'unsafe-inline' ${this.panel.webview.cspSource}; script-src 'nonce-${nonce}'; img-src ${this.panel.webview.cspSource} data:;`;
     return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${csp}">
-<meta name="viewport" content="width=device-width, initial-scale=1"><title>Ashley setup</title>
+<meta name="viewport" content="width=device-width, initial-scale=1"><title>Beethoven setup</title>
 <style>
   :root { color-scheme: light dark; }
   body { font-family: var(--vscode-font-family); font-size: var(--vscode-font-size); color: var(--vscode-foreground); background: var(--vscode-editor-background); margin: 0; padding: 0 16px 40px; }
@@ -309,7 +309,7 @@ export class SetupPanel implements WizardUI, vscode.Disposable {
   .finish.ok { display: block; background: rgba(46,125,50,.15); border: 1px solid #2e7d32; }
   .finish.bad { display: block; background: rgba(183,28,28,.12); border: 1px solid #b71c1c; }
 </style></head><body><div class="wrap">
-<header><h1>Ashley setup</h1><span class="sub">${STEPS.length} steps. Finished ones are skipped; rerun any time.</span></header>
+<header><h1>Beethoven setup</h1><span class="sub">${STEPS.length} steps. Finished ones are skipped; rerun any time.</span></header>
 <div class="bar" id="bar"></div>
 <div class="grid">
   <ol class="steps" id="steps"></ol>
@@ -386,9 +386,9 @@ function renderPrompt(p){
 function showClip(){ if (pendingKind === 'token' && clipValue) { $('clip').classList.add('show'); } }
 $('clipUse').onclick = () => { if (clipValue) answer(clipValue); };
 $('clipNo').onclick = () => { clipValue = ''; $('clip').classList.remove('show'); };
-$('btnWorker').onclick = () => vscode.postMessage({ type: 'command', command: 'ashley.workerStart' });
-$('btnConnect').onclick = () => vscode.postMessage({ type: 'command', command: 'ashley.connect' });
-$('btnDoctor').onclick = () => vscode.postMessage({ type: 'command', command: 'ashley.doctor' });
+$('btnWorker').onclick = () => vscode.postMessage({ type: 'command', command: 'beethoven.workerStart' });
+$('btnConnect').onclick = () => vscode.postMessage({ type: 'command', command: 'beethoven.connect' });
+$('btnDoctor').onclick = () => vscode.postMessage({ type: 'command', command: 'beethoven.doctor' });
 $('btnLog').onclick = () => vscode.postMessage({ type: 'showLog' });
 window.addEventListener('message', (e) => {
   const m = e.data;
@@ -398,7 +398,7 @@ window.addEventListener('message', (e) => {
   else if (m.type === 'log') { const l = $('log'); l.textContent += m.line + '\\n'; l.scrollTop = l.scrollHeight; }
   else if (m.type === 'toast') toast(m.message, m.level);
   else if (m.type === 'clipboard') { clipValue = m.value || ''; $('clipPreview').textContent = m.preview || ''; if (clipValue) showClip(); else $('clip').classList.remove('show'); }
-  else if (m.type === 'finish') { const f = $('finish'); f.textContent = m.headline; f.className = 'finish ' + (m.ok ? 'ok' : 'bad'); $('title').textContent = m.ok ? 'Done' : 'Stopped'; $('msg').textContent = m.ok ? 'The Ashley view in the activity bar shows when the grid container is ready. Then start a worker.' : 'Fix what the step says and run the wizard again; finished steps are skipped.'; $('controls').innerHTML=''; }
+  else if (m.type === 'finish') { const f = $('finish'); f.textContent = m.headline; f.className = 'finish ' + (m.ok ? 'ok' : 'bad'); $('title').textContent = m.ok ? 'Done' : 'Stopped'; $('msg').textContent = m.ok ? 'The Beethoven view in the activity bar shows when the grid container is ready. Then start a worker.' : 'Fix what the step says and run the wizard again; finished steps are skipped.'; $('controls').innerHTML=''; }
 });
 </script></body></html>`;
   }

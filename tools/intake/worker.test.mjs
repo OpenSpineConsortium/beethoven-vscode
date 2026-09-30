@@ -1,7 +1,8 @@
 // Tests for the access, licence and report service. Run: node --test tools/intake/worker.test.mjs
 // An in-memory KV, a fetch stub for Microsoft Graph and GitHub, and the test signing key that test
 // builds trust (extension/test-fixtures/license/test-signing-key.pem) as TRIAL_KEY_PKCS8_B64 with key
-// id "test". What the Worker signs is checked with grid/license.js, the one verifier Ashley ships.
+// id "test". What the Worker signs is checked with grid/license.js, the verifier the VS Code edition and
+// the grid ship (it takes both spellings of the prefixes, ASHLEY1 and BEETHOVEN1).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as crypto from 'node:crypto';
@@ -51,7 +52,7 @@ class FakeKV {
 }
 
 function makeEnv(over = {}) {
-  return { ACCESS: new FakeKV(), TRIALS: new FakeKV(), REPORTS: new FakeKV(), TRIAL_KEY_PKCS8_B64: PKCS8_B64, TRIAL_KID: 'test', TRIAL_DAYS: '365', ALLOWED_DOMAINS: 'wayne.edu', SITE_ORIGIN: SITE, ADMIN_TOKEN: 'secret-admin-token', IP_SALT: 'a-salt', GITHUB_TOKEN: 'gh-test', GITHUB_REPO: 'example/ashley', ...over };
+  return { ACCESS: new FakeKV(), TRIALS: new FakeKV(), REPORTS: new FakeKV(), TRIAL_KEY_PKCS8_B64: PKCS8_B64, TRIAL_KID: 'test', TRIAL_DAYS: '365', ALLOWED_DOMAINS: 'wayne.edu', SITE_ORIGIN: SITE, ADMIN_TOKEN: 'secret-admin-token', IP_SALT: 'a-salt', GITHUB_TOKEN: 'gh-test', GITHUB_REPO: 'example/beethoven-vscode', ...over };
 }
 
 // Microsoft Graph and GitHub, stubbed: a token names a person; every issue filed is kept for inspection
@@ -116,7 +117,7 @@ test('GET /allowlist has the bundled shape, open CORS and a one-minute cache', a
   const env = makeEnv();
   let r = await call(env, 'GET', '/allowlist', { origin: null }).then(asJson);
   assert.equal(r.status, 200);
-  assert.deepEqual(r.body, { about: 'AccessIDs approved to use Ashley', accessIds: [] });
+  assert.deepEqual(r.body, { about: 'AccessIDs approved to use Beethoven', accessIds: [] });
   assert.equal(r.headers.get('access-control-allow-origin'), '*');
   assert.equal(r.headers.get('cache-control'), 'max-age=60');
   for (const id of ['zz9999', 'ab1234', 'cd5678', 'ef0001', 'gh0002']) assert.equal((await adminPost(env, 'add', { accessId: id, name: 'Someone' })).status, 200);
@@ -148,7 +149,7 @@ test('POST /request validates, stores a pending record and files one issue', asy
   assert.ok(rec.requested_at);
   assert.equal(issues.length, 1);
   assert.equal(issues[0].title, 'Access request: ab1234');
-  assert.deepEqual(issues[0].labels, ['access-request']);
+  assert.deepEqual(issues[0].labels, ['beethoven-access-request']);
   assert.ok(!issues[0].body.includes('@'), 'the issue body carries no e-mail');
   assert.ok(issues[0].body.includes('spine segmentation project'));
   // a retry keeps the first request time and files no second issue
@@ -216,7 +217,7 @@ test('POST /trial refuses a person who is not approved, and points at the reques
   const r = await trial(env, 'tok-ab1234');
   assert.equal(r.status, 403);
   assert.equal(r.body.error, 'not approved');
-  assert.equal(r.body.request_page, `${SITE}/ashley/request.html`);
+  assert.equal(r.body.request_page, `${SITE}/beethoven/request.html`);
   assert.match(r.body.detail, /ab1234/);
   assert.equal(r.body.key, undefined);
   // pending is not approved either
@@ -368,7 +369,7 @@ test('deny, then approve and add: the records move and an approved person cannot
   assert.equal(add.body.record.approved_at, ap.body.record.approved_at);
 });
 
-// Beethoven's approval check (code name Ashley Bridge; its builds send product "bridge"), sent the way
+// Beethoven's approval check (its builds send product "bridge", the name it had as Ashley Bridge), sent the way
 // an extension's background page sends it: an extension
 // origin, a text/plain body (no preflight), no credentials
 const EXT = 'chrome-extension://abcdefghijklmnopabcdefghijklmnop';
@@ -425,7 +426,7 @@ test('POST /access_check: open CORS on every answer, one account looked up, the 
   assert.deepEqual(r.body, { approved: false, access_id: 'st1234', requestPage: `${SITE}/beethoven/request.html` });
   // the public allowlist route is what it was
   const al = await call(env, 'GET', '/allowlist', { origin: null }).then(asJson);
-  assert.deepEqual(al.body, { about: 'AccessIDs approved to use Ashley', accessIds: [] });
+  assert.deepEqual(al.body, { about: 'AccessIDs approved to use Beethoven', accessIds: [] });
   assert.equal(al.headers.get('cache-control'), 'max-age=60');
 });
 
@@ -515,16 +516,16 @@ test('POST /access_check keeps one record per product and account, counts the da
   assert.equal((await many.ACCESS.get('seen:bridge:zz0001', 'json')).checks, 120, 'a refused check is not recorded as a check');
 });
 
-test('POST /access_check: a no carries the request page of the product that asked', async () => {
+test('POST /access_check: a no carries the request page, one page for both editions unless moved', async () => {
   const env = makeEnv();
-  const BEETHOVEN_PAGE = 'https://openspineconsortium.com/beethoven/request.html';
-  const ASHLEY_PAGE = 'https://openspineconsortium.com/ashley/request.html';
-  // Beethoven's builds send "bridge" (4.0.0 on); "beethoven" is the same product; case and spaces are ignored
-  const cases = [['bridge', BEETHOVEN_PAGE], ['beethoven', BEETHOVEN_PAGE], [' Beethoven ', BEETHOVEN_PAGE], ['BRIDGE', BEETHOVEN_PAGE], ['ashley', ASHLEY_PAGE], ['vscode', ASHLEY_PAGE], ['something-else', ASHLEY_PAGE]];
-  for (const [product, page] of cases) {
+  const PAGE = 'https://openspineconsortium.com/beethoven/request.html';
+  // the browser edition's builds send "bridge" (4.0.0 on) and "beethoven" is the same product; the VS Code
+  // edition sent "ashley" before 4.0.0; case and spaces are ignored
+  const cases = ['bridge', 'beethoven', ' Beethoven ', 'BRIDGE', 'ashley', 'vscode', 'beethoven-vscode', 'something-else'];
+  for (const product of cases) {
     const r = await check(env, { product, access_id: 'zz9876' });
     assert.equal(r.status, 200, product);
-    assert.deepEqual(r.body, { approved: false, access_id: 'zz9876', requestPage: page }, product);
+    assert.deepEqual(r.body, { approved: false, access_id: 'zz9876', requestPage: PAGE }, product);
     assert.equal(r.headers.get('access-control-allow-origin'), '*', product);
   }
   // each product keeps its own record of the checks (bridge and BRIDGE are one, beethoven and Beethoven one)
@@ -538,19 +539,47 @@ test('POST /access_check: a no carries the request page of the product that aske
     assert.equal(r.body.approved, true, product);
     assert.deepEqual(Object.keys(r.body), ['approved', 'access_id', 'checked', 'until'], product);
   }
-  // each page can be moved on its own: REQUEST_PAGE moves Ashley's, BEETHOVEN_REQUEST_PAGE Beethoven's
+  // each page can still be moved on its own: BEETHOVEN_REQUEST_PAGE for the browser edition, REQUEST_PAGE
+  // for every other product and for the VS Code edition's key route
   const moved = makeEnv({ REQUEST_PAGE: 'https://example.org/a.html', BEETHOVEN_REQUEST_PAGE: 'https://example.org/b.html' });
   assert.equal((await check(moved, { product: 'bridge' })).body.requestPage, 'https://example.org/b.html');
   assert.equal((await check(moved, { product: 'beethoven' })).body.requestPage, 'https://example.org/b.html');
   assert.equal((await check(moved, { product: 'ashley' })).body.requestPage, 'https://example.org/a.html');
-  // Ashley in VS Code's key route still points at Ashley's page
   const vscode = await trial(makeEnv({ BEETHOVEN_REQUEST_PAGE: 'https://example.org/b.html' }), 'tok-ab1234');
-  assert.equal(vscode.body.request_page, ASHLEY_PAGE);
-  // wrangler.toml, which both Worker names deploy with, gives the two published addresses
+  assert.equal(vscode.body.request_page, PAGE);
+  assert.equal((await trial(makeEnv({ REQUEST_PAGE: 'https://example.org/a.html' }), 'tok-ab1234')).body.request_page, 'https://example.org/a.html');
+  // wrangler.toml, which both Worker names deploy with: the primary name, the published addresses, the
+  // old signing prefixes
   const toml = fs.readFileSync(path.join(HERE, 'wrangler.toml'), 'utf8');
-  assert.match(toml, /^REQUEST_PAGE = "https:\/\/openspineconsortium\.com\/ashley\/request\.html"$/m);
+  assert.match(toml, /^name = "beethoven-access"$/m);
+  assert.match(toml, /^REQUEST_PAGE = "https:\/\/openspineconsortium\.com\/beethoven\/request\.html"$/m);
   assert.match(toml, /^BEETHOVEN_REQUEST_PAGE = "https:\/\/openspineconsortium\.com\/beethoven\/request\.html"$/m);
+  assert.match(toml, /^ADMIN_PAGE = "https:\/\/openspineconsortium\.com\/beethoven\/admin\.html"$/m);
   assert.match(toml, /^SITE_ORIGIN = "https:\/\/openspineconsortium\.com"$/m);
+  assert.match(toml, /^KEY_PREFIX = "ashley"$/m);
+});
+
+test('KEY_PREFIX: keys and the revocation list are signed ASHLEY1 and ASHLEYREV1 unless it says beethoven', async () => {
+  const now = Math.floor(Date.now() / 1000);
+  for (const [value, key, list] of [[undefined, 'ASHLEY1', 'ASHLEYREV1'], ['ashley', 'ASHLEY1', 'ASHLEYREV1'], ['beethoven', 'BEETHOVEN1', 'BEETHOVENREV1'], [' Beethoven ', 'BEETHOVEN1', 'BEETHOVENREV1'], ['something-else', 'ASHLEY1', 'ASHLEYREV1']]) {
+    const why = String(value);
+    const env = makeEnv(value === undefined ? {} : { KEY_PREFIX: value });
+    await adminPost(env, 'add', { accessId: 'ab1234', name: 'A. Student' });
+    const k = (await trial(env, 'tok-ab1234')).body.key;
+    assert.ok(k.startsWith(`${key}.`), `${why}: ${k.slice(0, 12)}`);
+    const c = L.verifyLicense(k, { keys: KEYS, now, identity: { accessId: 'ab1234' } });
+    assert.equal(c.status, 'valid', `${why}: ${c.detail}`);
+    // the payload is the same whatever the prefix: the product field every verifier checks stays "ashley"
+    assert.equal(c.payload.product, 'ashley', why);
+    assert.equal(c.payload.edition, 'trial', why);
+    await adminPost(env, 'remove', { accessId: 'ab1234' });
+    const text = await call(env, 'GET', '/revoked', { origin: null }).then((r) => r.text());
+    assert.ok(text.startsWith(`${list}.`), why);
+    const rev = L.verifyRevocationList(text, KEYS);
+    assert.equal(rev.ok, true, `${why}: ${rev.detail}`);
+    assert.deepEqual(rev.revoked, [c.payload.lid], why);
+    assert.equal(L.verifyLicense(k, { keys: KEYS, now, revoked: rev.revoked }).status, 'revoked', why);
+  }
 });
 
 test('/health and /report still answer', async () => {
@@ -569,9 +598,9 @@ test('/health and /report still answer', async () => {
 
 // Requests by e-mail (README.md): the maintainer's e-mail through Resend, and the /decide links in it.
 // No GitHub token here, as in the deployed Worker.
-const MAIL = { RESEND_API_KEY: 're_test_key_never_logged', DECIDE_KEY: 'decide-test-key', NOTIFY_TO: 'maintainer@example.edu', MAIL_FROM: 'Ashley access <onboarding@resend.dev>' };
+const MAIL = { RESEND_API_KEY: 're_test_key_never_logged', DECIDE_KEY: 'decide-test-key', NOTIFY_TO: 'maintainer@example.edu', MAIL_FROM: 'Beethoven access <onboarding@resend.dev>' };
 const mailEnv = (over = {}) => makeEnv({ ...MAIL, GITHUB_TOKEN: undefined, GITHUB_REPO: undefined, ...over });
-const ADMIN_PAGE = `${SITE}/ashley/admin.html`;
+const ADMIN_PAGE = `${SITE}/beethoven/admin.html`;
 const linksIn = (text) => ({ approve: /^Approve: (\S+)$/m.exec(text)[1], deny: /^Deny: (\S+)$/m.exec(text)[1] });
 const tokenOf = (link) => new URL(link).searchParams.get('t');
 const claimOf = (t) => JSON.parse(Buffer.from(t.split('.')[0], 'base64url').toString('utf8'));
@@ -603,9 +632,10 @@ test('/request e-mails the maintainer once, with an Approve and a Deny link that
   const m = mails[0];
   assert.equal(m.headers.authorization, `Bearer ${MAIL.RESEND_API_KEY}`);
   assert.deepEqual(m.body.to, ['maintainer@example.edu']);
-  assert.equal(m.body.from, 'Ashley access <onboarding@resend.dev>');
-  assert.equal(m.body.subject, 'Ashley access request: ab1234 (A. Student)');
-  for (const s of ['A. Student asked for access to Ashley.', 'Name: A. Student', 'AccessID: ab1234', 'E-mail: ab1234@wayne.edu', 'What for: spine segmentation project', 'Asked: ', `The admin page lists every request: ${ADMIN_PAGE}`]) assert.ok(m.body.text.includes(s), s);
+  assert.equal(m.body.from, 'Beethoven access <onboarding@resend.dev>');
+  assert.equal(m.headers['user-agent'], 'beethoven-access');
+  assert.equal(m.body.subject, 'Beethoven access request: ab1234 (A. Student)');
+  for (const s of ['A. Student asked for access to Beethoven.', 'Name: A. Student', 'AccessID: ab1234', 'E-mail: ab1234@wayne.edu', 'What for: spine segmentation project', 'Asked: ', `The admin page lists every request: ${ADMIN_PAGE}`]) assert.ok(m.body.text.includes(s), s);
   assert.ok(!m.body.text.includes('Asked from'), 'the form did not say which product');
   assert.ok(!m.body.text.includes('Asked again'), 'a first request');
   assert.ok(!JSON.stringify(m.body).includes(MAIL.RESEND_API_KEY), 'the key is only in the header');
@@ -657,9 +687,10 @@ test('/request e-mails the maintainer once, with an Approve and a Deny link that
   assert.ok(!done.text.includes('<b>Eve'));
 });
 
-test('the e-mail names the product the form named: Beethoven for bridge and beethoven, Ashley otherwise', async () => {
-  // [what the form sends, what the headline and subject say, what "Asked from" says (null: no line)]
-  const cases = [['bridge', 'Beethoven', 'Beethoven'], ['beethoven', 'Beethoven', 'Beethoven'], ['Beethoven', 'Beethoven', 'Beethoven'], ['ashley', 'Ashley', 'Ashley in VS Code'], ['vscode', 'Ashley', 'Ashley in VS Code'], ['other-thing', 'Ashley', 'other-thing'], [undefined, 'Ashley', null]];
+test('the e-mail says Beethoven access request; its headline names the edition the form named', async () => {
+  // [what the form sends, what the headline says, what "Asked from" says (null: no line)]
+  const VS = 'Beethoven for VS Code';
+  const cases = [['bridge', 'Beethoven', 'Beethoven'], ['beethoven', 'Beethoven', 'Beethoven'], ['Beethoven', 'Beethoven', 'Beethoven'], ['ashley', VS, VS], ['vscode', VS, VS], ['beethoven-vscode', VS, VS], ['other-thing', 'Beethoven', 'other-thing'], [undefined, 'Beethoven', null]];
   for (const [product, headline, from] of cases) {
     const env = mailEnv();
     mails.length = 0;
@@ -667,7 +698,7 @@ test('the e-mail names the product the form named: Beethoven for bridge and beet
     assert.equal(r.status, 202, String(product));
     assert.equal(mails.length, 1, String(product));
     const m = mails[0].body;
-    assert.equal(m.subject, `${headline} access request: ab1234 (A. Student)`, String(product));
+    assert.equal(m.subject, 'Beethoven access request: ab1234 (A. Student)', String(product));
     assert.match(m.text, new RegExp(`^A\\. Student asked for access to ${headline}\\.$`, 'm'), String(product));
     assert.ok(m.html.includes(`<p>A. Student asked for access to ${headline}.</p>`), String(product));
     if (from) {
@@ -676,8 +707,13 @@ test('the e-mail names the product the form named: Beethoven for bridge and beet
     } else {
       assert.ok(!m.text.includes('Asked from') && !m.html.includes('Asked from'), 'the form did not say which product');
     }
-    assert.ok(!JSON.stringify(m).includes('Ashley Bridge'), 'the old public name is gone from the e-mail');
+    assert.ok(!JSON.stringify(m).includes('Ashley'), 'the old name is gone from the e-mail');
+    assert.ok(m.text.includes('Sent by the Beethoven access service'), String(product));
   }
+  // with no MAIL_FROM secret the sender is still Beethoven's
+  mails.length = 0;
+  await request(mailEnv({ MAIL_FROM: undefined }));
+  assert.equal(mails[0].body.from, 'Beethoven access <onboarding@resend.dev>');
   // Beethoven's request page posts to the second Worker name: the links carry that host, and either name
   // decides them, because both names share DECIDE_KEY and the KV namespaces
   const env = mailEnv();
@@ -786,7 +822,7 @@ test('the button applies the decision once, through the admin code, and spends b
   const spent = await env.ACCESS.get(`decide:${nonce}`, 'json');
   assert.deepEqual([spent.access_id, spent.decision], ['ab1234', 'approve']);
   assert.equal(env.ACCESS.ttl.get(`decide:${nonce}`), 30 * 86400);
-  // Beethoven and Ashley in VS Code see the approval
+  // both editions see the approval
   assert.equal((await check(env, { access_id: 'ab1234' })).body.approved, true);
   assert.ok((await call(env, 'GET', '/allowlist', { origin: null }).then(asJson)).body.accessIds.includes('ab1234'));
   // a second press, the other link, or opening either again: already used, and nothing changes
@@ -906,7 +942,8 @@ test('/admin/notify-test sends one test e-mail and answers the provider status',
   assert.equal(r.status, 200);
   assert.deepEqual(r.body, { sent: true, provider_status: 200 });
   assert.equal(mails.length, 1);
-  assert.equal(mails[0].body.subject, 'Ashley access: test e-mail');
+  assert.equal(mails[0].body.subject, 'Beethoven access: test e-mail');
+  assert.ok(mails[0].body.text.startsWith('This is a test from the Beethoven access service'));
   assert.deepEqual(mails[0].body.to, ['maintainer@example.edu']);
   assert.ok(mails[0].body.text.includes(ADMIN_PAGE));
   assert.ok(!mails[0].body.text.includes('/decide'), 'a test carries no working link');

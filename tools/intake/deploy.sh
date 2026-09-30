@@ -1,30 +1,37 @@
 #!/usr/bin/env bash
 # Deploy the access service end to end, after `wrangler login` has been done once on this machine.
-# One Worker, two names (README.md, "Two names"): ashley-service, the default and the name in wrangler.toml
-# (Ashley in VS Code, and Beethoven 4.0.0 to 6.0.0), and beethoven-access (Beethoven 7.0.0 on). Both run
-# the same code, bind the same three KV namespaces (the ids in wrangler.toml) and get the same secrets, so
-# both answer from one approved list. Deploy both whenever worker.js changes:
-#   bash tools/intake/deploy.sh                                   (ashley-service)
-#   WORKER_NAME=beethoven-access bash tools/intake/deploy.sh      (the second name)
+# One Worker, two names (README.md, "Two names"): beethoven-access, the default and the name in
+# wrangler.toml (Beethoven 7.0.0 on, Beethoven for VS Code 4.0.0 on), and ashley-service, kept deployed
+# with the same code because Ashley for VS Code 3.0.0 and Beethoven 4.0.0 to 6.0.0 know only that address.
+# Both run the same code, bind the same three KV namespaces (the ids in wrangler.toml) and get the same
+# secrets, so both answer from one approved list. Deploy both whenever worker.js changes:
+#   bash tools/intake/deploy.sh                                   (beethoven-access)
+#   WORKER_NAME=ashley-service bash tools/intake/deploy.sh        (the old name)
 # Steps: the KV namespaces (the ids in wrangler.toml, checked against the account; created only on the very
 # first deploy of the default name, never for another name), the Worker itself, the secrets (piped from
-# files in the vendor folder, never on a command line), then, for the default name only,
-# docs/site/services.json (the five service addresses, access_check among them) and the support-site copy
-# (SKIP_SITE=1 leaves both alone). Beethoven's services.json, which names beethoven-access, is built in the
-# ashley-bridge repository (docs/site/beethoven/services.json), not here.
+# files in the vendor folder, never on a command line), then, for the default name only, the service
+# addresses in the site repository's beethoven/services.json (SKIP_SITE=1 leaves it alone). The site
+# generator (tools/build_site.py there) never writes that file, so this is what keeps it in step; the
+# file is written only when an address in it differs. /ashley/services.json is never written: installed
+# builds read it as it is. The pages themselves are the site generator's; nothing is copied there.
 # Files read from the vendor folder: admin_token, decide_key and ip_salt (each made here when absent),
-# notify_to (default go2432@wayne.edu), mail_from (default "Ashley access <onboarding@resend.dev>"), and
+# notify_to (default go2432@wayne.edu), mail_from (default "Beethoven access <onboarding@resend.dev>"), and
 # resend_api_key (optional: without it no e-mail is sent).
+# The vendor folder is the first of: BEETHOVEN_VENDOR_DIR, ASHLEY_VENDOR_DIR (the old variable, still read),
+# ~/.beethoven-vendor, ~/.ashley-vendor (the old folder, still read), ~/.beethoven-vendor (to be made).
 #   bash tools/intake/deploy.sh            (Git Bash on Windows or any shell; needs node 22 and the vendor folder)
 #   From WSL on the maintainer's machine (the Windows network path times out against Cloudflare):
-#   ASHLEY_VENDOR_DIR=/mnt/c/Users/<you>/.ashley-vendor PATH=$HOME/node22/bin:$PATH bash tools/intake/deploy.sh
+#   BEETHOVEN_VENDOR_DIR=/mnt/c/Users/<you>/.beethoven-vendor PATH=$HOME/node22/bin:$PATH bash tools/intake/deploy.sh
 # Re-running is safe: existing namespaces are reused, secrets are overwritten with the same values,
 # the Worker is redeployed.
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"; REPO="$(cd "$HERE/../.." && pwd)"
-VENDOR="${ASHLEY_VENDOR_DIR:-$HOME/.ashley-vendor}"
-SITE_REPO="${ASHLEY_SITE_REPO:-$REPO/../openspineconsortium.github.io}"
-DEFAULT_NAME="ashley-service"
+if [ -n "${BEETHOVEN_VENDOR_DIR:-}" ]; then VENDOR="$BEETHOVEN_VENDOR_DIR"
+elif [ -n "${ASHLEY_VENDOR_DIR:-}" ]; then VENDOR="$ASHLEY_VENDOR_DIR"
+elif [ -d "$HOME/.beethoven-vendor" ] || [ ! -d "$HOME/.ashley-vendor" ]; then VENDOR="$HOME/.beethoven-vendor"
+else VENDOR="$HOME/.ashley-vendor"; fi
+SITE_REPO="${BEETHOVEN_SITE_REPO:-${ASHLEY_SITE_REPO:-$REPO/../openspineconsortium.github.io}}"
+DEFAULT_NAME="beethoven-access"
 WORKER_NAME="${WORKER_NAME:-$DEFAULT_NAME}"
 [[ "$WORKER_NAME" =~ ^[a-z0-9][a-z0-9-]{0,62}$ ]] || { echo "WORKER_NAME is lower-case letters, digits and dashes, like beethoven-access"; exit 2; }
 W() { npx --yes wrangler@4 "$@"; }
@@ -55,8 +62,9 @@ for B in TRIALS REPORTS ACCESS; do
     exit 3
   fi
   # the first deploy of the default name: find the namespace by its title, or create it. wrangler names the
-  # namespace after the binding ("TRIALS"); older versions prefixed the Worker name
-  ID=$(printf '%s' "$LIST" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{const a=JSON.parse(s);const m=a.find(x=>x.title===process.argv[1]||x.title===process.argv[2]);console.log(m?m.id:"")}catch{console.log("")}})' "$B" "$DEFAULT_NAME-$B")
+  # namespace after the binding ("TRIALS"); older versions prefixed the Worker name (ashley-service, the
+  # default name when the namespaces were made)
+  ID=$(printf '%s' "$LIST" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{const a=JSON.parse(s);const t=process.argv.slice(1);const m=a.find(x=>t.includes(x.title));console.log(m?m.id:"")}catch{console.log("")}})' "$B" "$DEFAULT_NAME-$B" "ashley-service-$B")
   if [ -z "$ID" ]; then
     OUT=$(W kv namespace create "$B" 2>&1) || { echo "$OUT"; exit 3; }
     ID=$(printf '%s' "$OUT" | grep -oE 'id = "[0-9a-f]+"' | head -1 | grep -oE '[0-9a-f]{16,}')
@@ -80,7 +88,7 @@ URL=$(printf '%s' "$OUT" | grep -oE "https://$WORKER_NAME\.[a-z0-9.-]+\.workers\
 echo "  $URL"
 
 echo "== secrets ($WORKER_NAME)"
-node "$REPO/tools/license/ashley-license.mjs" export-key --kid trial | strip | S TRIAL_KEY_PKCS8_B64
+BEETHOVEN_VENDOR_DIR="$VENDOR" node "$REPO/tools/license/beethoven-license.mjs" export-key --kid trial | strip | S TRIAL_KEY_PKCS8_B64
 printf 'trial' | S TRIAL_KID
 [ -s "$VENDOR/admin_token" ] || { umask 077; openssl rand -base64 32 | strip > "$VENDOR/admin_token"; }
 strip < "$VENDOR/admin_token" | S ADMIN_TOKEN
@@ -94,7 +102,7 @@ echo "  TRIAL_KEY_PKCS8_B64, TRIAL_KID, ADMIN_TOKEN, IP_SALT set (GITHUB_TOKEN/G
 # once and kept; the recipient and the sender have defaults; the Resend key is the maintainer's to add
 [ -s "$VENDOR/decide_key" ] || { umask 077; openssl rand -base64 32 | strip > "$VENDOR/decide_key"; echo "  made $VENDOR/decide_key"; }
 [ -s "$VENDOR/notify_to" ] || { printf 'go2432@wayne.edu' > "$VENDOR/notify_to"; echo "  made $VENDOR/notify_to (the default recipient)"; }
-[ -s "$VENDOR/mail_from" ] || { printf 'Ashley access <onboarding@resend.dev>' > "$VENDOR/mail_from"; echo "  made $VENDOR/mail_from (the default sender)"; }
+[ -s "$VENDOR/mail_from" ] || { printf 'Beethoven access <onboarding@resend.dev>' > "$VENDOR/mail_from"; echo "  made $VENDOR/mail_from (the default sender)"; }
 strip < "$VENDOR/decide_key" | S DECIDE_KEY
 strip < "$VENDOR/notify_to" | S NOTIFY_TO
 strip < "$VENDOR/mail_from" | S MAIL_FROM
@@ -118,21 +126,21 @@ curl -fsS "$URL/health" && echo
 echo "  access_check: $URL/access_check"
 
 if [ "$WORKER_NAME" != "$DEFAULT_NAME" ]; then
-  echo "== services.json: not written for $WORKER_NAME (Beethoven's is docs/site/beethoven/services.json in ashley-bridge)"
+  echo "== services.json: not written for $WORKER_NAME (/ashley/services.json on the site names it and stays as installed builds read it)"
 elif [ "${SKIP_SITE:-0}" = 1 ]; then
   echo "== services.json: left alone (SKIP_SITE=1)"
+elif [ ! -f "$SITE_REPO/beethoven/services.json" ]; then
+  echo "== services.json: no $SITE_REPO/beethoven/services.json; set BEETHOVEN_SITE_REPO to the site repository and run again"
 else
-  echo "== services.json"
+  # the six service addresses, for both editions, on this host; every other key (the request and support
+  # pages) is the site's and is kept as it is. Written only when something differs
+  echo "== services.json ($SITE_REPO/beethoven/services.json)"
   node -e '
-    const fs=require("fs");const [f,u]=process.argv.slice(1);const j=JSON.parse(fs.readFileSync(f,"utf8"));
-    j.license_service=u+"/trial"; j.allowlist=u+"/allowlist"; j.revocation=u+"/revoked"; j.report=u+"/report"; j.access_check=u+"/access_check";
-    fs.writeFileSync(f,JSON.stringify(j,null,2)+"\n");' "$REPO/docs/site/services.json" "$URL"
-  cat "$REPO/docs/site/services.json"
-  ( cd "$REPO" && { python -X utf8 tools/site_build.py >/dev/null 2>&1 || python3 tools/site_build.py >/dev/null; } )
-  if [ -d "$SITE_REPO/.git" ]; then
-    mkdir -p "$SITE_REPO/ashley"
-    cp "$REPO"/docs/site/*.html "$REPO"/docs/site/*.txt "$REPO"/docs/site/services.json "$SITE_REPO/ashley/"
-    echo "  copied to $SITE_REPO/ashley (commit and push that repository to publish)"
-  fi
+    const fs=require("fs");const [f,u]=process.argv.slice(1);const before=fs.readFileSync(f,"utf8");const j=JSON.parse(before);
+    for (const [k,r] of [["access_check","access_check"],["request","request"],["revocation","revoked"],["allowlist","allowlist"],["license_service","trial"],["report","report"]]) j[k]=u+"/"+r;
+    const after=JSON.stringify(j,null,2)+"\n";
+    if (after===before) console.log("  unchanged: it already names "+u+" for every route");
+    else { fs.writeFileSync(f,after); console.log("  written: commit and push the site repository to publish it"); }' "$SITE_REPO/beethoven/services.json" "$URL"
+  cat "$SITE_REPO/beethoven/services.json"
 fi
 echo "done: $WORKER_NAME at $URL"

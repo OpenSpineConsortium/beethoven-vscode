@@ -1,11 +1,11 @@
 #!/bin/bash
-# Ashley (c) 2026 OpenSpineConsortium. Licensed software: use requires a license key. See LICENSE.txt.
-# Ashley bootstrap: build the Claude Code container for this user and record what works.
+# Beethoven for VS Code (c) 2026 OpenSpineConsortium. Licensed software: use requires a license key. See LICENSE.txt.
+# Beethoven bootstrap: build the Claude Code container for this user and record what works.
 # Runs once per user (5-15 min), as a job, never on the login node. Idempotent: rerun to
 # repair or, with UPDATE=1, to reinstall Claude Code at CLAUDE_CODE_VERSION.
-#   run: sbatch --parsable -D ~/.ashley/log ~/.ashley/bin/bootstrap.sbatch
+#   run: sbatch --parsable -D ~/.beethoven/log ~/.beethoven/bin/bootstrap.sbatch
 #   resume: same command; finished pieces are skipped.
-#SBATCH --job-name=ashley_bootstrap
+#SBATCH --job-name=beethoven_bootstrap
 #SBATCH --partition=reqp
 #SBATCH --qos=requeue
 #SBATCH --no-requeue
@@ -16,8 +16,8 @@
 #SBATCH --time=02:00:00
 #SBATCH --output=bootstrap_%j.out
 set -uo pipefail
-ASHLEY_HOME="${ASHLEY_HOME:-$HOME/.ashley}"
-CFG="$ASHLEY_HOME/config.env"
+BEETHOVEN_HOME="${BEETHOVEN_HOME:-${ASHLEY_HOME:-$HOME/.beethoven}}"
+CFG="$BEETHOVEN_HOME/config.env"
 # LIBRARY=1 publishes into the lab's shared library (ROOT_OVERRIDE, LIB_NAME, IMAGE, GPU) instead
 # of the user's own root: nothing in the user's config.env or READY is touched.
 LIBRARY="${LIBRARY:-0}"
@@ -25,7 +25,7 @@ if [ "$LIBRARY" = "1" ]; then
   ROOT="${ROOT_OVERRIDE:?LIBRARY=1 needs ROOT_OVERRIDE}"
   LIB_NAME="${LIB_NAME:?LIBRARY=1 needs LIB_NAME}"
 else
-  [ -s "$CFG" ] || { echo "REFUSING: $CFG missing; run 'ashley install' first"; exit 1; }
+  [ -s "$CFG" ] || { echo "REFUSING: $CFG missing; run 'beethoven install' first"; exit 1; }
   # shellcheck disable=SC1090
   source "$CFG"
   : "${ROOT:?config.env must set ROOT}"
@@ -41,12 +41,12 @@ say() { echo "$(date -u +%FT%TZ) $*"; }
 say "bootstrap job ${SLURM_JOB_ID:-local} on $(hostname); ROOT=$ROOT; LIBRARY=$LIBRARY; name=$LIB_NAME; image=$IMAGE"
 # Container commands run only inside a Slurm job on a compute node, never on the login node (C&IT,
 # 2026-09-28: a build there left 7 GB of rootfs-* under /tmp on warrior, which is not for user files).
-if [ -z "${SLURM_JOB_ID:-}" ]; then echo "REFUSING: this builds a container and must run as a Slurm job (ashley grid-install submits it), not on $(hostname)"; exit 1; fi
+if [ -z "${SLURM_JOB_ID:-}" ]; then echo "REFUSING: this builds a container and must run as a Slurm job (beethoven install submits it), not on $(hostname)"; exit 1; fi
 mkdir -p "$ROOT"/{containers,npm-cache,workspaces} "$NPM_PREFIX" || { echo "REFUSING: cannot write $ROOT"; exit 1; }
 # Temporary and cache files stay on the compute node's local disk (never a shared filesystem, never the
 # login node) and are removed when the job ends, whatever way it ends.
-SCR=/dev/shm/${USER}_ashley_boot_${SLURM_JOB_ID:-x}; mkdir -p "$SCR"
-NODE_TMP="${SLURM_TMPDIR:-/tmp}/${USER}_ashley_build_${SLURM_JOB_ID:-x}"; mkdir -p "$NODE_TMP/tmp" "$NODE_TMP/cache" || { echo "REFUSING: no local scratch at ${SLURM_TMPDIR:-/tmp}"; exit 1; }
+SCR=/dev/shm/${USER}_beethoven_boot_${SLURM_JOB_ID:-x}; mkdir -p "$SCR"
+NODE_TMP="${SLURM_TMPDIR:-/tmp}/${USER}_beethoven_build_${SLURM_JOB_ID:-x}"; mkdir -p "$NODE_TMP/tmp" "$NODE_TMP/cache" || { echo "REFUSING: no local scratch at ${SLURM_TMPDIR:-/tmp}"; exit 1; }
 trap 'rm -rf "$SCR" "$NODE_TMP"' EXIT
 export TMPDIR="$NODE_TMP/tmp" APPTAINER_TMPDIR="$NODE_TMP/tmp" SINGULARITY_TMPDIR="$NODE_TMP/tmp" APPTAINER_CACHEDIR="$NODE_TMP/cache" SINGULARITY_CACHEDIR="$NODE_TMP/cache"
 say "temp and cache on $(hostname -s):$NODE_TMP (local disk, removed at exit)"
@@ -125,7 +125,7 @@ os.replace(p + ".part", p)
 print("library entry written:", name)
 PYEOF
   chmod -R g+rX,g-w,o-rwx "$ROOT" 2>/dev/null; find "$ROOT" -type d -exec chmod g+s {} + 2>/dev/null
-  "$ASHLEY_HOME/bin/ashley" access admin resync 2>/dev/null   # approved students read the new entry too
+  "$BEETHOVEN_HOME/bin/beethoven" access admin resync 2>/dev/null   # approved students read the new entry too
   say "published $LIB_NAME to $ROOT (group read-only; approved students by ACL)"
   exit 0
 fi
@@ -138,5 +138,5 @@ fi
   echo "BOOTSTRAP_STATE=done"
 } > "$CFG.part" && mv "$CFG.part" "$CFG"
 printf '{"claude_version":"%s","runtime":"%s","sandbox":"%s","image":"%s","built":"%s","host":"%s","job":"%s","smoke":"%s"}\n' \
-  "$CLAUDE_VERSION" "$RUNTIME" "$SANDBOX" "$IMAGE" "$(date -u +%FT%TZ)" "$(hostname)" "${SLURM_JOB_ID:-local}" "$smoke" > "$ASHLEY_HOME/READY.part" && mv "$ASHLEY_HOME/READY.part" "$ASHLEY_HOME/READY"
-say "READY written: $(cat "$ASHLEY_HOME/READY")"
+  "$CLAUDE_VERSION" "$RUNTIME" "$SANDBOX" "$IMAGE" "$(date -u +%FT%TZ)" "$(hostname)" "${SLURM_JOB_ID:-local}" "$smoke" > "$BEETHOVEN_HOME/READY.part" && mv "$BEETHOVEN_HOME/READY.part" "$BEETHOVEN_HOME/READY"
+say "READY written: $(cat "$BEETHOVEN_HOME/READY")"

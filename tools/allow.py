@@ -1,4 +1,4 @@
-"""Manage the list of AccessIDs pre-approved to use Ashley (extension/media/allowlist.json).
+"""Manage the list of AccessIDs pre-approved to use Beethoven for VS Code (extension/media/allowlist.json).
 
   python tools/allow.py list
   python tools/allow.py add ab1234 cd5678
@@ -6,7 +6,7 @@
 
 The list ships inside the VSIX, so rebuild after a change (cd extension && npm run package) and
 send students the new .vsix. For a list that updates without a rebuild, publish the same JSON at
-a URL and set the setting ashley.allowlistUrl.
+a URL and set the setting beethoven.allowlistUrl.
 """
 import json, os, re, sys
 

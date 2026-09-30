@@ -1,7 +1,7 @@
 {
- "ashley": {
+ "beethoven": {
   "error_report": {
-   "description": "Sent only when an Ashley check fails or is repaired, only if ashley.diagnostics.share is on AND VS Code telemetry is enabled AND ashley.diagnostics.endpoint is configured; at most one per distinct failure per day; a copy is kept locally (Ashley: Error reports).",
+   "description": "Sent only when a Beethoven for VS Code check fails or is repaired, only if beethoven.diagnostics.share is on AND VS Code telemetry is enabled AND beethoven.diagnostics.endpoint is configured; at most one per distinct failure per day; a copy is kept locally (Beethoven: Error reports).",
    "install_id": {
     "classification": "EndUserPseudonymizedInformation",
     "purpose": "FeatureInsight",
@@ -35,7 +35,7 @@
    "errors": {
     "classification": "CallstackOrException",
     "purpose": "PerformanceAndHealth",
-    "comment": "the last ERROR lines of Ashley's own log, scrubbed the same way"
+    "comment": "the last ERROR lines of Beethoven's own log, scrubbed the same way"
    },
    "signature": {
     "classification": "SystemMetaData",

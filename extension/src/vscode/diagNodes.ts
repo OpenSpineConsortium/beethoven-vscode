@@ -1,14 +1,14 @@
-// The dependency graph Ashley checks: every piece from the laptop's OS to the compute node, with a
+// The dependency graph Beethoven checks: every piece from the laptop's OS to the compute node, with a
 // cheap check, a safe repair where one exists, the manual fix and the risk it guards against.
 // Rule: a feature integrates only after its pieces are nodes here (see docs/DIAGNOSTICS.md).
 import * as vscode from 'vscode';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { DiagNode, CheckResult } from '../core/diagnostics';
-import { run, ssh } from '../core/shell';
+import { run, ssh, gridCli } from '../core/shell';
 import { WizardEnv, stepWsuSignIn, stepGithub, stepHuggingFace, stepSshKey, stepSshConfig, stepGridInstall, testConnection, pushTokens, licenseFingerprint, stepClaudeLocal } from '../core/wizard';
 import { GridRelay } from '../core/relay';
-import { AshleyStore, findClaudeExecutable } from './store';
+import { BeethovenStore, findClaudeExecutable } from './store';
 import { isMcpRegistered, registerMcp } from './mcpRegister';
 import { TERMS_VERSION } from '../core/terms';
 import { termsRecord } from './terms';
@@ -17,7 +17,7 @@ interface GridDiagNode { id: string; ok: boolean; warn: boolean; skip: boolean; 
 interface GridDiag { version: string; host: string; user: string; nodes: GridDiagNode[] }
 
 export interface DiagCtx {
-  store: AshleyStore;
+  store: BeethovenStore;
   env: WizardEnv;
   extensionPath: string;
   /** the grid's own diagnosis, fetched once per run (and again after a grid repair) */
@@ -27,10 +27,10 @@ export interface DiagCtx {
   log(line: string): void;
 }
 
-export function makeCtx(store: AshleyStore, env: WizardEnv, extensionPath: string, withNodeProbe: boolean, log: (l: string) => void): DiagCtx {
+export function makeCtx(store: BeethovenStore, env: WizardEnv, extensionPath: string, withNodeProbe: boolean, log: (l: string) => void): DiagCtx {
   let cache: Promise<GridDiag | null> | null = null;
   const fetchDiag = async (args: string[]): Promise<GridDiag | null> => {
-    const r = await ssh(env.settings.sshAlias, ['~/.ashley/bin/ashley', 'diag', '--json', ...args], { timeoutMs: 240_000 });
+    const r = await ssh(env.settings.sshAlias, gridCli(['diag', '--json', ...args]), { timeoutMs: 240_000 });
     log(`grid diag ${args.join(' ')} -> exit ${r.code}`);
     try {
       return JSON.parse(r.stdout.trim().split('\n').pop() ?? '') as GridDiag;
@@ -64,7 +64,7 @@ async function stepCheck(step: { check(env: WizardEnv): Promise<{ status: string
   return r.status === 'done' ? ok(r.detail) : r.status === 'skipped' ? skip(r.detail) : fail(r.detail);
 }
 
-/** A grid node answered by `ashley diag`; repairs go through `ashley diag --repair` unless given. */
+/** A grid node answered by `beethoven diag`; repairs go through `beethoven diag --repair` unless given. */
 function gridNode(id: string, title: string, dependsOn: string[], assumption: string, manualFix: string, futureRisk: string, repair?: DiagNode<DiagCtx>['repair'], slow = false): DiagNode<DiagCtx> {
   return {
     id,
@@ -74,7 +74,7 @@ function gridNode(id: string, title: string, dependsOn: string[], assumption: st
     assumption,
     manualFix,
     futureRisk,
-    source: 'grid/ashley (cmd_diag)',
+    source: 'grid/beethoven (cmd_diag)',
     slow,
     async check(ctx) {
       const d = await ctx.grid();
@@ -101,7 +101,7 @@ export function buildGraph(): DiagNode<DiagCtx>[] {
   // ---------------------------------------------------------------- laptop and VS Code
   add({
     id: 'laptop.os', title: 'Operating system', layer: 'laptop', dependsOn: [],
-    assumption: 'Windows 10/11, macOS or Linux on x64 or arm64', manualFix: 'Ashley supports Windows, macOS and Linux laptops',
+    assumption: 'Windows 10/11, macOS or Linux on x64 or arm64', manualFix: 'Beethoven supports Windows, macOS and Linux laptops',
     futureRisk: 'a new OS release changing OpenSSH or the keychain', source: 'extension/src/extension.ts',
     async check() { return ['win32', 'darwin', 'linux'].includes(process.platform) ? ok(`${process.platform} ${process.arch}`) : fail(`unsupported platform ${process.platform}`); },
   });
@@ -156,7 +156,7 @@ export function buildGraph(): DiagNode<DiagCtx>[] {
   });
   add({
     id: 'vscode.shell-integration', title: 'Terminal shell integration', layer: 'vscode', dependsOn: ['vscode.version'],
-    assumption: 'terminal.integrated.shellIntegration.enabled is on (Ashley reads the Claude token from the terminal)',
+    assumption: 'terminal.integrated.shellIntegration.enabled is on (Beethoven reads the Claude token from the terminal)',
     manualFix: 'Settings: Terminal > Integrated > Shell Integration: Enabled', source: 'extension/src/vscode/panel.ts (runCapturing)',
     async check() { return vscode.workspace.getConfiguration('terminal.integrated').get<boolean>('shellIntegration.enabled', true) ? ok('enabled') : fail('disabled'); },
     async repair() { await vscode.workspace.getConfiguration('terminal.integrated').update('shellIntegration.enabled', true, vscode.ConfigurationTarget.Global); return { ok: true, detail: 'enabled' }; },
@@ -166,10 +166,10 @@ export function buildGraph(): DiagNode<DiagCtx>[] {
     assumption: 'tokens can be stored and read back from the OS keychain', manualFix: 'Linux: install a keyring (gnome-keyring or kwallet); restart VS Code',
     futureRisk: 'a keychain backend change', source: 'extension/src/vscode/store.ts',
     async check(ctx) {
-      const probe = `ashley-probe-${Date.now()}`;
-      await ctx.store.setSecretRaw('ashley.diag-probe', probe);
-      const back = await ctx.store.getSecretRaw('ashley.diag-probe');
-      await ctx.store.setSecretRaw('ashley.diag-probe', undefined);
+      const probe = `beethoven-probe-${Date.now()}`;
+      await ctx.store.setSecretRaw('beethoven.diag-probe', probe);
+      const back = await ctx.store.getSecretRaw('beethoven.diag-probe');
+      await ctx.store.setSecretRaw('beethoven.diag-probe', undefined);
       return back === probe ? ok('write and read back work') : fail('a stored value did not read back');
     },
   });
@@ -201,8 +201,8 @@ export function buildGraph(): DiagNode<DiagCtx>[] {
   add({
     id: 'laptop.terms', title: 'License terms accepted', layer: 'account', dependsOn: ['vscode.version'],
     assumption: 'the current version of the agreement and privacy statement was accepted in the signing dialog, and the record with the texts is on this laptop',
-    manualFix: 'run any Ashley command: the signing dialog appears; Ashley: Read the license terms shows the text',
-    fixCommand: { command: 'ashley.terms', title: 'Accept the terms' },
+    manualFix: 'run any Beethoven command: the signing dialog appears; Beethoven: Read the license terms shows the text',
+    fixCommand: { command: 'beethoven.terms', title: 'Accept the terms' },
     futureRisk: 'a new terms version (every installation is asked again); the record folder deleted by hand',
     source: 'extension/src/core/terms.ts, extension/src/vscode/termsPanel.ts',
     async check(ctx) {
@@ -212,10 +212,10 @@ export function buildGraph(): DiagNode<DiagCtx>[] {
     },
   });
   add({
-    id: 'laptop.license', title: 'Ashley license', layer: 'account', dependsOn: ['laptop.terms'],
+    id: 'laptop.license', title: 'Beethoven license', layer: 'account', dependsOn: ['laptop.terms'],
     assumption: 'a license key signed by a key this release trusts, in date (or in its grace period), not withdrawn',
-    manualFix: 'Ashley: License, then paste the key your lead sent; a new key if it ended or was withdrawn',
-    fixCommand: { command: 'ashley.license', title: 'Enter the key' },
+    manualFix: 'Beethoven: License, then paste the key your lead sent; a new key if it ended or was withdrawn',
+    fixCommand: { command: 'beethoven.license', title: 'Enter the key' },
     futureRisk: 'the signing key rotating (a new release trusts the new key); the revocation list address moving',
     source: 'grid/license.js, extension/src/core/license.ts, extension/src/vscode/licenseGate.ts',
     async check(ctx) {
@@ -228,9 +228,9 @@ export function buildGraph(): DiagNode<DiagCtx>[] {
   });
   add({
     id: 'account.license-identity', title: 'License names the signed-in person', layer: 'account', dependsOn: ['laptop.license', 'account.wsu'],
-    assumption: 'the AccessID (or e-mail) in the license matches the Wayne State sign-in Ashley recorded',
+    assumption: 'the AccessID (or e-mail) in the license matches the Wayne State sign-in Beethoven recorded',
     manualFix: 'sign in with the account the license names (setup step "Sign in with Wayne State"), or ask your lead for a license in your name',
-    fixCommand: { command: 'ashley.wsuSignIn', title: 'Sign in with Wayne State' },
+    fixCommand: { command: 'beethoven.wsuSignIn', title: 'Sign in with Wayne State' },
     futureRisk: 'Wayne State changing the sign-in e-mail format (AccessID@wayne.edu)',
     source: 'grid/license.js (identityMatches), extension/src/core/wizard.ts (stepWsuSignIn)',
     async check(ctx) {
@@ -246,28 +246,28 @@ export function buildGraph(): DiagNode<DiagCtx>[] {
   // ---------------------------------------------------------------- accounts (the wizard's own checks)
   add({ id: 'account.wsu', title: 'Wayne State sign-in and the lab list', layer: 'account', dependsOn: ['vscode.version', 'laptop.license'], assumption: 'signed in with AccessID@wayne.edu; AccessID on the pre-approved list',
     manualFix: 'run the wizard step "Sign in with Wayne State"; if not on the list, ask your lead', futureRisk: 'the WSU tenant blocking VS Code sign-in', source: 'extension/src/core/wizard.ts (stepWsuSignIn)',
-    fixCommand: { command: 'ashley.wsuSignIn', title: 'Sign in with Wayne State' },
+    fixCommand: { command: 'beethoven.wsuSignIn', title: 'Sign in with Wayne State' },
     check: (ctx) => stepCheck(stepWsuSignIn, ctx) });
-  // the fix button and the token's row in the Ashley view run the wizard's own step for that token
+  // the fix button and the token's row in the Beethoven view run the wizard's own step for that token
   const tokenNode = (id: string, step: typeof stepGithub, title: string): DiagNode<DiagCtx> => ({
     id, title, layer: 'account', dependsOn: ['account.wsu'], assumption: `${title} stored in the keychain and accepted by the service`,
-    manualFix: `press Renew next to "${step.title}" in the setup panel, or click its row in the Ashley view`, futureRisk: 'token formats or scopes changing', source: 'extension/src/core/wizard.ts (tokenStep)',
-    fixCommand: { command: 'ashley.renewToken', title: 'Renew', arguments: [step.id] },
+    manualFix: `press Renew next to "${step.title}" in the setup panel, or click its row in the Beethoven view`, futureRisk: 'token formats or scopes changing', source: 'extension/src/core/wizard.ts (tokenStep)',
+    fixCommand: { command: 'beethoven.renewToken', title: 'Renew', arguments: [step.id] },
     check: (ctx) => stepCheck(step, ctx),
   });
   add(tokenNode('account.github', stepGithub, 'GitHub token'));
   add(tokenNode('account.huggingface', stepHuggingFace, 'Hugging Face token'));
   add({ id: 'account.claude', title: 'Claude on this laptop', layer: 'account', dependsOn: ['account.wsu', 'vscode.claude-binary'],
-    assumption: 'Claude Code on this laptop is signed in with the student\'s own Claude Pro or Max subscription (Ashley reads status only)',
+    assumption: 'Claude Code on this laptop is signed in with the student\'s own Claude Pro or Max subscription (Beethoven reads status only)',
     manualFix: 'sign in to Claude Code on this laptop (setup step "Claude on this laptop")', futureRisk: 'claude auth status changing its output; plan names changing', source: 'extension/src/core/wizard.ts (stepClaudeLocal)',
-    fixCommand: { command: 'ashley.claudeLocalSignIn', title: 'Sign in' },
+    fixCommand: { command: 'beethoven.claudeLocalSignIn', title: 'Sign in' },
     check: (ctx) => stepCheck(stepClaudeLocal, ctx) });
 
   // ---------------------------------------------------------------- SSH to the grid
   add({ id: 'laptop.ssh-key', title: 'SSH key for the grid', layer: 'laptop', dependsOn: ['laptop.ssh-keygen', 'account.wsu'], assumption: '~/.ssh/id_ed25519_wsu and .pub exist',
     manualFix: 'run the wizard steps "SSH key" and "Log in to the grid once"', source: 'extension/src/core/wizard.ts (stepSshKey)', check: (ctx) => stepCheck(stepSshKey, ctx) });
   add({ id: 'laptop.ssh-config', title: 'SSH configuration block', layer: 'laptop', dependsOn: ['laptop.ssh-key'],
-    assumption: 'the Ashley block in ~/.ssh/config is current (jump host, MACs +hmac-sha1, AddressFamily inet, *.nas.grid.wayne.edu)',
+    assumption: 'the Beethoven block in ~/.ssh/config is current (jump host, MACs +hmac-sha1, AddressFamily inet, *.nas.grid.wayne.edu)',
     manualFix: 'run the wizard step "SSH configuration"', futureRisk: 'the grid dropping hmac-sha1 or renaming nodes', source: 'extension/src/core/sshConfig.ts',
     check: (ctx) => stepCheck(stepSshConfig, ctx),
     async repair(ctx) { const r = await stepSshConfig.run(ctx.env); return { ok: r.status === 'done', detail: r.detail }; } });
@@ -283,7 +283,7 @@ export function buildGraph(): DiagNode<DiagCtx>[] {
       return ok(`${t.hostname} in ${s.toFixed(1)} s`, s > 6);
     } });
   add({ id: 'laptop.relay', title: 'Prompt relay (open session)', layer: 'network', dependsOn: ['grid.relay'],
-    assumption: 'one persistent ssh session carries prompts in tens of milliseconds', manualFix: 'Ashley falls back to one ssh per prompt; check the grid relay node', source: 'extension/src/core/relay.ts',
+    assumption: 'one persistent ssh session carries prompts in tens of milliseconds', manualFix: 'Beethoven falls back to one ssh per prompt; check the grid relay node', source: 'extension/src/core/relay.ts',
     async check(ctx) {
       const r = new GridRelay(ctx.env.settings.sshAlias);
       try {
@@ -297,24 +297,24 @@ export function buildGraph(): DiagNode<DiagCtx>[] {
       }
     } });
 
-  // ---------------------------------------------------------------- the grid (answered by `ashley diag`)
-  G.push({ ...gridNode('grid.scripts', 'Ashley scripts on the grid', ['network.grid-login'], 'the grid has this extension\'s scripts (same version, LF line endings)',
-    'run the wizard step "Install on the grid"', 'a home directory restore or clean-up removing ~/.ashley',
+  // ---------------------------------------------------------------- the grid (answered by `beethoven diag`)
+  G.push({ ...gridNode('grid.scripts', 'Beethoven scripts on the grid', ['network.grid-login'], 'the grid has this extension\'s scripts (same version, LF line endings)',
+    'run the wizard step "Install on the grid"', 'a home directory restore or clean-up removing ~/.beethoven',
     async (ctx) => { const r = await stepGridInstall.run(ctx.env); await ctx.grid(true); return { ok: r.status === 'done', detail: `re-uploaded: ${r.detail}` }; }),
     async check(ctx) {
       const d = await ctx.grid();
-      if (!d) return fail('Ashley does not answer on the grid (not installed?)');
+      if (!d) return fail('Beethoven does not answer on the grid (not installed?)');
       const n = d.nodes.find((x) => x.id === 'grid.scripts');
       let want = '';
       try { want = fs.readFileSync(path.join(ctx.env.settings.gridScriptsDir, 'VERSION'), 'utf8').trim(); } catch { /* none */ }
-      if (want && String(d.version) !== want) return fail(`the grid runs Ashley v${d.version}; this extension brings v${want}`);
+      if (want && String(d.version) !== want) return fail(`the grid runs Beethoven v${d.version}; this extension brings v${want}`);
       return n?.ok ? ok(n.detail) : fail(n?.detail ?? 'scripts missing');
     } });
-  add(gridNode('grid.bashrc-block', 'Ashley block in ~/.bashrc', ['grid.scripts'], 'the block exporting the VS Code sysroot variables and PATH', 'ssh wsu-grid "~/.ashley/bin/ashley install"', 'a new default .bashrc from C&IT'));
+  add(gridNode('grid.bashrc-block', 'Beethoven block in ~/.bashrc', ['grid.scripts'], 'the block exporting the VS Code sysroot variables and PATH', 'ssh wsu-grid "~/.beethoven/bin/beethoven install"', 'a new default .bashrc from C&IT'));
   add(gridNode('grid.vscode-sysroot', 'VS Code compatibility libraries (C&IT sysroot)', ['grid.bashrc-block'], '/wsu/apps/vscode sysroot and patchelf exist at the paths in the block', 'ask hpc@wayne.edu where the VS Code sysroot moved', 'Wayne State moving or upgrading the sysroot (repair rediscovers it)'));
-  add(gridNode('grid.login-tmp', 'Nothing of yours left under /tmp on the login node', ['grid.scripts'], 'no container build leftovers (rootfs-*, build-temp-*, apptainer*) or files over 50 MB of yours under /tmp on the login node, which C&IT keeps free of user files; Ashley builds containers only inside Slurm jobs with node-local temp and cache', 'ssh wsu-grid and remove your files under /tmp (repair removes the recognisable leftovers)', 'a container command run by hand on the login node; a build job killed before its cleanup trap'));
+  add(gridNode('grid.login-tmp', 'Nothing of yours left under /tmp on the login node', ['grid.scripts'], 'no container build leftovers (rootfs-*, build-temp-*, apptainer*) or files over 50 MB of yours under /tmp on the login node, which C&IT keeps free of user files; Beethoven builds containers only inside Slurm jobs with node-local temp and cache', 'ssh wsu-grid and remove your files under /tmp (repair removes the recognisable leftovers)', 'a container command run by hand on the login node; a build job killed before its cleanup trap'));
   add(gridNode('grid.slurm', 'Slurm commands', ['grid.scripts'], 'sbatch, squeue, sacct, scancel work on the login node', 'contact hpc@wayne.edu', 'a Slurm upgrade changing output formats'));
-  add(gridNode('grid.slurm-visibility', 'Access requests visible to the admin', ['grid.slurm'], 'Slurm PrivateData=none (the admin sees held ashley_access jobs)', 'the admin can grant directly without a request', 'C&IT enabling PrivateData=jobs'));
+  add(gridNode('grid.slurm-visibility', 'Access requests visible to the admin', ['grid.slurm'], 'Slurm PrivateData=none (the admin sees the held access-request jobs)', 'the admin can grant directly without a request', 'C&IT enabling PrivateData=jobs'));
   add(gridNode('grid.qos', 'Slurm partitions and QoS', ['grid.slurm'], 'the account has the requeue or secondary QoS', 'ask your lead / hpc@wayne.edu for the QoS', 'QoS renamed by C&IT'));
   add(gridNode('grid.internet', 'Internet from the grid', ['grid.scripts'], 'HTTPS from the login node; curl reads secrets from stdin (-K -)', 'contact hpc@wayne.edu', 'a proxy introduced on the grid'));
   add(gridNode('grid.acl-tools', 'ACL tools (setfacl/getfacl)', ['grid.scripts'], 'POSIX ACL tools present (lab access)', 'contact hpc@wayne.edu', 'the lab volume moved to a filesystem without ACLs'));
@@ -322,13 +322,13 @@ export function buildGraph(): DiagNode<DiagCtx>[] {
   const pushRepair: DiagNode<DiagCtx>['repair'] = async (ctx) => { const r = await pushTokens(ctx.env); await ctx.grid(true); return r; };
   add(gridNode('grid.token-github', 'GitHub token on the grid', ['grid.internet', 'account.github'], 'the grid copy of the GitHub token verifies', 'press Renew next to GitHub', 'GitHub token expiry policies', pushRepair));
   add(gridNode('grid.token-hf', 'Hugging Face token on the grid', ['grid.internet', 'account.huggingface'], 'the grid copy of the Hugging Face token verifies', 'press Renew next to Hugging Face', 'Hugging Face token changes', pushRepair));
-  add({ ...gridNode('grid.claude-login', 'Claude signed in on the grid', ['grid.scripts', 'account.claude'], 'Claude Code on the grid reports its own sign-in (made by the student with ashley claude login; Ashley never touches the credential)', 'run Ashley: Sign in to Claude on the grid (the sign-in lasts about a month)', 'Anthropic changing the login flow or its lifetime', undefined),
-    fixCommand: { command: 'ashley.claudeSignIn', title: 'Sign in on the grid' } });
+  add({ ...gridNode('grid.claude-login', 'Claude signed in on the grid', ['grid.scripts', 'account.claude'], 'Claude Code on the grid reports its own sign-in (made by the student with beethoven claude login; Beethoven never touches the credential)', 'run Beethoven: Sign in to Claude on the grid (the sign-in lasts about a month)', 'Anthropic changing the login flow or its lifetime', undefined),
+    fixCommand: { command: 'beethoven.claudeSignIn', title: 'Sign in on the grid' } });
   add({
-    id: 'grid.license', title: 'Ashley license on the grid', layer: 'grid-login', dependsOn: ['grid.scripts', 'account.license-identity'],
+    id: 'grid.license', title: 'Beethoven license on the grid', layer: 'grid-login', dependsOn: ['grid.scripts', 'account.license-identity'],
     assumption: 'the grid has the same license key as this laptop, and every running worker accepts it for this grid account',
-    manualFix: 'Troubleshoot and repair copies it; a worker started before licensing needs a restart (Ashley: Stop a worker, then Start)',
-    futureRisk: 'a worker template older than the license check', source: 'grid/ashley (cmd_diag, license_fp), grid/ashleyd.js (checkLicense)',
+    manualFix: 'Troubleshoot and repair copies it; a worker started before licensing needs a restart (Beethoven: Stop a worker, then Start)',
+    futureRisk: 'a worker template older than the license check', source: 'grid/beethoven (cmd_diag, license_fp), grid/beethovend.js (checkLicense)',
     async check(ctx) {
       const d = await ctx.grid();
       const n = d?.nodes.find((x) => x.id === 'grid.license');
@@ -341,16 +341,16 @@ export function buildGraph(): DiagNode<DiagCtx>[] {
     },
     repair: pushRepair,
   });
-  add(gridNode('grid.accounts', 'Claude accounts on the grid', ['grid.claude-login'], 'one subscription token per person, no copied logins, and every account shares one session history (so a conversation survives a move to your API key)', 'Troubleshoot and repair links the history; remove extra accounts with: ssh wsu-grid "ashley accounts remove NAME"', 'Claude Code moving where --resume looks for transcripts', undefined));
+  add(gridNode('grid.accounts', 'Claude accounts on the grid', ['grid.claude-login'], 'one subscription token per person, no copied logins, and every account shares one session history (so a conversation survives a move to your API key)', 'Troubleshoot and repair links the history; remove extra accounts with: ssh wsu-grid "beethoven accounts remove NAME"', 'Claude Code moving where --resume looks for transcripts', undefined));
   add(gridNode('grid.lab-access', 'Lab access', ['account.claude', 'grid.token-github', 'grid.token-hf', 'grid.slurm'], 'the lab folder is readable (approved), or a request is pending', 'the last wizard step: Join the lab', 'the lab folder moving'));
   add(gridNode('grid.runtime', 'Container runtime (Apptainer)', ['grid.scripts'], 'the configured apptainer executable exists (repair switches to the current module)', 'ask your lead to republish the container', 'Wayne State upgrading or removing the apptainer module'));
-  add(gridNode('grid.container', 'Lab Claude container', ['grid.lab-access', 'grid.runtime'], 'the lab container is adopted (repair runs ashley adopt)', 'wait for lab access', 'a republished container at a new path'));
-  add(gridNode('grid.relay', 'Prompt relay on the login node', ['grid.scripts'], 'ashley relay answers PING', 'reinstall Ashley on the grid', 'bash changes on the login node'));
-  add(gridNode('grid.lab-folder', 'Lab folder layout (admin)', ['grid.acl-tools'], 'the lab folder is closed to other users and requests go through Slurm', 'ssh wsu-grid "ashley access init"', 'someone widening permissions by hand'));
+  add(gridNode('grid.container', 'Lab Claude container', ['grid.lab-access', 'grid.runtime'], 'the lab container is adopted (repair runs beethoven adopt)', 'wait for lab access', 'a republished container at a new path'));
+  add(gridNode('grid.relay', 'Prompt relay on the login node', ['grid.scripts'], 'beethoven relay answers PING', 'reinstall Beethoven on the grid', 'bash changes on the login node'));
+  add(gridNode('grid.lab-folder', 'Lab folder layout (admin)', ['grid.acl-tools'], 'the lab folder is closed to other users and requests go through Slurm', 'ssh wsu-grid "beethoven access init"', 'someone widening permissions by hand'));
   add({
     id: 'grid.worker', title: 'Claude workers', layer: 'grid-slurm', dependsOn: ['grid.container', 'grid.qos'],
-    assumption: 'every running worker job has a daemon that answers (heartbeat under 90 s)', manualFix: 'Ashley: Stop a worker, then Start a worker',
-    futureRisk: 'node images changing under the container', source: 'grid/ashleyd.js, grid/worker.sbatch.tpl',
+    assumption: 'every running worker job has a daemon that answers (heartbeat under 90 s)', manualFix: 'Beethoven: Stop a worker, then Start a worker',
+    futureRisk: 'node images changing under the container', source: 'grid/beethovend.js, grid/worker.sbatch.tpl',
     async check(ctx) {
       const d = await ctx.grid();
       const ws = (d?.nodes ?? []).filter((x) => x.id.startsWith('grid.worker'));
@@ -363,7 +363,7 @@ export function buildGraph(): DiagNode<DiagCtx>[] {
       const dead = (d?.nodes ?? []).filter((x) => x.id.startsWith('grid.worker.') && !x.ok).map((x) => x.id.replace('grid.worker.', ''));
       const outs: string[] = [];
       for (const w of dead) {
-        const r = await ssh(ctx.env.settings.sshAlias, ['~/.ashley/bin/ashley', 'worker', 'restart', '--name', w], { timeoutMs: 120_000 });
+        const r = await ssh(ctx.env.settings.sshAlias, gridCli(['worker', 'restart', '--name', w]), { timeoutMs: 120_000 });
         outs.push((r.stdout + r.stderr).trim());
       }
       await ctx.grid(true);
@@ -374,9 +374,9 @@ export function buildGraph(): DiagNode<DiagCtx>[] {
   add(gridNode('node.probe', 'Compute node and container', ['grid.worker'], 'inside a worker: the container runs node and Claude Code, has a pseudo-terminal and HTTPS', 'restart the worker; if it persists tell your lead', 'a node OS or kernel update breaking the container', undefined, true));
   add({
     id: 'grid.phone', title: 'Phone access', layer: 'grid-node', dependsOn: ['grid.worker'], assumption: 'when turned on, the worker\'s Remote Control session runs',
-    manualFix: 'Ashley: Phone access (sign in again if asked)', futureRisk: 'Remote Control flags or login flow changing', source: 'grid/phone.js',
+    manualFix: 'Beethoven: Phone access (sign in again if asked)', futureRisk: 'Remote Control flags or login flow changing', source: 'grid/phone.js',
     async check(ctx) {
-      const r = await ssh(ctx.env.settings.sshAlias, ['~/.ashley/bin/ashley', 'phone', 'status', '--worker', 'default', '--json'], { timeoutMs: 60_000 });
+      const r = await ssh(ctx.env.settings.sshAlias, gridCli(['phone', 'status', '--worker', 'default', '--json']), { timeoutMs: 60_000 });
       if (r.code !== 0) return skip('no default worker');
       try {
         const j = JSON.parse(r.stdout.trim().split('\n').pop() ?? '{}');
@@ -393,7 +393,7 @@ export function buildGraph(): DiagNode<DiagCtx>[] {
   // ---------------------------------------------------------------- the bridge to the local Claude
   add({
     id: 'vscode.mcp-bridge', title: 'Claude Code bridge to the grid (MCP)', layer: 'vscode', dependsOn: ['vscode.claude-binary', 'network.grid-login'],
-    assumption: 'the ashley MCP server is registered with Claude Code and connects', manualFix: 'Ashley: Connect the Claude Code extension to the grid',
+    assumption: 'the beethoven MCP server is registered with Claude Code and connects', manualFix: 'Beethoven: Connect the Claude Code extension to the grid',
     futureRisk: 'claude mcp CLI changes; Electron-as-node removed from VS Code', source: 'extension/src/vscode/mcpRegister.ts',
     async check() { return (await isMcpRegistered()) ? ok('registered') : fail('not registered'); },
     async repair(ctx) { const r = await registerMcp(ctx.extensionPath, ctx.env.settings.sshAlias, ctx.log); return { ok: r.ok, detail: `${r.how}: ${r.detail.split('\n')[0]}` }; },

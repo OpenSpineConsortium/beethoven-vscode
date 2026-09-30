@@ -1,10 +1,10 @@
 #!/bin/bash
-# Ashley (c) 2026 OpenSpineConsortium. Licensed software: use requires a license key. See LICENSE.txt.
-# Ashley worker "@NAME@": a persistent Claude Code session for one student, in a Singularity
-# container on a compute node. It watches ~/.ashley/workers/@NAME@/inbox and answers into
-# outbox. Resumable: `ashley worker start --name @NAME@` again; queued requests survive.
-# Written by `ashley worker start` from worker.sbatch.tpl; do not edit by hand.
-#SBATCH --job-name=ashley_@NAME@
+# Beethoven for VS Code (c) 2026 OpenSpineConsortium. Licensed software: use requires a license key. See LICENSE.txt.
+# Beethoven worker "@NAME@": a persistent Claude Code session for one student, in a Singularity
+# container on a compute node. It watches ~/.beethoven/workers/@NAME@/inbox and answers into
+# outbox. Resumable: `beethoven worker start --name @NAME@` again; queued requests survive.
+# Written by `beethoven worker start` from worker.sbatch.tpl; do not edit by hand.
+#SBATCH --job-name=beethoven_@NAME@
 #SBATCH --partition=@PARTITION@
 #SBATCH --qos=@QOS@
 #SBATCH --nodes=1
@@ -19,12 +19,12 @@
 @GRES@
 @REQUEUE@
 set -uo pipefail
-ASHLEY_HOME="${ASHLEY_HOME:-$HOME/.ashley}"
-W="${SLURM_SUBMIT_DIR:-$ASHLEY_HOME/workers/@NAME@}"
+BEETHOVEN_HOME="${BEETHOVEN_HOME:-${ASHLEY_HOME:-$HOME/.beethoven}}"
+W="${SLURM_SUBMIT_DIR:-$BEETHOVEN_HOME/workers/@NAME@}"
 cd "$W" || exit 1
 say() { echo "$(date -u +%FT%TZ) $*"; }
 # shellcheck disable=SC1090
-source "$ASHLEY_HOME/config.env" || { echo "REFUSING: no config.env"; exit 1; }
+source "$BEETHOVEN_HOME/config.env" || { echo "REFUSING: no config.env"; exit 1; }
 # a worker may run a container from the lab's shared library instead of the account's own
 W_SANDBOX="@SANDBOX@"; W_CLAUDE="@CLAUDE_BIN@"; LIBRARY_ROOT="@LIBRARY@"
 [ -n "$W_SANDBOX" ] && SANDBOX="$W_SANDBOX"
@@ -37,7 +37,7 @@ for v in RUNTIME SANDBOX CLAUDE_BIN ROOT; do [ -n "${!v:-}" ] || { echo "REFUSIN
 hostname -f > node.part && mv node.part node
 echo "${SLURM_JOB_ID:-x}" > job.id
 say "worker @NAME@ job ${SLURM_JOB_ID:-x} on $(hostname -f); cpus=${SLURM_CPUS_PER_TASK:-?} mem=@MEM@ time=@TIME@"
-SCR=/dev/shm/${USER}_ashley_@NAME@_${SLURM_JOB_ID:-x}; mkdir -p "$SCR" || { echo "REFUSING: no /dev/shm scratch"; exit 1; }
+SCR=/dev/shm/${USER}_beethoven_@NAME@_${SLURM_JOB_ID:-x}; mkdir -p "$SCR" || { echo "REFUSING: no /dev/shm scratch"; exit 1; }
 trap 'rm -rf "$SCR"' EXIT
 export TMPDIR="$SCR"
 # Slurm from inside the container, so the worker's Claude can submit and watch jobs. Bound read-only:
@@ -73,6 +73,9 @@ NV=""; [ "@GPUS@" != "0" ] && NV="--nv"
 # shellcheck disable=SC2086,SC2206
 BIND_ARR=($BINDS)
 # ${ARR[@]+...}: bash 4.2 (CentOS 7) calls an empty array unbound under set -u
+# the daemon reads the BEETHOVEN_ names; the ASHLEY_ twins (the names before grid scripts 7) go along
+# for anything older that the worker's Claude may start
 exec "$RUNTIME" exec $NV "${BIND_ARR[@]}" ${SLURM_ARGS[@]+"${SLURM_ARGS[@]}"} -B "$SCR:/tmp" "$SANDBOX" \
-  env HOME="$HOME" ASHLEY_HOME="$ASHLEY_HOME" ASHLEY_ROOT="$ROOT" SLURM_JOB_ID="${SLURM_JOB_ID:-x}" TMPDIR=/tmp ASHLEY_SLURM_BIN="$SLURM_BIN" \
-  node "$ASHLEY_HOME/bin/ashleyd.js" --worker-dir "$W" --claude "$CLAUDE_BIN" --concurrency @CONC@
+  env HOME="$HOME" BEETHOVEN_HOME="$BEETHOVEN_HOME" BEETHOVEN_ROOT="$ROOT" BEETHOVEN_SLURM_BIN="$SLURM_BIN" \
+  ASHLEY_HOME="$BEETHOVEN_HOME" ASHLEY_ROOT="$ROOT" ASHLEY_SLURM_BIN="$SLURM_BIN" SLURM_JOB_ID="${SLURM_JOB_ID:-x}" TMPDIR=/tmp \
+  node "$BEETHOVEN_HOME/bin/beethovend.js" --worker-dir "$W" --claude "$CLAUDE_BIN" --concurrency @CONC@

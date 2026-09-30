@@ -7,11 +7,11 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as L from '../../../grid/license.js';
 
-const EXT_ID = 'openspineconsortium.ashley';
+const EXT_ID = 'openspineconsortium.beethoven';
 const here = __dirname; // extension/dist-test/vscode/vscode-test
 const repo = path.resolve(here, '..', '..', '..', '..');
 
-suite('Ashley as packaged', () => {
+suite('Beethoven as packaged', () => {
   const ext = () => vscode.extensions.getExtension(EXT_ID)!;
   const internal = () => (ext().exports as any)._internal;
 
@@ -31,8 +31,8 @@ suite('Ashley as packaged', () => {
   test('refuses to work without a license', async () => {
     await internal().terms.accept('off');
     assert.equal(internal().licenseGate().check(true).status, 'missing');
-    assert.equal(await vscode.commands.executeCommand('ashley.workerStop'), internal().REFUSED);
-    assert.equal(await vscode.commands.executeCommand('ashley.gridStatus'), internal().REFUSED);
+    assert.equal(await vscode.commands.executeCommand('beethoven.workerStop'), internal().REFUSED);
+    assert.equal(await vscode.commands.executeCommand('beethoven.gridStatus'), internal().REFUSED);
   });
 
   test('does not trust the test signing key', async () => {
@@ -43,17 +43,17 @@ suite('Ashley as packaged', () => {
   });
 
   test('accepts a key issued with the release key, for the person it names', async function () {
-    const key = process.env.ASHLEY_RELEASE_TEST_LICENSE;
+    const key = process.env.BEETHOVEN_RELEASE_TEST_LICENSE;
     if (!key) return this.skip();
     const g = internal().licenseGate();
     const c = await g.set(key);
     assert.equal(c.ok, true, c.detail);
     const sub = c.payload.sub;
-    assert.equal(g.allowed('ashley.workerStop').ok, false, 'not before the sign-in');
+    assert.equal(g.allowed('beethoven.workerStop').ok, false, 'not before the sign-in');
     await g.recordIdentity({ accessId: sub, email: `${sub}@wayne.edu` });
-    assert.equal(g.allowed('ashley.workerStop').ok, true);
+    assert.equal(g.allowed('beethoven.workerStop').ok, true);
     await g.recordIdentity({ accessId: 'zz0001', email: 'zz0001@wayne.edu' });
-    assert.equal(g.allowed('ashley.workerStop').ok, false, 'someone else signed in');
+    assert.equal(g.allowed('beethoven.workerStop').ok, false, 'someone else signed in');
     await g.remove();
   });
 });

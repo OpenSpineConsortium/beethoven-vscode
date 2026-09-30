@@ -1,7 +1,7 @@
-// Sending error reports to Ashley's maintainer, when the person has left that on.
+// Sending error reports to Beethoven's maintainer, when the person has left that on.
 // Rules, all checkable: only after a troubleshooter run that found a failure or made a repair;
-// only if ashley.diagnostics.share is "on" AND VS Code's own telemetry is enabled; only to the
-// address in ashley.diagnostics.endpoint (empty = keep reports on this laptop and send nothing);
+// only if beethoven.diagnostics.share is "on" AND VS Code's own telemetry is enabled; only to the
+// address in beethoven.diagnostics.endpoint (empty = keep reports on this laptop and send nothing);
 // the same failure at most once a day; every report that was sent is kept under the extension's
 // storage so the person can read exactly what left. The report never contains an AccessID,
 // e-mail, path, hostname, prompt, file content or token (core/diagReport.ts scrubs it).
@@ -12,9 +12,10 @@ import * as path from 'node:path';
 import * as crypto from 'node:crypto';
 import type { DiagReport } from '../core/diagnostics';
 import { buildSharedReport, worthSending, REPORT_FIELDS, SharedReport } from '../core/diagReport';
+import { settings } from './settings';
 
-const INSTALL_KEY = 'ashley.installId';
-const SENT_KEY = 'ashley.diagnostics.sent'; // signature -> iso time
+const INSTALL_KEY = 'beethoven.installId';
+const SENT_KEY = 'beethoven.diagnostics.sent'; // signature -> iso time
 
 export class DiagSharer {
   constructor(
@@ -24,7 +25,7 @@ export class DiagSharer {
   ) {}
 
   private cfg() {
-    return vscode.workspace.getConfiguration('ashley');
+    return settings;
   }
   enabled(): boolean {
     return this.cfg().get<string>('diagnostics.share', 'on') === 'on' && vscode.env.isTelemetryEnabled;
@@ -54,7 +55,7 @@ export class DiagSharer {
     const id = this.identity();
     const report = buildSharedReport(
       rep,
-      { installId: this.installId(), product: 'ashley', version: this.context.extension.packageJSON.version, gridScriptsVersion, vscode: vscode.version, os: `${os.platform()} ${os.release()}`, arch: os.arch(), errorLines },
+      { installId: this.installId(), product: 'beethoven-vscode', version: this.context.extension.packageJSON.version, gridScriptsVersion, vscode: vscode.version, os: `${os.platform()} ${os.release()}`, arch: os.arch(), errorLines },
       { accessId: id?.accessId, email: id?.email, home: os.homedir(), words: [os.hostname(), os.userInfo().username] },
     );
     fs.writeFileSync(path.join(this.dir(), `${report.when.replace(/[:.]/g, '-')}-${report.signature}.json`), JSON.stringify(report, null, 1));
@@ -74,7 +75,7 @@ export class DiagSharer {
     try {
       const res = await fetch(url.replace(/\/$/, '') + '/report', {
         method: 'POST',
-        headers: { 'content-type': 'application/json', 'user-agent': `ashley/${report.version}` },
+        headers: { 'content-type': 'application/json', 'user-agent': `beethoven-vscode/${report.version}` },
         body: JSON.stringify(report),
         signal: AbortSignal.timeout(20_000),
       });
@@ -89,24 +90,24 @@ export class DiagSharer {
     }
   }
 
-  /** Ashley: Error reports. */
+  /** Beethoven: Error reports. */
   async manage(): Promise<void> {
     const on = this.cfg().get<string>('diagnostics.share', 'on') === 'on';
     const files = fs.readdirSync(this.dir()).filter((f) => f.endsWith('.json')).sort();
     const items: Array<vscode.QuickPickItem & { id: string }> = [
       { id: 'state', label: `$(info) Error reports are ${on ? 'on' : 'off'}${on && !vscode.env.isTelemetryEnabled ? ' (but VS Code telemetry is off, so nothing is sent)' : ''}${on && !this.endpoint() ? ' (no report address configured: nothing is sent)' : ''}`, description: `${files.length} report(s) kept on this laptop` },
-      { id: 'toggle', label: on ? 'Turn error reports off' : 'Turn error reports on', description: 'Settings > Ashley > Diagnostics: Share' },
+      { id: 'toggle', label: on ? 'Turn error reports off' : 'Turn error reports on', description: 'Settings > Beethoven > Diagnostics: Share' },
       { id: 'fields', label: 'What a report contains', description: 'the field list' },
       { id: 'last', label: 'Open the latest report kept here', description: files[files.length - 1] ?? 'none yet' },
       { id: 'privacy', label: 'Read the privacy statement', description: 'PRIVACY.md' },
     ];
-    const pick = await vscode.window.showQuickPick(items, { title: 'Ashley error reports' });
+    const pick = await vscode.window.showQuickPick(items, { title: 'Beethoven error reports' });
     if (!pick) return;
     if (pick.id === 'toggle') {
       await this.cfg().update('diagnostics.share', on ? 'off' : 'on', vscode.ConfigurationTarget.Global);
-      void vscode.window.showInformationMessage(`Ashley error reports are now ${on ? 'off' : 'on'}.`);
+      void vscode.window.showInformationMessage(`Beethoven error reports are now ${on ? 'off' : 'on'}.`);
     } else if (pick.id === 'fields') {
-      const doc = await vscode.workspace.openTextDocument({ language: 'markdown', content: ['# What an Ashley error report contains', '', ...REPORT_FIELDS.map(([k, v]) => `- **${k}**: ${v}`), '', 'Never: prompts, file contents, tokens, your AccessID or e-mail, paths, hostnames, environment values.'].join('\n') });
+      const doc = await vscode.workspace.openTextDocument({ language: 'markdown', content: ['# What a Beethoven error report contains', '', ...REPORT_FIELDS.map(([k, v]) => `- **${k}**: ${v}`), '', 'Never: prompts, file contents, tokens, your AccessID or e-mail, paths, hostnames, environment values.'].join('\n') });
       await vscode.window.showTextDocument(doc, { preview: true });
     } else if (pick.id === 'last' && files.length) {
       await vscode.window.showTextDocument(vscode.Uri.file(path.join(this.dir(), files[files.length - 1])), { preview: true });

@@ -38,7 +38,7 @@ fs.copyFileSync(vsix, path.join(out, path.basename(vsix)));
 for (const f of ['CHANGELOG.md', 'LICENSE.txt', 'LICENSE-FULL.txt', 'PRIVACY.md', 'THIRD_PARTY_NOTICES.md']) fs.copyFileSync(path.join(EXT, f), path.join(out, f));
 if (!process.argv.includes('--no-sign')) {
   try {
-    run('node', [path.join(REPO, 'tools', 'license', 'ashley-license.mjs'), 'sign-release', out], REPO);
+    run('node', [path.join(REPO, 'tools', 'license', 'beethoven-license.mjs'), 'sign-release', out], REPO);
   } catch {
     console.log('release not signed (no signing key on this machine); SHA256SUMS.sig missing');
   }

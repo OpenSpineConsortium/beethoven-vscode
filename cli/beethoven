@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# beethoven (laptop, macOS/Linux/WSL): forwards to the grid-side CLI over ssh, for people who do not
+# use VS Code (Xcode users, terminal users). Needs only ssh and the ~/.ssh/config block that the
+# wizard writes (or `beethoven-cli ssh-config` prints). Reads a prompt on stdin for `send`/`ask`.
+#   beethoven status
+#   beethoven worker start --name default --hours 24
+#   echo '{"id":"...","prompt":"...","session":"default"}' | beethoven ask --worker default --json --stream
+#   beethoven connect            print the ssh command for the worker's node (VS Code Remote-SSH host)
+# The grid command is ~/.beethoven/bin/beethoven; an account whose grid install predates the rename
+# has only ~/.ashley/bin/ashley, which answers instead until the next grid install moves the folder.
+GRID="${BEETHOVEN_GRID:-${ASHLEY_GRID:-wsu-grid}}"   # ASHLEY_GRID: the variable's name before the rename
+PICK='b=$HOME/.beethoven/bin/beethoven; [ -x $b ] || b=$HOME/.ashley/bin/ashley; exec $b'
+if [ "${1:-}" = "connect" ]; then
+  node=$(ssh -o BatchMode=yes "$GRID" "$PICK worker node --name '${2:-default}'") || exit 1
+  echo "ssh $node        # Remote-SSH host: $node"
+  exit 0
+fi
+q=""; for a in "$@"; do q="$q $(printf %q "$a")"; done   # each argument quoted once for the remote bash
+if [ -t 0 ]; then
+  exec ssh -o BatchMode=yes -o ConnectTimeout=20 "$GRID" -- "$PICK$q"
+else
+  exec ssh -o BatchMode=yes -o ConnectTimeout=20 "$GRID" -- "$PICK$q" < /dev/stdin
+fi

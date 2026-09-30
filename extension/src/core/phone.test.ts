@@ -17,8 +17,8 @@ const fake = path.join(repo, 'extension', 'test-fixtures', 'fake-claude.js');
 const hasScript = process.platform !== 'win32' && spawnSync('script', ['--version'], { encoding: 'utf8' }).status === 0;
 const skip = hasScript ? false : 'needs util-linux script (runs on the grid; see docs/DIAGNOSTICS.md)';
 
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ashley-phone-'));
-const home = path.join(tmp, 'ashley-home');
+const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'beethoven-phone-'));
+const home = path.join(tmp, 'beethoven-home');
 const root = path.join(tmp, 'root');
 const cfg = path.join(home, 'claude'); // the student's own sign-in, stored by Claude Code
 const lease = path.join(home, 'remote', 'host.lock');
@@ -64,7 +64,7 @@ before(() => {
   process.env.ANTHROPIC_AUTH_TOKEN = 'leak-auth';
   process.env.ANTHROPIC_BASE_URL = 'https://elsewhere.invalid';
   process.env.CLAUDE_CODE_OAUTH_TOKEN = 'leak-oauth';
-  const mk = (w: string, job: string) => startPhone({ workerDir: path.join(home, 'workers', w), ashleyHome: home, claudeHome: cfg, root, claude: fake, node: `node-${w}`, job, log: (m: string) => logs.push(`${w}: ${m}`) });
+  const mk = (w: string, job: string) => startPhone({ workerDir: path.join(home, 'workers', w), beethovenHome: home, claudeHome: cfg, root, claude: fake, node: `node-${w}`, job, log: (m: string) => logs.push(`${w}: ${m}`) });
   A = mk('wa', '101');
   B = mk('wb', '202');
 });
@@ -75,11 +75,11 @@ after(() => {
   B.stop();
 });
 
-test('without the student\'s own sign-in, phone access waits and says what to do; Ashley signs nobody in', { skip }, async () => {
+test('without the student\'s own sign-in, phone access waits and says what to do; Beethoven signs nobody in', { skip }, async () => {
   enable('wa', true);
   assert.ok(await tickUntil(A, () => status('wa').phase === 'need_login', 10000), `need_login (${JSON.stringify(status('wa'))})`);
-  assert.match(status('wa').message, /ashley claude login/);
-  assert.ok(!fs.existsSync(path.join(home, 'workers', 'wa', 'rc', 'login.log')), 'no sign-in was attempted by Ashley');
+  assert.match(status('wa').message, /beethoven claude login/);
+  assert.ok(!fs.existsSync(path.join(home, 'workers', 'wa', 'rc', 'login.log')), 'no sign-in was attempted by Beethoven');
 });
 
 test('signed in but without the one-time Remote Control consent, it waits for the student\'s answer', { skip }, async () => {
@@ -131,7 +131,7 @@ test('an abandoned lease (no beat for over 60 s) is taken over', { skip }, async
   assert.equal(JSON.parse(fs.readFileSync(path.join(lease, 'holder.json'), 'utf8')).worker, 'wa');
 });
 
-test('when the sign-in ends, phone access stops and asks for a new sign-in; Ashley never runs logout', { skip }, async () => {
+test('when the sign-in ends, phone access stops and asks for a new sign-in; Beethoven never runs logout', { skip }, async () => {
   fs.rmSync(path.join(cfg, 'fake_logged_in'));
   // the running session ends as the real one does when its login expires
   const log = path.join(home, 'workers', 'wa', 'rc', 'session.log');

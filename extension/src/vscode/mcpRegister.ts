@@ -1,4 +1,6 @@
-// Registers dist/mcp-server.js with Claude Code so the local Claude gets the ashley_* tools.
+// Registers dist/mcp-server.js with Claude Code so the local Claude gets the beethoven_* tools.
+// Ashley for VS Code registered the same server as "ashley" (tools ashley_*); that entry points at
+// the old extension's folder and is removed here, unless Ashley itself is still installed.
 // Preferred: `claude mcp add-json --scope user` (works for the VS Code extension and the CLI,
 // survives workspace changes). Fallback: a .mcp.json in the workspace root (project scope).
 // The server needs a Node runtime: system node if present, else VS Code's own Electron
@@ -8,6 +10,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { run, which } from '../core/shell';
 import { findClaudeExecutable } from './store';
+import { oldEditionInstalled } from './oldEdition';
 
 export interface McpRegistration {
   ok: boolean;
@@ -27,7 +30,7 @@ export function mcpServerConfig(extensionPath: string, alias: string, node: { co
     type: 'stdio',
     command: node.command,
     args: [path.join(extensionPath, 'dist', 'mcp-server.js')],
-    env: { ...node.env, ASHLEY_GRID: alias, ASHLEY_WORKER: 'default' },
+    env: { ...node.env, BEETHOVEN_GRID: alias, BEETHOVEN_WORKER: 'default' },
   };
 }
 
@@ -35,13 +38,14 @@ export async function registerMcp(extensionPath: string, alias: string, log: (s:
   const node = await nodeForMcp();
   const config = mcpServerConfig(extensionPath, alias, node);
   const claude = findClaudeExecutable();
-  // add-json refuses a name that exists ("MCP server ashley already exists in user config", exit 1;
+  // add-json refuses a name that exists ("MCP server beethoven already exists in user config", exit 1;
   // measured on 2.1.283), and the path changes with every extension version: replace, never append
-  await run(claude, ['mcp', 'remove', '--scope', 'user', 'ashley'], { timeoutMs: 60_000 });
-  const r = await run(claude, ['mcp', 'add-json', '--scope', 'user', 'ashley', JSON.stringify(config)], { timeoutMs: 60_000 });
+  await run(claude, ['mcp', 'remove', '--scope', 'user', 'beethoven'], { timeoutMs: 60_000 });
+  const r = await run(claude, ['mcp', 'add-json', '--scope', 'user', 'beethoven', JSON.stringify(config)], { timeoutMs: 60_000 });
   log(`${r.command}\n${r.stdout}${r.stderr}`);
   if (r.code === 0) {
-    const list = await run(claude, ['mcp', 'get', 'ashley'], { timeoutMs: 60_000 });
+    if (!oldEditionInstalled()) await run(claude, ['mcp', 'remove', '--scope', 'user', 'ashley'], { timeoutMs: 60_000 });
+    const list = await run(claude, ['mcp', 'get', 'beethoven'], { timeoutMs: 60_000 });
     return { ok: true, how: 'claude-cli', detail: (list.stdout || r.stdout).trim(), config };
   }
   // fallback: project-scope .mcp.json
@@ -54,13 +58,14 @@ export async function registerMcp(extensionPath: string, alias: string, log: (s:
   } catch {
     /* new file */
   }
-  existing.mcpServers = { ...(existing.mcpServers ?? {}), ashley: config };
+  existing.mcpServers = { ...(existing.mcpServers ?? {}), beethoven: config };
+  if (!oldEditionInstalled()) delete existing.mcpServers.ashley;
   fs.writeFileSync(p, JSON.stringify(existing, null, 2) + '\n');
   return { ok: true, how: 'mcp-json', detail: `wrote ${p} (Claude Code asks once to approve project MCP servers)`, config };
 }
 
 export async function isMcpRegistered(): Promise<boolean> {
   const claude = findClaudeExecutable();
-  const r = await run(claude, ['mcp', 'get', 'ashley'], { timeoutMs: 30_000 });
-  return r.code === 0 && /ashley/.test(r.stdout);
+  const r = await run(claude, ['mcp', 'get', 'beethoven'], { timeoutMs: 30_000 });
+  return r.code === 0 && /beethoven/.test(r.stdout);
 }

@@ -14,6 +14,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { AGREE_BUTTON, Affirmation, TERMS_FILE, TERMS_TITLE, TERMS_VERSION, TermsEdition, TermsRecord, acceptanceComplete, affirmationsFor, readTermsRecord, sha256, writeTermsRecord } from '../core/terms';
+import { settings } from './settings';
 
 export interface SigningResult {
   record: TermsRecord;
@@ -31,28 +32,28 @@ export class TermsPanel {
     const privacy = fs.readFileSync(path.join(context.extensionPath, 'PRIVACY.md'), 'utf8');
     const licenseHash = sha256(license);
     const privacyHash = sha256(privacy);
-    const panel = vscode.window.createWebviewPanel('ashley.terms', edition === 'full' ? 'Ashley: Full Edition agreement' : 'Ashley: license terms', { viewColumn: vscode.ViewColumn.Active, preserveFocus: false }, { enableScripts: true, retainContextWhenHidden: true, enableFindWidget: true, localResourceRoots: [] });
+    const panel = vscode.window.createWebviewPanel('beethoven.terms', edition === 'full' ? 'Beethoven: Full Edition agreement' : 'Beethoven: license terms', { viewColumn: vscode.ViewColumn.Active, preserveFocus: false }, { enableScripts: true, retainContextWhenHidden: true, enableFindWidget: true, localResourceRoots: [] });
     const nonce = crypto.randomBytes(16).toString('base64');
     const summary = edition === 'full' ? [
-      'This is the paid Full Edition. It is licensed, not sold: you receive a license to use Ashley, not the software itself. From the moment you register the key, this agreement replaces the Trial Edition agreement.',
+      'This is the paid Full Edition. It is licensed, not sold: you receive a license to use Beethoven for VS Code, not the software itself. From the moment you register the key, this agreement replaces the Trial Edition agreement.',
       'Every copy needs a license key for the person using it, checked against your Wayne State sign-in. Fees are stated before you pay, for a fixed term, and never renew by themselves.',
-      'Ashley depends on your university\'s grid and network, on Anthropic (Claude and Claude Code), on Microsoft (VS Code and its Marketplace), on GitHub and on Hugging Face. Any of them can stop it working; after the 14-day refund window that is not refunded, but a long outage extends your license (sections 7 to 9).',
-      'Ashley stores no Claude credential: you sign in to Claude Code yourself, on the laptop and once on the grid. Your GitHub and Hugging Face tokens are kept in your keychain and copied, with your consent, into your own grid account.',
+      'Beethoven depends on your university\'s grid and network, on Anthropic (Claude and Claude Code), on Microsoft (VS Code and its Marketplace), on GitHub and on Hugging Face. Any of them can stop it working; after the 14-day refund window that is not refunded, but a long outage extends your license (sections 7 to 9).',
+      'Beethoven stores no Claude credential: you sign in to Claude Code yourself, on the laptop and once on the grid. Your GitHub and Hugging Face tokens are kept in your keychain and copied, with your consent, into your own grid account.',
       'Disputes: a signed written notice and 60 days to resolve it before any lawsuit; individual claims only (class-action waiver); Michigan courts, or small claims where you live; a jury waiver; one year to bring contract and warranty claims (sections 19 and 20). No arbitration in this version.',
       'Refunds: a paid key can be refunded on request within 14 days, once; after that, an outage caused by an outside dependency is not refunded but a long one extends your license.',
       'Electronic records: you receive the agreement and notices electronically, can save and print them ("Open in editor", "Save a copy"), can ask for a paper copy, and can withdraw this consent by stopping use. You need VS Code or a web browser to read them.',
-      'No warranty; liability is limited (sections 12 and 13). Ashley is a research tool and never for clinical use.',
-      'Error reports: with your permission, when one of Ashley\'s checks fails it sends its maintainer the versions, which checks failed and their messages with names, paths and secrets replaced. Never prompts, files, tokens or your AccessID. You choose below and can change it any time in Settings.',
+      'No warranty; liability is limited (sections 12 and 13). Beethoven is a research tool and never for clinical use.',
+      'Error reports: with your permission, when one of Beethoven\'s checks fails it sends its maintainer the versions, which checks failed and their messages with names, paths and secrets replaced. Never prompts, files, tokens or your AccessID. You choose below and can change it any time in Settings.',
     ] : [
-      'This is the free Trial Edition. It is licensed, not sold: you receive a license to use Ashley, not the software itself. Nothing is paid, nothing converts into a paid license, and no charge ever follows.',
-      'Only Wayne State AccessIDs the lab has approved can use it. After you sign in with Wayne State, Ashley obtains an access key in your name; the key is checked against that sign-in on every use. Approval can be refused or withdrawn, and the Trial Edition can end with 30 days\' notice.',
-      'Ashley depends on your university\'s grid and network, on Anthropic (Claude and Claude Code), on Microsoft (VS Code and its Marketplace), on GitHub and on Hugging Face. Any of them can stop it working; because nothing is paid, nothing is refunded (sections 7 to 9).',
-      'Ashley stores no Claude credential: you sign in to Claude Code yourself, on the laptop and once on the grid. Your GitHub and Hugging Face tokens are kept in your keychain and copied, with your consent, into your own grid account.',
+      'This is the free Trial Edition. It is licensed, not sold: you receive a license to use Beethoven for VS Code, not the software itself. Nothing is paid, nothing converts into a paid license, and no charge ever follows.',
+      'Only Wayne State AccessIDs the lab has approved can use it. After you sign in with Wayne State, Beethoven obtains an access key in your name; the key is checked against that sign-in on every use. Approval can be refused or withdrawn, and the Trial Edition can end with 30 days\' notice.',
+      'Beethoven depends on your university\'s grid and network, on Anthropic (Claude and Claude Code), on Microsoft (VS Code and its Marketplace), on GitHub and on Hugging Face. Any of them can stop it working; because nothing is paid, nothing is refunded (sections 7 to 9).',
+      'Beethoven stores no Claude credential: you sign in to Claude Code yourself, on the laptop and once on the grid. Your GitHub and Hugging Face tokens are kept in your keychain and copied, with your consent, into your own grid account.',
       'Disputes: a signed written notice and 60 days to resolve it before any lawsuit; individual claims only (class-action waiver); Michigan courts, or small claims where you live; a jury waiver; one year to bring contract and warranty claims (sections 19 and 20). No arbitration in this version.',
       'If a paid Full Edition is offered later, you may keep the Trial Edition for as long as it is offered, or register a Full Edition key by accepting its own agreement in this same dialog. Nothing here obliges you to buy anything.',
       'Electronic records: you receive the agreement and notices electronically, can save and print them ("Open in editor", "Save a copy"), can ask for a paper copy, and can withdraw this consent by stopping use. You need VS Code or a web browser to read them.',
-      'No warranty; liability is limited (sections 12 and 13). Ashley is a research tool and never for clinical use.',
-      'Error reports: with your permission, when one of Ashley\'s checks fails it sends its maintainer the versions, which checks failed and their messages with names, paths and secrets replaced. Never prompts, files, tokens or your AccessID. You choose below and can change it any time in Settings.',
+      'No warranty; liability is limited (sections 12 and 13). Beethoven is a research tool and never for clinical use.',
+      'Error reports: with your permission, when one of Beethoven\'s checks fails it sends its maintainer the versions, which checks failed and their messages with names, paths and secrets replaced. Never prompts, files, tokens or your AccessID. You choose below and can change it any time in Settings.',
     ];
     panel.webview.html = `<!DOCTYPE html>
 <html lang="en">
@@ -105,7 +106,7 @@ ${AFFIRMATIONS.map((a) => `<div class="box"><input type="checkbox" id="aff-${a.i
 </fieldset>
 <fieldset>
 <legend>Error reports</legend>
-<div class="box"><input type="checkbox" id="diag" checked><label for="diag">Send Ashley's maintainer an error report when one of its checks fails (scrubbed of names, paths and secrets; never prompts, files, tokens or my AccessID). I can turn this off any time in Settings.</label></div>
+<div class="box"><input type="checkbox" id="diag" checked><label for="diag">Send Beethoven's maintainer an error report when one of its checks fails (scrubbed of names, paths and secrets; never prompts, files, tokens or my AccessID). I can turn this off any time in Settings.</label></div>
 </fieldset>
 <div class="row">
   <label for="name">Type your full name as your signature:</label>
@@ -173,7 +174,7 @@ ${AFFIRMATIONS.map((a) => `<div class="box"><input type="checkbox" id="aff-${a.i
           const doc = await vscode.workspace.openTextDocument({ language: 'plaintext', content: `${license}\n\n\n==================== PRIVACY STATEMENT ====================\n\n${privacy}` });
           await vscode.window.showTextDocument(doc, { viewColumn: vscode.ViewColumn.Beside, preview: false });
         } else if (m.type === 'save') {
-          const target = await vscode.window.showSaveDialog({ title: 'Save the Ashley agreement and privacy statement', defaultUri: vscode.Uri.file(path.join(os.homedir(), `Ashley-${edition}-edition-agreement-v${TERMS_VERSION}.txt`)), filters: { Text: ['txt'] } });
+          const target = await vscode.window.showSaveDialog({ title: 'Save the Beethoven agreement and privacy statement', defaultUri: vscode.Uri.file(path.join(os.homedir(), `Beethoven-${edition}-edition-agreement-v${TERMS_VERSION}.txt`)), filters: { Text: ['txt'] } });
           if (target) {
             fs.writeFileSync(target.fsPath, `${license}\n\n\n==================== PRIVACY STATEMENT ====================\n\n${privacy}`);
             void vscode.window.showInformationMessage(`Saved to ${target.fsPath}`);
@@ -213,12 +214,12 @@ ${AFFIRMATIONS.map((a) => `<div class="box"><input type="checkbox" id="aff-${a.i
           };
           try {
             const where = writeTermsRecord(record, { license, privacy });
-            await context.globalState.update(edition === 'full' ? 'ashley.terms.full' : 'ashley.terms', record);
-            await vscode.workspace.getConfiguration('ashley').update('diagnostics.share', record.diagnostics, vscode.ConfigurationTarget.Global);
+            await context.globalState.update(edition === 'full' ? 'beethoven.terms.full' : 'beethoven.terms', record);
+            await settings.update('diagnostics.share', record.diagnostics, vscode.ConfigurationTarget.Global);
             output.appendLine(`terms ${TERMS_VERSION} (${edition}) accepted ${record.accepted_at} by "${record.signed_name}" (license ${licenseHash.slice(0, 12)}, privacy ${privacyHash.slice(0, 12)}); record ${where}; error reports ${record.diagnostics}`);
             finish(record);
           } catch (e) {
-            void vscode.window.showErrorMessage(`Ashley could not save the acceptance record: ${(e as Error).message}`);
+            void vscode.window.showErrorMessage(`Beethoven could not save the acceptance record: ${(e as Error).message}`);
           }
         }
       });
@@ -229,7 +230,7 @@ ${AFFIRMATIONS.map((a) => `<div class="box"><input type="checkbox" id="aff-${a.i
   static current(context: vscode.ExtensionContext, edition: TermsEdition = 'trial'): TermsRecord | undefined {
     const fromFile = readTermsRecord(edition);
     if (fromFile) return fromFile;
-    const r = context.globalState.get<TermsRecord>(edition === 'full' ? 'ashley.terms.full' : 'ashley.terms');
+    const r = context.globalState.get<TermsRecord>(edition === 'full' ? 'beethoven.terms.full' : 'beethoven.terms');
     return r && r.terms_version === TERMS_VERSION && (r.edition ?? 'trial') === edition ? r : undefined;
   }
 }

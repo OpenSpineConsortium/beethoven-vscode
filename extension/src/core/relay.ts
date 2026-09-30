@@ -1,12 +1,12 @@
 // A persistent message channel to the grid: one ssh session to the login node running
-// `ashley relay`, kept open; each prompt is one line on its stdin, answers come back as lines.
+// `beethoven relay`, kept open; each prompt is one line on its stdin, answers come back as lines.
 // No per-message handshake, so a prompt reaches the worker's inbox in the network round trip
 // (tens of milliseconds) instead of a fresh ssh connection (about two seconds). Reconnects
 // on its own if the session drops; callers see a rejected promise for whatever was in flight.
 import { ChildProcess, spawn } from 'node:child_process';
 import * as readline from 'node:readline';
-import { SSH_BATCH_OPTS } from './shell';
-import { AshleyRequest, AshleyResult } from './protocol';
+import { SSH_BATCH_OPTS, gridCliLine } from './shell';
+import { BeethovenRequest, BeethovenResult } from './protocol';
 
 export interface RelayEvents {
   onEvent?(id: string, event: Record<string, unknown>): void;
@@ -16,7 +16,7 @@ export interface RelayEvents {
 
 interface Waiter {
   resolveQueued?: (ms: number) => void;
-  resolveResult?: (r: AshleyResult) => void;
+  resolveResult?: (r: BeethovenResult) => void;
   reject: (e: Error) => void;
   onEvent?: (event: Record<string, unknown>) => void;
   timer?: NodeJS.Timeout;
@@ -36,8 +36,8 @@ export class GridRelay {
     if (this.child && this.ready) return this.ready;
     this.events.onStatus?.('connecting');
     this.ready = new Promise<void>((resolve, reject) => {
-      // the path is left unquoted so the remote shell expands ~ (it contains no spaces)
-      const child = spawn('ssh', [...SSH_BATCH_OPTS, '-o', 'ServerAliveInterval=30', this.alias, '--', '~/.ashley/bin/ashley relay'], { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+      // one line for the remote shell: the grid command (or its name before the rename) with 'relay'
+      const child = spawn('ssh', [...SSH_BATCH_OPTS, '-o', 'ServerAliveInterval=30', this.alias, '--', gridCliLine(['relay'])], { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
       this.child = child;
       let settled = false;
       let stderr = '';
@@ -119,7 +119,7 @@ export class GridRelay {
       const w = this.waiters.get(id);
       if (!w) return;
       try {
-        const r = JSON.parse(rest.slice(sp2 + 1)) as AshleyResult;
+        const r = JSON.parse(rest.slice(sp2 + 1)) as BeethovenResult;
         this.waiters.delete(id);
         if (w.timer) clearTimeout(w.timer);
         w.resolveResult?.(r);
@@ -163,7 +163,7 @@ export class GridRelay {
   }
 
   /** Queue a request; resolves with the grid's queue time (epoch ms, grid clock) as soon as the file is written. */
-  async send(req: AshleyRequest, worker = 'default'): Promise<{ queuedGridMs: number }> {
+  async send(req: BeethovenRequest, worker = 'default'): Promise<{ queuedGridMs: number }> {
     await this.ensure();
     return new Promise((resolve, reject) => {
       const w: Waiter = { reject, resolveQueued: (ms) => resolve({ queuedGridMs: ms }) };
@@ -176,9 +176,9 @@ export class GridRelay {
   }
 
   /** Queue a request and wait for its result, receiving events as they stream. */
-  async ask(req: AshleyRequest, worker = 'default', timeoutSec = 3600, onEvent?: (ev: Record<string, unknown>) => void): Promise<AshleyResult> {
+  async ask(req: BeethovenRequest, worker = 'default', timeoutSec = 3600, onEvent?: (ev: Record<string, unknown>) => void): Promise<BeethovenResult> {
     await this.ensure();
-    return new Promise<AshleyResult>((resolve, reject) => {
+    return new Promise<BeethovenResult>((resolve, reject) => {
       const w: Waiter = { reject, onEvent, resolveResult: resolve, resolveQueued: () => {} };
       w.timer = setTimeout(() => {
         this.waiters.delete(req.id);
@@ -189,7 +189,7 @@ export class GridRelay {
     });
   }
 
-  async result(id: string, worker = 'default'): Promise<AshleyResult | null> {
+  async result(id: string, worker = 'default'): Promise<BeethovenResult | null> {
     await this.ensure();
     return new Promise((resolve, reject) => {
       const w: Waiter = { reject, resolveResult: (r) => resolve(r), resolveQueued: () => {} };

@@ -4,7 +4,7 @@
 
 Order: pitch, getting started, how it works (ARCHITECTURE + figures), limits, install,
 troubleshooting, appendix pointers. pandoc embeds the SVG figures and the CSS; Edge headless
-prints the PDF; the HTML is also copied into extension/media so "Ashley: Open the manual" shows it.
+prints the PDF; the HTML is also copied into extension/media so "Beethoven: Open the manual" shows it.
 """
 from __future__ import annotations
 import os, re, shutil, subprocess, sys, datetime
@@ -28,12 +28,12 @@ def figure(path, caption):
 parts = []
 today = datetime.date.today().isoformat()
 parts.append(f"""---
-title: "Ashley"
-subtitle: "The Wayne State grid and Claude Code, from one wizard. Manual, version 1.0.0"
+title: "Beethoven for VS Code"
+subtitle: "The Wayne State grid and Claude Code, from one wizard. Manual for version 4.0.0"
 date: "{today}"
 ---
 
-> Ashley is a VS Code extension for medical students in OpenSpineConsortium projects. It sets up the laptop for the Wayne State HPC grid, keeps a Claude Code worker running there on the student's own subscription, and lets the Claude Code extension on the laptop hand work to it. This manual is the pitch, the first hour, how it works, what you can and cannot ask, installation, and troubleshooting. The design notes and the research behind them are in the repository (`docs/ARCHITECTURE.md`, `docs/RESEARCH.md`).
+> Beethoven for VS Code (called Ashley for VS Code until version 3.0.0) is a VS Code extension for medical students in OpenSpineConsortium projects. It sets up the laptop for the Wayne State HPC grid, keeps a Claude Code worker running there on the student's own subscription, and lets the Claude Code extension on the laptop hand work to it. This manual is the pitch, the first hour, how it works, what you can and cannot ask, installation, and troubleshooting. The design notes and the research behind them are in the repository (`docs/ARCHITECTURE.md`, `docs/RESEARCH.md`).
 
 """)
 parts.append("# Why\n\n" + demote(read("PITCH.md")).split("\n", 1)[1])
@@ -53,10 +53,10 @@ parts.append("""# Appendix
 
 - `docs/RESEARCH.md`: the research behind the design (Claude Code headless mode, subscription limits and terms, containers on this grid, multi-account tools, orchestration patterns, VS Code Remote-SSH on old glibc, Xcode, literature APIs), with sources and which findings were independently verified.
 - `docs/DIAGNOSTICS.md`: the troubleshooter's dependency graph, the rule that every feature adds its checks before it is integrated, and what the dependency study found and fixed.
-- `docs/DEPENDENCY_MAP.md`: every assumption Ashley makes (370 entries), with the check, what a failure looks like and how to fix it; search it for an error message the troubleshooter does not name.
-- `docs/research/claude_swap_notes.md`: what Ashley took from claude-swap and cswap-desktop, and the plan for the next release.
+- `docs/DEPENDENCY_MAP.md`: every assumption Beethoven makes (370 entries), with the check, what a failure looks like and how to fix it; search it for an error message the troubleshooter does not name.
+- `docs/research/claude_swap_notes.md`: what Beethoven took from claude-swap and cswap-desktop, and the plan for the next release.
 - `docs/CHECKPOINT_2026-09-28.md`: the state of the project on the day this manual was built, including what was tested and what was not.
-- `Student_Projects/RECIPE.md`: the lab's method; Ashley is the on-ramp to it.
+- `Student_Projects/RECIPE.md`: the lab's method; Beethoven is the on-ramp to it.
 - C&IT: "How to SSH to the Grid in Visual Studio Code" and "How do I set up and use Google Authenticator for the Grid" (services.wayne.edu knowledge base).
 """)
 src = os.path.join(BUILD, "manual.md")
@@ -72,7 +72,7 @@ subprocess.run(cmd, check=True)
 size = os.path.getsize(html)
 print(f"wrote {html} ({size//1024} KB)")
 
-# copy into the extension so the command "Ashley: Open the manual" can show it offline
+# copy into the extension so the command "Beethoven: Open the manual" can show it offline
 media = os.path.join(ROOT, "extension", "media", "manual.html")
 shutil.copyfile(html, media)
 print("copied to", media)

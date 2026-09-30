@@ -1,21 +1,23 @@
 'use strict';
-/*! Ashley (c) 2026. Licensed software: use requires a license key. See LICENSE.txt. */
+/*! Beethoven for VS Code (c) 2026 OpenSpineConsortium. Licensed software: use requires a license key. See LICENSE.txt. */
 // Phone access: Claude Code's Remote Control, hosted by the worker job, so the Claude app (or
 // claude.ai/code) drives a Claude session on the grid with no workstation.
 //
-// Ashley never signs in for the student and never handles a Claude credential. The student signs
-// in once, in a terminal, through Claude Code's own flow (`ashley claude login` runs
+// Beethoven never signs in for the student and never handles a Claude credential. The student signs
+// in once, in a terminal, through Claude Code's own flow (`beethoven claude login` runs
 // `claude auth login` inside their allocation), and Claude Code keeps its credential in
-// ~/.ashley/claude, the one CLAUDE_CONFIG_DIR every Claude Code process Ashley starts on the grid
-// uses. The student also answers Claude Code's one-time "Enable Remote Control?" question
-// themselves (`ashley claude remote-consent`), which writes the marker file below. Only then does
+// ~/.beethoven/claude, the one CLAUDE_CONFIG_DIR every Claude Code process Beethoven starts on the
+// grid uses. The student also answers Claude Code's one-time "Enable Remote Control?" question
+// themselves (`beethoven claude remote-consent`), which writes the marker files below. Only then does
 // this module run `claude remote-control` in a pseudo-terminal in a trusted folder, restart it if
 // it exits, and report the session link. Everything is driven by files:
 //   <worker>/rc/enable         present = phone access wanted
 //   <worker>/rc/status.json    {phase, session_url, message, updated}
 //   <worker>/rc/session.log    the pseudo-terminal transcript
-//   ~/.ashley/claude/.ashley-remote-consent   the student answered "Enable Remote Control?" once
-//   ~/.ashley/remote/host.lock/holder.json    which worker hosts the phone (one at a time)
+//   ~/.beethoven/claude/.beethoven-remote-consent   the student answered "Enable Remote Control?" once
+//   ~/.beethoven/claude/.ashley-remote-consent      the same answer under its name before grid scripts 7
+//                                                   (both are written; either counts)
+//   ~/.beethoven/remote/host.lock/holder.json       which worker hosts the phone (one at a time)
 // phases: off, need_login, need_consent, starting, running, elsewhere, error
 //
 // Only ONE worker may host: every worker shares the one login, and two Remote Control hosts on
@@ -37,17 +39,19 @@ function clean(s) {
 }
 
 function startPhone(o) {
+  // the grid folder: beethovenHome (ashleyHome, its option name before grid scripts 7, still accepted)
+  const HOME_DIR = o.beethovenHome || o.ashleyHome;
   const RC = path.join(o.workerDir, 'rc');
-  const CFG = o.claudeHome || path.join(o.ashleyHome, 'claude');
+  const CFG = o.claudeHome || path.join(HOME_DIR, 'claude');
   const PROJ = path.join(o.root, 'workspaces', 'phone');
   const ENABLE = path.join(RC, 'enable');
   const STATUS = path.join(RC, 'status.json');
-  const CONSENT = path.join(CFG, '.ashley-remote-consent');
+  const CONSENT = [path.join(CFG, '.beethoven-remote-consent'), path.join(CFG, '.ashley-remote-consent')];
   // Claude Code records the student's answer to "Enable Remote Control?" itself, as remoteDialogSeen
   // in its config file (a setting, not a credential). That answer counts; the marker file is the
   // fallback for a config Claude Code has not written yet. Only that one key is read.
   function consentGiven() {
-    if (fs.existsSync(CONSENT)) return true;
+    if (CONSENT.some((f) => fs.existsSync(f))) return true;
     try {
       const j = JSON.parse(fs.readFileSync(path.join(CFG, '.claude.json'), 'utf8'));
       return j && j.remoteDialogSeen === true;
@@ -55,7 +59,7 @@ function startPhone(o) {
       return false;
     }
   }
-  const LEASE = path.join(o.ashleyHome, 'remote', 'host.lock');
+  const LEASE = path.join(HOME_DIR, 'remote', 'host.lock');
   const HOLDER = path.join(LEASE, 'holder.json');
   const log = o.log || (() => {});
   const me = { worker: path.basename(o.workerDir), node: o.node, job: o.job, pid: process.pid };
@@ -87,7 +91,7 @@ function startPhone(o) {
   function claudeCmd(args) {
     return o.claude.endsWith('.js') ? `'${process.execPath}' '${o.claude}' ${args}` : `'${o.claude}' ${args}`;
   }
-  /** Claude Code's own answer about its stored login; Ashley reads status, never the credential. */
+  /** Claude Code's own answer about its stored login; Beethoven reads status, never the credential. */
   function loggedIn(force) {
     if (!force && Date.now() - loggedInCache.at < 60_000) return loggedInCache.value;
     const cmd = o.claude.endsWith('.js') ? process.execPath : o.claude;
@@ -143,7 +147,7 @@ function startPhone(o) {
         mine.lastAnswer = Date.now();
         if (consentGiven()) child.stdin.write('y\r');
         else {
-          write({ phase: 'need_consent', session_url: null, message: 'Claude Code asks once whether to enable Remote Control; answer it yourself with: ashley claude remote-consent (Ashley: Phone access does this)' });
+          write({ phase: 'need_consent', session_url: null, message: 'Claude Code asks once whether to enable Remote Control; answer it yourself with: beethoven claude remote-consent (Beethoven: Phone access does this)' });
           child.kill('SIGTERM');
         }
         return;
@@ -160,7 +164,7 @@ function startPhone(o) {
       if (st.phase === 'need_consent') return;
       if (/must be logged in|not logged in|log in again|expired|Please run \/login/i.test(out)) {
         loggedInCache = { at: 0, value: false };
-        write({ phase: 'need_login', message: 'the Claude sign-in on the grid ended; sign in again with: ashley claude login (Ashley: Sign in to Claude on the grid)', session_url: null });
+        write({ phase: 'need_login', message: 'the Claude sign-in on the grid ended; sign in again with: beethoven claude login (Beethoven: Sign in to Claude on the grid)', session_url: null });
       } else if (fs.existsSync(ENABLE)) {
         restartAt = Date.now() + backoff;
         backoff = Math.min(backoff * 2, 5 * 60_000);
@@ -242,16 +246,16 @@ function startPhone(o) {
         if (session) stopAll();
         const where = `worker ${lease.worker || '?'}${lease.node ? ` on ${lease.node}` : ''}`;
         if (st.phase !== 'elsewhere') log(`phone: ${where} already hosts phone access`);
-        write({ phase: 'elsewhere', session_url: null, message: `phone access is hosted by ${where}; turn it on here with Ashley: Phone access to move it` });
+        write({ phase: 'elsewhere', session_url: null, message: `phone access is hosted by ${where}; turn it on here with Beethoven: Phone access to move it` });
         return;
       }
       if (session) return;
       if (!loggedIn(false)) {
-        if (st.phase !== 'need_login') write({ phase: 'need_login', session_url: null, message: 'sign in to Claude on the grid first: ashley claude login (Ashley: Sign in to Claude on the grid)' });
+        if (st.phase !== 'need_login') write({ phase: 'need_login', session_url: null, message: 'sign in to Claude on the grid first: beethoven claude login (Beethoven: Sign in to Claude on the grid)' });
         return;
       }
       if (!consentGiven()) {
-        if (st.phase !== 'need_consent') write({ phase: 'need_consent', session_url: null, message: 'answer Claude Code\'s one-time Remote Control question yourself: ashley claude remote-consent (Ashley: Phone access does this)' });
+        if (st.phase !== 'need_consent') write({ phase: 'need_consent', session_url: null, message: 'answer Claude Code\'s one-time Remote Control question yourself: beethoven claude remote-consent (Beethoven: Phone access does this)' });
         return;
       }
       if (Date.now() >= restartAt) startSession();

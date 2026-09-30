@@ -102,7 +102,7 @@ export function remotePath(p: string): string {
 /**
  * The remote command line for an argv: every argument quoted once, with a leading '~/' left
  * unquoted in EVERY argument (not only the first). A quoted '~/x' is a literal folder named '~':
- * `mkdir -p '~/.ashley/bin'` made exactly that on the grid on 2026-09-27.
+ * `mkdir -p '~/.ashley/bin'` made exactly that on the grid on 2026-09-27 (the folder's name before the rename).
  * Nothing else is expanded: pass `$USER` and the like through ['bash', '-c', '...'].
  */
 export function renderRemote(args: string[]): string {
@@ -136,11 +136,35 @@ export const SSH_BATCH_OPTS = ['-o', 'BatchMode=yes', '-o', 'ConnectTimeout=20',
 
 /**
  * Run a command on the grid. `remoteArgs` is an argv on the remote side; it is quoted once.
- * Example: ssh('wsu-grid', ['~/.ashley/bin/ashley', 'status']).
+ * Example: ssh('wsu-grid', gridCli(['status'])).
  * A leading '~/' in any argument is left unquoted so the remote shell expands it (renderRemote).
  */
 export function ssh(alias: string, remoteArgs: string[], opts: RunOptions = {}): Promise<RunResult> {
   return run('ssh', [...SSH_BATCH_OPTS, alias, '--', renderRemote(remoteArgs)], { timeoutMs: 120_000, ...opts });
+}
+
+/** The folder in the grid account and the grid command, since the rename (4.0.0). */
+export const GRID_HOME = '~/.beethoven';
+export const GRID_CLI = '~/.beethoven/bin/beethoven';
+/**
+ * Picks the grid command: ~/.beethoven/bin/beethoven, or ~/.ashley/bin/ashley on an account whose grid
+ * install predates the rename (kept so such an account answers, and is offered the update, instead of
+ * looking "not installed"; the next grid install moves the folder). No double quotes, so the line passes
+ * through Windows argument quoting unchanged; $HOME holds no spaces on the grid.
+ */
+const GRID_CLI_PICK = 'b=$HOME/.beethoven/bin/beethoven; [ -x $b ] || b=$HOME/.ashley/bin/ashley; exec $b';
+/**
+ * Sets $h to the grid folder: ~/.beethoven, or ~/.ashley on an account the rename has not moved yet.
+ * Files the laptop writes (license, tokens) go where that account's grid command reads them.
+ */
+export const GRID_HOME_PICK = 'h=$HOME/.beethoven; [ -d $h ] || [ ! -d $HOME/.ashley ] || h=$HOME/.ashley;';
+/** The remote argv for ssh(): the grid command with these arguments (stdin and the exit code pass through). */
+export function gridCli(args: string[]): string[] {
+  return ['bash', '-c', `${GRID_CLI_PICK} "$@"`, 'beethoven', ...args];
+}
+/** The same as one remote command line, for `ssh -t <alias> <line>` in a terminal and for the relay. */
+export function gridCliLine(args: string[]): string {
+  return [GRID_CLI_PICK, ...args.map(shq)].join(' ');
 }
 
 /** scp local files to a remote directory (files are given explicitly: no globbing on Windows). */

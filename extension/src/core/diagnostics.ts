@@ -1,4 +1,4 @@
-// The diagnostics engine: every tool, package, account, file and assumption Ashley depends on is a
+// The diagnostics engine: every tool, package, account, file and assumption Beethoven depends on is a
 // node with a cheap check, an optional safe repair, a manual fix and the risk it guards against.
 // A run goes in dependency order; a node whose dependency failed is reported "blocked" with the
 // root cause, so a failure names the one broken piece instead of a cascade.
@@ -167,7 +167,7 @@ export async function runDiagnostics<C>(nodes: DiagNode<C>[], ctx: C, opts: RunO
 /** A short text report for the log, grouped by layer, root causes first. */
 export function formatReport(rep: DiagReport): string {
   const icon: Record<NodeStatus, string> = { ok: 'PASS', warn: 'WARN', fail: 'FAIL', repaired: 'FIXD', blocked: 'BLKD', skipped: 'SKIP' };
-  const lines = [`Ashley troubleshooter ${rep.started} -> ${rep.finished}: ${rep.ok ? 'everything works' : `${rep.rootCauses.length} root cause(s)`}`];
+  const lines = [`Beethoven troubleshooter ${rep.started} -> ${rep.finished}: ${rep.ok ? 'everything works' : `${rep.rootCauses.length} root cause(s)`}`];
   for (const r of rep.rootCauses) lines.push(`  ROOT CAUSE ${r.id}: ${r.detail}${r.manualFix ? `\n             fix: ${r.manualFix}` : ''}${r.fixCommand ? `\n             one click: ${r.fixCommand.title} (${r.fixCommand.command})` : ''}`);
   let layer = '';
   for (const r of rep.reports) {

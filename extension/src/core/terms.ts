@@ -16,20 +16,20 @@
 // recipient cannot store or print is not enforceable against them).
 import * as crypto from 'node:crypto';
 import * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
+import { licenseDir } from './localDir';
 
 /** Bump when either agreement or PRIVACY.md changes in substance; every install re-accepts. Integer, never fractional. */
-export const TERMS_VERSION = 4;
-export const TERMS_DATE = '2026-09-28';
+export const TERMS_VERSION = 5;
+export const TERMS_DATE = '2026-09-30';
 
 export type TermsEdition = 'trial' | 'full';
 export const EDITIONS: TermsEdition[] = ['trial', 'full'];
 
 /** The agreement each edition shows, its title, and the file it ships in. */
 export const TERMS_TITLE: Record<TermsEdition, string> = {
-  trial: 'Ashley Trial Edition License Agreement',
-  full: 'Ashley Full Edition License Agreement',
+  trial: 'Beethoven for VS Code Trial Edition License Agreement',
+  full: 'Beethoven for VS Code Full Edition License Agreement',
 };
 export const TERMS_FILE: Record<TermsEdition, string> = {
   trial: 'LICENSE.txt',
@@ -80,7 +80,7 @@ export interface TermsRecord {
 
 const RIGHTS =
   'I specifically consent to the terms that change how a dispute is handled and what I can recover: written notice and 60 days to resolve it before any lawsuit, individual claims only with a class-action waiver, Michigan courts with small claims allowed where I live (section 19), the WAIVER OF JURY TRIAL (section 20), the one-year limit on contract and warranty claims, and the warranty disclaimer, exclusive remedy and liability limits (sections 12 and 13).';
-const AGE = 'I am 18 or older (or a parent or guardian accepting for me), and each account Ashley touches (Wayne State, Claude, GitHub, Hugging Face) is my own.';
+const AGE = 'I am 18 or older (or a parent or guardian accepting for me), and each account Beethoven for VS Code touches (Wayne State, Claude, GitHub, Hugging Face) is my own.';
 
 /** The affirmations the signing dialog shows for an edition, in order. The wording is part of the record. */
 export function affirmationsFor(edition: TermsEdition): Array<{ id: string; label: string }> {
@@ -88,13 +88,13 @@ export function affirmationsFor(edition: TermsEdition): Array<{ id: string; labe
     return [
       {
         id: 'read_agree',
-        label: `By ticking this box and choosing "Accept and Continue" below, I agree to the ${TERMS_TITLE.full} (version ${TERMS_VERSION}, ${TERMS_DATE}) and the Privacy Statement, which I have read, and I understand that it replaces the Trial Edition agreement for my use of Ashley.`,
+        label: `By ticking this box and choosing "Accept and Continue" below, I agree to the ${TERMS_TITLE.full} (version ${TERMS_VERSION}, ${TERMS_DATE}) and the Privacy Statement, which I have read, and I understand that it replaces the Trial Edition agreement for my use of Beethoven for VS Code.`,
       },
       { id: 'rights', label: RIGHTS },
       {
         id: 'risks',
         label:
-          'Known risks: Ashley depends on my university\'s grid and network, Anthropic, Microsoft, GitHub and Hugging Face; any of them can stop it working; after the 14-day refund window that is not refunded (a long outage extends a paid license); nothing releases the licensor from its own gross negligence, wilful misconduct or fraud; and Ashley is a research tool, never for clinical use. I accept these risks (section 8).',
+          'Known risks: Beethoven for VS Code depends on my university\'s grid and network, Anthropic, Microsoft, GitHub and Hugging Face; any of them can stop it working; after the 14-day refund window that is not refunded (a long outage extends a paid license); nothing releases the licensor from its own gross negligence, wilful misconduct or fraud; and Beethoven for VS Code is a research tool, never for clinical use. I accept these risks (section 8).',
       },
       { id: 'age_authority', label: AGE },
     ];
@@ -108,7 +108,7 @@ export function affirmationsFor(edition: TermsEdition): Array<{ id: string; labe
     {
       id: 'risks',
       label:
-        'Known risks: Ashley depends on my university\'s grid and network, Anthropic, Microsoft, GitHub and Hugging Face; any of them can stop it working; the Trial Edition is free, can be withdrawn or ended, and nothing is refunded because nothing is paid; nothing releases the licensor from its own gross negligence, wilful misconduct or fraud; and Ashley is a research tool, never for clinical use. I accept these risks (section 8).',
+        'Known risks: Beethoven for VS Code depends on my university\'s grid and network, Anthropic, Microsoft, GitHub and Hugging Face; any of them can stop it working; the Trial Edition is free, can be withdrawn or ended, and nothing is refunded because nothing is paid; nothing releases the licensor from its own gross negligence, wilful misconduct or fraud; and Beethoven for VS Code is a research tool, never for clinical use. I accept these risks (section 8).',
     },
     { id: 'age_authority', label: AGE },
   ];
@@ -122,7 +122,7 @@ export function sha256(text: string): string {
 }
 
 export function termsDir(): string {
-  return process.env.ASHLEY_LICENSE_DIR || path.join(os.homedir(), '.ashley-local');
+  return licenseDir();
 }
 
 function recordFile(edition: TermsEdition): string {
@@ -164,5 +164,5 @@ export function acceptanceComplete(affirmations: Affirmation[], signedName: stri
 }
 
 /** The one-line refusal every tool prints without a record. */
-export const TERMS_REFUSAL = 'The Ashley license terms have not been accepted on this computer yet: run any Ashley command in VS Code (the terms are shown), or ashley-cli terms.';
-export const FULL_TERMS_REFUSAL = 'A Full Edition key needs the Full Edition agreement accepted first: register the key in VS Code (Ashley: License), where the agreement is shown.';
+export const TERMS_REFUSAL = 'The Beethoven for VS Code license terms have not been accepted on this computer yet: run any Beethoven command in VS Code (the terms are shown), or beethoven-cli terms.';
+export const FULL_TERMS_REFUSAL = 'A Full Edition key needs the Full Edition agreement accepted first: register the key in VS Code (Beethoven: License), where the agreement is shown.';

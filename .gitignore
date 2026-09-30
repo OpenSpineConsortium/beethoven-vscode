@@ -2,6 +2,8 @@ node_modules/
 # the built extension is committed (students install it from here); bundles, unpacked copies and
 # test builds are not. dist/release/<version>/ holds each release with its signed checksums.
 /dist/*
+!/dist/beethoven-*.vsix
+# the builds before the rename (Ashley for VS Code 2.0.0 and 3.0.0) stay committed under their names
 !/dist/ashley-*.vsix
 !/dist/release/
 extension/dist/
@@ -20,10 +22,11 @@ secrets*
 # build intermediates for the manual
 docs/build/
 
-# license signing keys never enter the repository (they live in ~/.ashley-vendor); the one
-# exception is the test-only key that test builds trust
+# license signing keys never enter the repository (they live in the vendor folder ~/.beethoven-vendor,
+# ~/.ashley-vendor before the rename); the one exception is the test-only key that test builds trust
 *.pem
 !extension/test-fixtures/license/test-signing-key.pem
+.beethoven-vendor/
 .ashley-vendor/
 extension/build-meta/
 .wrangler/

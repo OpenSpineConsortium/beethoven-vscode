@@ -8,7 +8,7 @@ import { join, resolve } from 'node:path';
 // 'live': runs the whole troubleshooter against the real grid, read-only, using this machine's
 //   SSH setup and license; run with: npx vscode-test --label live
 // 'package': the packaged extension, unpacked (tools/release.mjs does this), minified and trusting
-//   only the release keys; run with: ASHLEY_PACKAGED_EXT=<dir> npx vscode-test --label package
+//   only the release keys; run with: BEETHOVEN_PACKAGED_EXT=<dir> npx vscode-test --label package
 const scratch = (p) => mkdtempSync(join(tmpdir(), p));
 export default defineConfig([
   {
@@ -17,7 +17,7 @@ export default defineConfig([
     version: 'stable',
     workspaceFolder: './test-fixtures/workspace',
     launchArgs: ['--disable-extensions', '--disable-gpu'],
-    env: { ASHLEY_LICENSE_DIR: scratch('ashley-vsc-lic-') },
+    env: { BEETHOVEN_LICENSE_DIR: scratch('beethoven-vsc-lic-') },
     mocha: { ui: 'tdd', timeout: 60_000 },
   },
   {
@@ -26,17 +26,17 @@ export default defineConfig([
     version: 'stable',
     workspaceFolder: './test-fixtures/live',
     launchArgs: ['--disable-gpu'],
-    env: { ASHLEY_LIVE: '1' },
+    env: { BEETHOVEN_LIVE: '1' },
     mocha: { ui: 'tdd', timeout: 600_000 },
   },
   {
     label: 'package',
     files: 'dist-test/vscode/**/package.test.js',
     version: 'stable',
-    extensionDevelopmentPath: resolve(process.env.ASHLEY_PACKAGED_EXT || '../dist/unpacked/extension'),
+    extensionDevelopmentPath: resolve(process.env.BEETHOVEN_PACKAGED_EXT || '../dist/unpacked/extension'),
     workspaceFolder: './test-fixtures/workspace',
     launchArgs: ['--disable-extensions', '--disable-gpu'],
-    env: { ASHLEY_LICENSE_DIR: scratch('ashley-pkg-lic-'), ASHLEY_RELEASE_TEST_LICENSE: process.env.ASHLEY_RELEASE_TEST_LICENSE || '' },
+    env: { BEETHOVEN_LICENSE_DIR: scratch('beethoven-pkg-lic-'), BEETHOVEN_RELEASE_TEST_LICENSE: process.env.BEETHOVEN_RELEASE_TEST_LICENSE || '' },
     mocha: { ui: 'tdd', timeout: 120_000 },
   },
 ]);

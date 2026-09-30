@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { makeRequest, newRequestId, looksRateLimited, parseResetTime } from './protocol';
 import { parseSqueue, parseSbatchId, workerStartArgs, describeWall } from './slurm';
 import { normaliseAccessId, gridHome, SERVICES, extractWrappedToken } from './services';
-import { shq, shjoin, renderRemote, remotePath } from './shell';
+import { shq, shjoin, renderRemote, remotePath, gridCli, gridCliLine, GRID_HOME_PICK } from './shell';
 
 test('request ids sort by time and are filesystem safe', () => {
   const a = newRequestId(new Date('2026-09-27T23:59:00Z'));
@@ -40,7 +40,7 @@ test('reset time parsing', () => {
 });
 
 test('squeue parsing', () => {
-  const rows = parseSqueue('40481725_1|armb_t1f_gpu|RUNNING|voh3|3:05:12|3-00:00:00|gvohp|None\n40486313|ashley_probe1|PENDING|(null)|0:00|1:30:00|reqp|(Priority)\n');
+  const rows = parseSqueue('40481725_1|armb_t1f_gpu|RUNNING|voh3|3:05:12|3-00:00:00|gvohp|None\n40486313|beethoven_probe1|PENDING|(null)|0:00|1:30:00|reqp|(Priority)\n');
   assert.equal(rows.length, 2);
   assert.equal(rows[0].node, 'voh3');
   assert.equal(rows[1].node, '');
@@ -70,7 +70,7 @@ test('token patterns accept real shapes and reject junk', () => {
   const gh = SERVICES.find((s) => s.id === 'github')!;
   assert.ok(gh.pattern!.test('ghp_' + 'a'.repeat(36)));
   assert.ok(!gh.pattern!.test('https://github.com/settings/tokens'));
-  assert.equal(SERVICES.find((s) => s.id === ('claudeOauth' as string)), undefined, 'Ashley stores no Claude credential');
+  assert.equal(SERVICES.find((s) => s.id === ('claudeOauth' as string)), undefined, 'Beethoven stores no Claude credential');
   assert.equal(SERVICES.find((s) => s.id === 'anthropicApiKey')!.injectLocally, false);
 });
 
@@ -81,10 +81,24 @@ test('remote quoting is single-layer POSIX', () => {
 
 test('every ~/ argument expands on the grid; nothing else does', () => {
   // the first install ran mkdir with quoted '~/...' paths and made a folder literally named '~'
-  assert.equal(renderRemote(['mkdir', '-p', '~/.ashley/bin', '~/.ashley/log']), `'mkdir' '-p' ~/'.ashley/bin' ~/'.ashley/log'`);
-  assert.equal(renderRemote(['~/.ashley/bin/ashley', 'status']), `~/'.ashley/bin/ashley' 'status'`);
+  assert.equal(renderRemote(['mkdir', '-p', '~/.beethoven/bin', '~/.beethoven/log']), `'mkdir' '-p' ~/'.beethoven/bin' ~/'.beethoven/log'`);
+  assert.equal(renderRemote(['~/.beethoven/bin/beethoven', 'status']), `~/'.beethoven/bin/beethoven' 'status'`);
   assert.equal(renderRemote(['echo', '$USER', 'a~/b', '~']), `'echo' '$USER' 'a~/b' ~`);
   assert.equal(remotePath("~/it's here"), `~/'it'\\''s here'`);
+});
+
+test('the grid command: the new path first, the one before the rename as the fallback', () => {
+  const argv = gridCli(['status', '--json']);
+  assert.deepEqual(argv.slice(0, 2), ['bash', '-c']);
+  assert.deepEqual(argv.slice(3), ['beethoven', 'status', '--json'], 'the arguments reach the command as "$@"');
+  assert.match(argv[2], /^b=\$HOME\/\.beethoven\/bin\/beethoven; \[ -x \$b \] \|\| b=\$HOME\/\.ashley\/bin\/ashley; exec \$b "\$@"$/);
+  // one argument over ssh: the script is quoted once, the arguments each once
+  assert.equal(renderRemote(argv).split("' '").length, 6);
+  const line = gridCliLine(['claude', 'login']);
+  assert.ok(line.endsWith(`exec $b 'claude' 'login'`));
+  assert.ok(!line.includes('"'), 'no double quotes: the line passes through Windows argument quoting unchanged');
+  assert.ok(!GRID_HOME_PICK.includes('"'));
+  assert.match(GRID_HOME_PICK, /h=\$HOME\/\.beethoven;.*h=\$HOME\/\.ashley;$/);
 });
 
 test('a token is captured whole: across chunks and across hard line wraps', () => {

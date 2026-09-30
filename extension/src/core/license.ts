@@ -1,31 +1,30 @@
-// Ashley license on the laptop: where the key lives, who it was verified for, and the check the
+// Beethoven license on the laptop: where the key lives, who it was verified for, and the check the
 // extension, the CLI and the MCP server all use. The cryptography is grid/license.js (one
-// implementation for every place Ashley runs). No 'vscode' import.
+// implementation for every place Beethoven runs). No 'vscode' import.
 //
-// Files, in ASHLEY_LICENSE_DIR or ~/.ashley-local (the CLI's folder):
+// Files, in licenseDir() (localDir.ts: ~/.beethoven-local, or ~/.ashley-local where an earlier Ashley
+// made it; BEETHOVEN_LICENSE_DIR overrides):
 //   license.key       the key the person entered (not secret on its own: it names its owner)
 //   identity.json     who signed in (AccessID, WSU e-mail), written after the Wayne State sign-in
 //   license.state     the latest time seen, so setting the clock back does not revive a key
-//   license.revoked   the newest signed revocation list fetched from ashley.licenseRevocationUrl
+//   license.revoked   the newest signed revocation list fetched from beethoven.licenseRevocationUrl
 import * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
 import * as L from '../../../grid/license.js';
+import { licenseDir } from './localDir';
 import PRODUCTION_KEYS from '../../../grid/license_keys.json';
 
 export type { LicenseCheck, LicensePayload, Identity } from '../../../grid/license.js';
 export { KEY_PATTERN, findKey, peek } from '../../../grid/license.js';
 
 // Test builds add a test signing key (esbuild define); production builds define it as undefined.
-declare const __ASHLEY_TEST_KEYS__: Record<string, string> | undefined;
+declare const __BEETHOVEN_TEST_KEYS__: Record<string, string> | undefined;
 export const TRUSTED_KEYS: Record<string, string> = {
   ...(PRODUCTION_KEYS as Record<string, string>),
-  ...(typeof __ASHLEY_TEST_KEYS__ !== 'undefined' && __ASHLEY_TEST_KEYS__ ? __ASHLEY_TEST_KEYS__ : {}),
+  ...(typeof __BEETHOVEN_TEST_KEYS__ !== 'undefined' && __BEETHOVEN_TEST_KEYS__ ? __BEETHOVEN_TEST_KEYS__ : {}),
 };
 
-export function licenseDir(): string {
-  return process.env.ASHLEY_LICENSE_DIR || path.join(os.homedir(), '.ashley-local');
-}
+export { licenseDir };
 function file(name: string): string {
   return path.join(licenseDir(), name);
 }
@@ -121,5 +120,5 @@ export function describeLicense(c: L.LicenseCheck): string {
 
 /** The message shown by every tool that refuses to work without a license. */
 export function unlicensedMessage(c: L.LicenseCheck): string {
-  return `Ashley needs a valid license on this computer: ${c.detail}. In VS Code run "Ashley: License" (or: ashley-cli license set <key>).`;
+  return `Beethoven needs a valid license on this computer: ${c.detail}. In VS Code run "Beethoven: License" (or: beethoven-cli license set <key>).`;
 }

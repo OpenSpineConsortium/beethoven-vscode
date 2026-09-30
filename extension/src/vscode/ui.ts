@@ -20,7 +20,7 @@ export class VsCodeUI implements WizardUI {
     opts: { password?: boolean; placeholder?: string; value?: string; validate?: (v: string) => string | null } = {},
   ): Promise<string | undefined> {
     return vscode.window.showInputBox({
-      title: 'Ashley setup',
+      title: 'Beethoven setup',
       prompt,
       password: opts.password,
       placeHolder: opts.placeholder,
@@ -77,7 +77,7 @@ export class VsCodeUI implements WizardUI {
 
   progress(message: string): void {
     this.output.appendLine(message);
-    vscode.window.setStatusBarMessage(`Ashley: ${message}`, 8000);
+    vscode.window.setStatusBarMessage(`Beethoven: ${message}`, 8000);
   }
 }
 

@@ -7,7 +7,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { runDiagnostics, formatReport, DiagReport, NodeReport } from '../core/diagnostics';
 import { buildGraph, makeCtx } from './diagNodes';
-import { AshleyStore, findClaudeExecutable } from './store';
+import { BeethovenStore, findClaudeExecutable } from './store';
 import { VsCodeUI } from './ui';
 import { run } from '../core/shell';
 
@@ -19,16 +19,16 @@ export class Troubleshooter implements vscode.Disposable {
 
   constructor(
     private context: vscode.ExtensionContext,
-    private store: AshleyStore,
+    private store: BeethovenStore,
     private output: vscode.OutputChannel,
     /** called with every finished report (error reports to the maintainer, when the person allows them) */
     private afterRun?: (rep: DiagReport, gridScriptsVersion: string | null) => Promise<string>,
   ) {
-    this.item = vscode.window.createStatusBarItem('ashley.health', vscode.StatusBarAlignment.Left, 50);
-    this.item.name = 'Ashley health';
-    this.item.command = 'ashley.healthMenu';
-    this.item.text = '$(sync~spin) Ashley';
-    this.item.tooltip = 'Ashley is checking your setup';
+    this.item = vscode.window.createStatusBarItem('beethoven.health', vscode.StatusBarAlignment.Left, 50);
+    this.item.name = 'Beethoven health';
+    this.item.command = 'beethoven.healthMenu';
+    this.item.text = '$(sync~spin) Beethoven';
+    this.item.tooltip = 'Beethoven is checking your setup';
     this.item.show();
   }
 
@@ -53,18 +53,18 @@ export class Troubleshooter implements vscode.Disposable {
   private paint(rep: DiagReport): void {
     const warn = rep.reports.some((r) => r.status === 'warn');
     if (!this.store.settings().accessId && rep.rootCauses.every((r) => r.id.startsWith('account.') || r.layer !== 'laptop')) {
-      this.item.text = '$(rocket) Ashley: set up';
-      this.item.tooltip = 'Ashley is not set up yet: click to run the wizard or troubleshoot';
+      this.item.text = '$(rocket) Beethoven: set up';
+      this.item.tooltip = 'Beethoven is not set up yet: click to run the wizard or troubleshoot';
       this.item.backgroundColor = undefined;
       return;
     }
     if (rep.ok) {
-      this.item.text = warn ? '$(warning) Ashley' : '$(pass) Ashley';
+      this.item.text = warn ? '$(warning) Beethoven' : '$(pass) Beethoven';
       this.item.backgroundColor = warn ? new vscode.ThemeColor('statusBarItem.warningBackground') : undefined;
-      this.item.tooltip = `Ashley: everything works${warn ? ' (with warnings)' : ''}; checked ${new Date(rep.finished).toLocaleTimeString()}`;
+      this.item.tooltip = `Beethoven: everything works${warn ? ' (with warnings)' : ''}; checked ${new Date(rep.finished).toLocaleTimeString()}`;
     } else {
       const first = rep.rootCauses[0];
-      this.item.text = `$(error) Ashley: ${first.title}`;
+      this.item.text = `$(error) Beethoven: ${first.title}`;
       this.item.backgroundColor = new vscode.ThemeColor('statusBarItem.errorBackground');
       this.item.tooltip = `${rep.rootCauses.length} problem(s). ${first.title}: ${first.detail}\nClick: Troubleshoot, Show log`;
     }
@@ -77,23 +77,23 @@ export class Troubleshooter implements vscode.Disposable {
     ];
     if (this.last && !this.last.ok) items.push({ id: 'claude', label: '$(sparkle) Investigate with Claude', description: 'ask your Claude to research the failure' });
     if (this.last) items.push({ id: 'report', label: '$(file) Open the last report', description: new Date(this.last.finished).toLocaleString() });
-    if (!this.store.settings().accessId) items.unshift({ id: 'setup', label: '$(rocket) Set up Ashley', description: 'the wizard' });
+    if (!this.store.settings().accessId) items.unshift({ id: 'setup', label: '$(rocket) Set up Beethoven', description: 'the wizard' });
     const pick = await vscode.window.showQuickPick(items, { title: this.item.tooltip as string });
     if (!pick) return;
     if (pick.id === 'fix') await this.run({ repair: true, quick: false, quiet: false });
     else if (pick.id === 'log') this.output.show(true);
     else if (pick.id === 'claude') await this.investigate();
     else if (pick.id === 'report' && this.last) await this.openReport(this.last);
-    else if (pick.id === 'setup') await vscode.commands.executeCommand('ashley.setup');
+    else if (pick.id === 'setup') await vscode.commands.executeCommand('beethoven.setup');
   }
 
   async run(o: { repair: boolean; quick: boolean; quiet: boolean }): Promise<DiagReport | null> {
     if (this.running) {
-      if (!o.quiet) void vscode.window.showInformationMessage('Ashley is already checking; the result appears in the status bar.');
+      if (!o.quiet) void vscode.window.showInformationMessage('Beethoven is already checking; the result appears in the status bar.');
       return null;
     }
     this.running = true;
-    this.item.text = '$(sync~spin) Ashley: checking';
+    this.item.text = '$(sync~spin) Beethoven: checking';
     const panel = o.quiet ? null : this.openPanel();
     try {
       const env = this.store.wizardEnv(new VsCodeUI(this.output));
@@ -104,7 +104,7 @@ export class Troubleshooter implements vscode.Disposable {
         quick: o.quick,
         onNode: (r, done, total) => {
           panel?.webview.postMessage({ type: 'node', r, done, total });
-          this.item.text = `$(sync~spin) Ashley: checking ${done}/${total}`;
+          this.item.text = `$(sync~spin) Beethoven: checking ${done}/${total}`;
         },
       });
       this.last = rep;
@@ -121,7 +121,7 @@ export class Troubleshooter implements vscode.Disposable {
         }
       }
       panel?.webview.postMessage({ type: 'done', rep });
-      if (!o.quiet && rep.ok) void vscode.window.showInformationMessage(`Ashley: everything works${rep.reports.some((r) => r.status === 'repaired') ? ` (repaired: ${rep.reports.filter((r) => r.status === 'repaired').map((r) => r.title).join(', ')})` : ''}.`);
+      if (!o.quiet && rep.ok) void vscode.window.showInformationMessage(`Beethoven: everything works${rep.reports.some((r) => r.status === 'repaired') ? ` (repaired: ${rep.reports.filter((r) => r.status === 'repaired').map((r) => r.title).join(', ')})` : ''}.`);
       return rep;
     } finally {
       this.running = false;
@@ -129,8 +129,8 @@ export class Troubleshooter implements vscode.Disposable {
   }
 
   private openPanel(): vscode.WebviewPanel {
-    const p = vscode.window.createWebviewPanel('ashley.troubleshoot', 'Ashley troubleshooter', vscode.ViewColumn.One, { enableScripts: true });
-    p.iconPath = vscode.Uri.joinPath(this.context.extensionUri, 'media', 'ashley.svg');
+    const p = vscode.window.createWebviewPanel('beethoven.troubleshoot', 'Beethoven troubleshooter', vscode.ViewColumn.One, { enableScripts: true });
+    p.iconPath = vscode.Uri.joinPath(this.context.extensionUri, 'media', 'beethoven.svg');
     p.webview.html = this.html(p.webview.cspSource);
     p.webview.onDidReceiveMessage(async (m) => {
       if (m?.type === 'log') this.output.show(true);
@@ -171,7 +171,7 @@ export class Troubleshooter implements vscode.Disposable {
     if (!this.last || this.last.ok) return void vscode.window.showInformationMessage('Nothing is broken right now.');
     const causes = this.last.rootCauses.map((r: NodeReport) => ({ id: r.id, title: r.title, detail: r.detail, manual_fix: r.manualFix, repair_tried: r.repair }));
     const prompt = [
-      'You are helping a Wayne State University medical student whose research tool "Ashley" (a VS Code extension that connects a laptop to the Wayne State HPC grid,',
+      'You are helping a Wayne State University medical student whose research tool "Beethoven for VS Code" (a VS Code extension that connects a laptop to the Wayne State HPC grid,',
       'CentOS 7, Slurm, Apptainer, VS Code Remote-SSH with the C&IT glibc sysroot, and a Claude Code worker) reports these failing checks.',
       'Research the most likely cause of each (search the web, vendor docs, Wayne State C&IT knowledge base) and give the exact steps to fix it,',
       'in plain words a first-year medical student can follow. Say what you are unsure of. Do not suggest disabling security.',
@@ -203,7 +203,7 @@ export class Troubleshooter implements vscode.Disposable {
  .btns{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0} button{padding:6px 12px;border-radius:6px;border:0;cursor:pointer;background:var(--vscode-button-background);color:var(--vscode-button-foreground)}
  button.s{background:var(--vscode-button-secondaryBackground);color:var(--vscode-button-secondaryForeground)}
 </style></head><body><div class="wrap">
-<h1>Ashley troubleshooter</h1><div class="sub" id="sub">Checking every piece Ashley relies on, from your laptop to the compute node...</div>
+<h1>Beethoven troubleshooter</h1><div class="sub" id="sub">Checking every piece Beethoven relies on, from your laptop to the compute node...</div>
 <div class="bar" id="bar"></div><div class="ok" id="ok">Everything works.</div><div class="causes" id="causes"></div>
 <div class="btns"><button id="again">Check and repair again</button><button class="s" id="claude">Investigate with Claude</button><button class="s" id="copy">Copy report</button><button class="s" id="log">Show log</button></div>
 <div id="list"></div></div>

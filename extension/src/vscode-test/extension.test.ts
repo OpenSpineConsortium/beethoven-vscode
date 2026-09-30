@@ -8,14 +8,14 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as L from '../../../grid/license.js';
 
-const EXT_ID = 'openspineconsortium.ashley';
+const EXT_ID = 'openspineconsortium.beethoven';
 const COMMANDS = [
-  'ashley.setup', 'ashley.license', 'ashley.doctor', 'ashley.troubleshoot', 'ashley.showLog', 'ashley.investigate', 'ashley.healthMenu', 'ashley.connect', 'ashley.workerStart', 'ashley.workerStop', 'ashley.workerLogs', 'ashley.ask',
-  'ashley.gridStatus', 'ashley.gridBootstrap', 'ashley.access', 'ashley.phone', 'ashley.registerMcp', 'ashley.claudeSignIn', 'ashley.errorReports', 'ashley.terms', 'ashley.support', 'ashley.manageTokens', 'ashley.openManual', 'ashley.openTerminal', 'ashley.reset', 'ashley.refresh',
-  'ashley.renewToken', 'ashley.claudeLocalSignIn', 'ashley.wsuSignIn',
+  'beethoven.setup', 'beethoven.license', 'beethoven.doctor', 'beethoven.troubleshoot', 'beethoven.showLog', 'beethoven.investigate', 'beethoven.healthMenu', 'beethoven.connect', 'beethoven.workerStart', 'beethoven.workerStop', 'beethoven.workerLogs', 'beethoven.ask',
+  'beethoven.gridStatus', 'beethoven.gridBootstrap', 'beethoven.access', 'beethoven.phone', 'beethoven.registerMcp', 'beethoven.claudeSignIn', 'beethoven.errorReports', 'beethoven.terms', 'beethoven.support', 'beethoven.manageTokens', 'beethoven.openManual', 'beethoven.openTerminal', 'beethoven.reset', 'beethoven.refresh',
+  'beethoven.renewToken', 'beethoven.claudeLocalSignIn', 'beethoven.wsuSignIn',
 ];
 
-suite('Ashley extension', () => {
+suite('Beethoven for VS Code extension', () => {
   test('is present and activates', async () => {
     const ext = vscode.extensions.getExtension(EXT_ID);
     assert.ok(ext, `extension ${EXT_ID} not found`);
@@ -29,13 +29,38 @@ suite('Ashley extension', () => {
   });
 
   test('exposes the settings with sane defaults', () => {
-    const c = vscode.workspace.getConfiguration('ashley');
+    const c = vscode.workspace.getConfiguration('beethoven');
     assert.equal(c.get('loginHost'), 'warrior.grid.wayne.edu');
     assert.equal(c.get('sshAlias'), 'wsu-grid');
     assert.equal(c.get('nodeDomain'), 'nas.grid.wayne.edu');
     assert.equal(c.get('worker.partition'), 'reqp');
     assert.equal(c.get('worker.qos'), 'requeue');
     assert.equal(c.get('worker.hours'), 24);
+  });
+
+  // the rename (Ashley for VS Code 3.0.0 -> Beethoven for VS Code 4.0.0): settings still set under the
+  // old name are read (the workspace fixture sets two), and the new name wins once it is set
+  test('settings: a value still set under the old name (ashley.*) is read; the new name wins', () => {
+    const store = (vscode.extensions.getExtension(EXT_ID)!.exports as any)._internal.storeFor();
+    assert.equal(store.settings().gridRoot, '/rs/example/set-under-the-old-name', 'ashley.gridRoot from the workspace settings');
+    assert.equal(store.config.source('gridRoot'), 'ashley');
+    assert.equal(store.config.get('defaultSession', 'default'), 'set-under-the-new-name', 'beethoven.defaultSession wins over ashley.defaultSession');
+    assert.equal(store.config.get('worker.hours', 1), 24, 'set under neither name: the default');
+    const pj = vscode.extensions.getExtension(EXT_ID)!.packageJSON;
+    assert.ok(Object.keys(pj.contributes.configuration.properties).every((k: string) => k.startsWith('beethoven.')), 'only beethoven.* is declared (ashley.* would collide with Ashley itself)');
+  });
+
+  test('the command ids from before the rename (ashley.*) still run, as hidden aliases', async () => {
+    let all: string[] = [];
+    for (let i = 0; i < 50; i++) {
+      all = await vscode.commands.getCommands(true);
+      if (all.includes('ashley.refresh')) break;
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    for (const c of COMMANDS) assert.ok(all.includes(c.replace(/^beethoven\./, 'ashley.')), `alias of ${c}`);
+    await vscode.commands.executeCommand('ashley.refresh');
+    const pj = vscode.extensions.getExtension(EXT_ID)!.packageJSON;
+    assert.ok(pj.contributes.commands.every((c: any) => c.command.startsWith('beethoven.')), 'the palette offers only beethoven.*');
   });
 
   test('the wizard exports its steps in order', () => {
@@ -55,14 +80,14 @@ suite('Ashley extension', () => {
   });
 
   // a fix button beside a failing check runs a command; every one it names must exist, and every
-  // sign-in or token the wizard collects must have one (the same click-through as the Ashley view)
+  // sign-in or token the wizard collects must have one (the same click-through as the Beethoven view)
   test('every fix button names a registered command, and the account checks have one', async () => {
     const ext = vscode.extensions.getExtension(EXT_ID)!;
     const all = await vscode.commands.getCommands(true);
     const g = (ext.exports as any)._internal.buildGraph();
     for (const n of g) if (n.fixCommand) assert.ok(all.includes(n.fixCommand.command) && n.fixCommand.title, `${n.id}: fix command ${n.fixCommand.command} is not registered`);
     const byId = Object.fromEntries(g.map((n: any) => [n.id, n]));
-    const want: Record<string, string> = { 'account.github': 'ashley.renewToken', 'account.huggingface': 'ashley.renewToken', 'account.claude': 'ashley.claudeLocalSignIn', 'account.wsu': 'ashley.wsuSignIn', 'account.license-identity': 'ashley.wsuSignIn', 'laptop.license': 'ashley.license', 'laptop.terms': 'ashley.terms', 'grid.claude-login': 'ashley.claudeSignIn' };
+    const want: Record<string, string> = { 'account.github': 'beethoven.renewToken', 'account.huggingface': 'beethoven.renewToken', 'account.claude': 'beethoven.claudeLocalSignIn', 'account.wsu': 'beethoven.wsuSignIn', 'account.license-identity': 'beethoven.wsuSignIn', 'laptop.license': 'beethoven.license', 'laptop.terms': 'beethoven.terms', 'grid.claude-login': 'beethoven.claudeSignIn' };
     for (const [id, cmd] of Object.entries(want)) assert.equal(byId[id]?.fixCommand?.command, cmd, `${id} has the fix button ${cmd}`);
   });
 
@@ -96,8 +121,8 @@ suite('Ashley extension', () => {
   });
 
   test('refresh and openManual run without throwing', async () => {
-    await vscode.commands.executeCommand('ashley.refresh');
-    await vscode.commands.executeCommand('ashley.openManual');
+    await vscode.commands.executeCommand('beethoven.refresh');
+    await vscode.commands.executeCommand('beethoven.openManual');
   });
 
   // ---- the license gate ----------------------------------------------------------------------
@@ -125,21 +150,22 @@ suite('Ashley extension', () => {
     assert.equal(rec.signed_name, 'Test Person');
     const fs = require('node:fs');
     const path = require('node:path');
-    const dir = process.env.ASHLEY_LICENSE_DIR!;
+    const dir = process.env.BEETHOVEN_LICENSE_DIR!;
     assert.ok(fs.existsSync(path.join(dir, 'terms.json')), 'the record is on disk for the CLI and MCP server');
     assert.ok(fs.existsSync(path.join(dir, 'terms', String(rec.terms_version), 'LICENSE.txt')), 'the accepted text is kept beside the record');
-    assert.equal(vscode.workspace.getConfiguration('ashley').get('diagnostics.share'), 'on', 'the setting is what the dialog writes; the test wrote the record only');
+    assert.equal(vscode.workspace.getConfiguration('beethoven').get('diagnostics.share'), 'on', 'the setting is what the dialog writes; the test wrote the record only');
   });
 
   test('without a license every gated command refuses and nothing runs; getting one still works', async () => {
     assert.equal(gate().check(true).status, 'missing');
-    for (const c of ['ashley.workerStop', 'ashley.gridStatus', 'ashley.connect', 'ashley.registerMcp', 'ashley.phone', 'ashley.ask']) {
+    for (const c of ['beethoven.workerStop', 'beethoven.gridStatus', 'beethoven.connect', 'beethoven.registerMcp', 'beethoven.phone', 'beethoven.ask']) {
       assert.equal(await vscode.commands.executeCommand(c), REFUSED(), `${c} refused`);
     }
-    assert.equal(gate().lastRefusal.command, 'ashley.ask');
-    assert.notEqual(await vscode.commands.executeCommand('ashley.refresh'), REFUSED(), 'the tree can refresh');
+    assert.equal(gate().lastRefusal.command, 'beethoven.ask');
+    assert.equal(await vscode.commands.executeCommand('ashley.workerStop'), REFUSED(), 'an old command id passes the same gate');
+    assert.notEqual(await vscode.commands.executeCommand('beethoven.refresh'), REFUSED(), 'the tree can refresh');
     const ungated = (vscode.extensions.getExtension(EXT_ID)!.exports as any)._internal.UNGATED as Set<string>;
-    for (const c of ['ashley.setup', 'ashley.license', 'ashley.openManual', 'ashley.showLog', 'ashley.troubleshoot']) assert.ok(ungated.has(c), `${c} is not gated`);
+    for (const c of ['beethoven.setup', 'beethoven.license', 'beethoven.openManual', 'beethoven.showLog', 'beethoven.troubleshoot']) assert.ok(ungated.has(c), `${c} is not gated`);
   });
 
   test('a valid key is kept; the gate opens only once the Wayne State sign-in names the same person', async () => {
@@ -158,17 +184,17 @@ suite('Ashley extension', () => {
     const full = await internal.terms.accept('off', 'Test Person', 'full');
     assert.equal(full.edition, 'full');
     assert.match(full.affirmations[0].label, /Full Edition License Agreement/);
-    assert.ok(require('node:fs').existsSync(require('node:path').join(process.env.ASHLEY_LICENSE_DIR!, 'terms-full.json')), 'the Full Edition record is on disk for the CLI');
+    assert.ok(require('node:fs').existsSync(require('node:path').join(process.env.BEETHOVEN_LICENSE_DIR!, 'terms-full.json')), 'the Full Edition record is on disk for the CLI');
     assert.ok(internal.terms.record(), 'the Trial Edition record is untouched');
     const c = await gate().set(`Your key:\n${issue('ab1234')}\n`);
     assert.equal(c.status, 'valid', c.detail);
-    assert.equal(gate().allowed('ashley.workerStop').ok, false, 'nobody signed in yet');
-    assert.match(gate().allowed('ashley.workerStop').reason, /sign-in/);
+    assert.equal(gate().allowed('beethoven.workerStop').ok, false, 'nobody signed in yet');
+    assert.match(gate().allowed('beethoven.workerStop').reason, /sign-in/);
     await gate().recordIdentity({ accessId: 'ab1234', email: 'ab1234@wayne.edu' });
-    assert.equal(gate().allowed('ashley.workerStop').ok, true);
-    const key = fs.readFileSync(path.join(process.env.ASHLEY_LICENSE_DIR!, 'license.key'), 'utf8');
+    assert.equal(gate().allowed('beethoven.workerStop').ok, true);
+    const key = fs.readFileSync(path.join(process.env.BEETHOVEN_LICENSE_DIR!, 'license.key'), 'utf8');
     assert.match(key, /^ASHLEY1\./, 'stored where the CLI and the MCP server read it');
-    const id = JSON.parse(fs.readFileSync(path.join(process.env.ASHLEY_LICENSE_DIR!, 'identity.json'), 'utf8'));
+    const id = JSON.parse(fs.readFileSync(path.join(process.env.BEETHOVEN_LICENSE_DIR!, 'identity.json'), 'utf8'));
     assert.equal(id.accessId, 'ab1234');
   });
 
@@ -181,7 +207,21 @@ suite('Ashley extension', () => {
     assert.equal((await gate().set(L.signLicense({ kid: 'k-stranger', sub: 'ab1234', exp: Math.floor(Date.now() / 1000) + 86400 } as never, stranger))).status, 'unknown-key');
     assert.equal((await gate().set('not a key')).status, 'invalid');
     assert.equal(gate().key(), before, 'the good key is still the one stored');
-    assert.equal(gate().allowed('ashley.workerStop').ok, true);
+    assert.equal(gate().allowed('beethoven.workerStop').ok, true);
+  });
+
+  test('a key with the new prefix (BEETHOVEN1) is accepted like one with the old prefix (ASHLEY1)', async () => {
+    const before = gate().key();
+    // self-contained: the sign-in this test compares against. The test profile's VS Code state sometimes
+    // loses the one recorded two tests earlier (2 of 12 runs of the 3.0.0 suite fail on it the same way)
+    await gate().recordIdentity({ accessId: 'ab1234', email: 'ab1234@wayne.edu' });
+    const k = L.signLicense({ kid: 'test', sub: 'ab1234', email: 'ab1234@wayne.edu', exp: Math.floor(Date.now() / 1000) + 30 * 86400 } as never, testKey(), { prefix: 'beethoven' });
+    assert.match(k, /^BEETHOVEN1\./);
+    const c = await gate().set(`Your key:\n${k}\n`);
+    assert.equal(c.status, 'valid', c.detail);
+    assert.match(gate().key(), /^BEETHOVEN1\./);
+    assert.equal(gate().allowed('beethoven.workerStop').ok, true);
+    if (before) assert.equal((await gate().set(before)).status, 'valid', 'the key from before again');
   });
 
   test('the wizard signs in first, then the access step reports the stored key', async () => {
@@ -198,6 +238,6 @@ suite('Ashley extension', () => {
   test('removing the key closes the gate again', async () => {
     await gate().remove();
     assert.equal(gate().check(true).status, 'missing');
-    assert.equal(await vscode.commands.executeCommand('ashley.workerStop'), REFUSED());
+    assert.equal(await vscode.commands.executeCommand('beethoven.workerStop'), REFUSED());
   });
 });

@@ -1,5 +1,5 @@
 // Installs the student's public key on the grid with a pure-JS SSH client (ssh2), so the one
-// password-and-code login happens inside the Ashley panel instead of a terminal. The grid's
+// password-and-code login happens inside the Beethoven panel instead of a terminal. The grid's
 // sshd (OpenSSH 7.4) answers keyboard-interactive prompts: "Password:" then a verification
 // code; each prompt is routed to the UI. Nothing is stored: the password lives in memory for
 // one connection.
@@ -25,7 +25,7 @@ export interface InstallKeyResult {
 }
 
 const REMOTE = (pub: string) =>
-  `umask 077; mkdir -p ~/.ssh; touch ~/.ssh/authorized_keys; grep -qF '${pub}' ~/.ssh/authorized_keys || echo '${pub}' >> ~/.ssh/authorized_keys; echo ASHLEY-KEY-INSTALLED`;
+  `umask 077; mkdir -p ~/.ssh; touch ~/.ssh/authorized_keys; grep -qF '${pub}' ~/.ssh/authorized_keys || echo '${pub}' >> ~/.ssh/authorized_keys; echo BEETHOVEN-KEY-INSTALLED`;
 
 export function installPublicKey(o: InstallKeyOptions): Promise<InstallKeyResult> {
   return new Promise((resolve) => {
@@ -87,7 +87,7 @@ export function installPublicKey(o: InstallKeyOptions): Promise<InstallKeyResult
         stream.stderr.on('data', (d: Buffer) => (out += d.toString()));
         stream.on('close', () => {
           clearTimeout(timer);
-          done(out.includes('ASHLEY-KEY-INSTALLED') ? { ok: true, detail: 'key installed' } : { ok: false, detail: `unexpected reply: ${out.slice(0, 300)}`, authFailure: false });
+          done(out.includes('BEETHOVEN-KEY-INSTALLED') ? { ok: true, detail: 'key installed' } : { ok: false, detail: `unexpected reply: ${out.slice(0, 300)}`, authFailure: false });
         });
       });
     });

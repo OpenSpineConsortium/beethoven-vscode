@@ -9,8 +9,8 @@ import { AFFIRMATIONS, AGREE_BUTTON, TERMS_FILE, TERMS_VERSION, acceptanceComple
 
 let dir = '';
 before(() => {
-  dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ashley-terms-'));
-  process.env.ASHLEY_LICENSE_DIR = dir;
+  dir = fs.mkdtempSync(path.join(os.tmpdir(), 'beethoven-terms-'));
+  process.env.BEETHOVEN_LICENSE_DIR = dir;
 });
 after(() => fs.rmSync(dir, { recursive: true, force: true }));
 
@@ -42,7 +42,7 @@ test('the affirmations say what the button does, name the dispute terms and are 
 });
 
 test('the record is written with the texts beside it and read back only for the version in force', () => {
-  const license = 'ASHLEY SOFTWARE LICENSE AGREEMENT\r\nVersion test\r\n';
+  const license = 'BEETHOVEN SOFTWARE LICENSE AGREEMENT\r\nVersion test\r\n';
   const privacy = '# Privacy\n';
   const rec: TermsRecord = {
     v: 1,

@@ -1,11 +1,11 @@
 # The access check: how Beethoven asks whether an account is approved
 
-Beethoven, the browser extension, has no keys. (Beethoven is its public name since 2026-09-29; Ashley
-Bridge stays its code name in the repositories and the code.) A person signs in to their own Open
-OnDemand portal with their university account; the extension reads the account name the portal's
+Beethoven, the browser extension, has no keys. (Beethoven is its name since 2026-09-29; it was built
+as Ashley Bridge before, and its builds still send product `bridge`.) A person signs in to their own
+Open OnDemand portal with their university account; the extension reads the account name the portal's
 dashboard shows for that session and asks this service whether that account is approved. The answer
-comes from the same approved list the admin page manages for Ashley in VS Code (KV
-`approved:<AccessID>`), so one approval serves both products. This file is the contract as built in
+comes from the same approved list the admin page manages for Beethoven for VS Code (KV
+`approved:<AccessID>`), so one approval serves both editions. This file is the contract as built in
 `worker.js` (`accessCheck`) and pinned by `worker.test.mjs`; both sides code to exactly this.
 
 ## Where the address comes from
@@ -16,11 +16,10 @@ comes from the same approved list the admin page manages for Ashley in VS Code (
 | Beethoven 4.0.0 to 6.0.0 (built as Ashley Bridge) | `https://openspineconsortium.com/ashley/services.json` | `https://ashley-service.openspineconsortium.workers.dev/access_check` |
 
 The two hosts are one Worker deployed under two names: the same code, the same KV namespaces, the
-same secrets (README.md, "Two names"), so they give the same answer to the same check. Beethoven's
-file is built in the ashley-bridge repository (`docs/site/beethoven/services.json`) and names the
-new host for every route; `deploy.sh` writes the old file's five service addresses. The extension
-caches `services.json` for a day. The site repository's copies are published when that repository is
-pushed.
+same secrets (README.md, "Two names"), so they give the same answer to the same check. The new file
+is in the site repository and names the new host for every route (`deploy.sh` writes its service
+addresses); the old file is kept byte for byte for the builds that read it. The extension caches
+`services.json` for a day. The site repository's copies are published when that repository is pushed.
 
 ## Request
 
@@ -39,7 +38,7 @@ same way. The body is JSON, 8 KiB at most.
 | `v` | the number 1 | 400 |
 | `access_id` | the account name the portal shows: letters, digits, `.` `_` `@` `-`, 64 at most, case and surrounding spaces ignored | 400 |
 | `portal` | the portal's hostname (a `:port` is allowed, for a mock portal on localhost); not a URL | 400 |
-| `product` | a short name: `bridge` is what every Beethoven build sends (the code name, kept on the wire so 4.0.0 to 6.0.0 keep working); `beethoven` is taken as the same product; any other short name is accepted and answered with Ashley's request page | 400 |
+| `product` | a short name: `bridge` is what every Beethoven build sends (its name when it was built as Ashley Bridge, kept on the wire so 4.0.0 on keep working); `beethoven` is taken as the same product; any other short name is accepted, recorded under its own name, and answered with `REQUEST_PAGE` | 400 |
 | `version` | the extension's version, like `4.0.0` | 400 |
 
 ## Answers
@@ -51,7 +50,7 @@ no-store` and `content-type: application/json`; none carries `access-control-all
 |---|---|---|
 | 204 | none, with `access-control-allow-methods: POST, OPTIONS`, `access-control-allow-headers: content-type`, `access-control-max-age: 600` | `OPTIONS` (a preflight, should a browser send one) |
 | 200 | `{"approved":true,"access_id":"st1234","checked":"<ISO time>","until":null}` | the account is on the approved list; `until` is the approval's end date when the record has one (none does today) |
-| 200 | `{"approved":false,"access_id":"st1234","requestPage":"https://openspineconsortium.com/beethoven/request.html"}` | the account is not on the list (never approved, pending, denied or removed), or the name is not one the list can hold. `requestPage` is Beethoven's page (`BEETHOVEN_REQUEST_PAGE` in `wrangler.toml`) for product `bridge` or `beethoven`, and Ashley's (`REQUEST_PAGE`, `https://openspineconsortium.com/ashley/request.html`) for any other |
+| 200 | `{"approved":false,"access_id":"st1234","requestPage":"https://openspineconsortium.com/beethoven/request.html"}` | the account is not on the list (never approved, pending, denied or removed), or the name is not one the list can hold. `requestPage` is `BEETHOVEN_REQUEST_PAGE` in `wrangler.toml` for product `bridge` or `beethoven`, and `REQUEST_PAGE` for any other; both are `https://openspineconsortium.com/beethoven/request.html` since 2026-09-30, the one request page of both editions (before, `REQUEST_PAGE` was `/ashley/request.html`, which now redirects there) |
 | 400 | `{"error":"..."}` | a malformed body (see the table above), or not JSON |
 | 405 | `{"error":"POST the check here"}` | any method but POST and OPTIONS |
 | 413 | `{"error":"too much text"}` | a body over 8 KiB |
@@ -66,8 +65,9 @@ first field from that and sends nothing until the person presses the button.
 `approved:<access_id>` exists in KV ACCESS. That record is written by the admin routes (`add`,
 `approve`) and deleted by `remove`; nothing on this route writes it. A record may carry `until` (an
 ISO date); after it the answer is no. The list itself is never returned on this route: one id in,
-yes or no out. (`GET /allowlist` still returns the whole list to anyone, because Ashley in VS Code
-3.0.0 on the Marketplace reads it; that route is unchanged.)
+yes or no out. (`GET /allowlist` still returns the whole list to anyone, because Beethoven for VS
+Code reads it, as Ashley for VS Code 3.0.0 on the Marketplace does; that route is unchanged but for
+its `about` text, which says Beethoven since 2026-09-30.)
 
 Cloudflare KV is eventually consistent: an approval or a removal can take up to about a minute to
 reach every edge, so a check right after a click on the admin page may still see the old answer.
@@ -92,10 +92,13 @@ once a day, and only after the agreement is accepted, the portal is connected an
 identity is known. Approval withdrawn (Remove on the admin page or `admin.mjs remove`) means the
 next check answers no and the extension stops starting workers and says so.
 
-## Ashley in VS Code 3.0.0 is untouched
+## The VS Code edition is untouched
 
-`/trial`, `/request`, `/allowlist`, `/admin/*`, `/revoked` and `/report` behave exactly as before;
-`access_check` is added beside them. The Marketplace build keeps its own key flow.
+`/trial`, `/request`, `/allowlist`, `/admin/*`, `/revoked` and `/report` behave as before;
+`access_check` is added beside them. Ashley for VS Code 3.0.0 on the Marketplace and Beethoven for
+VS Code 4.0.0 keep their own key flow; the keys are still signed `ASHLEY1.` (README.md, "The key
+prefixes"). The wording changed on 2026-09-30 (the product's name, the admin and request pages under
+`/beethoven/`); no field and no status did.
 
 ## Proof, 2026-09-29 afternoon (before the public name changed)
 
@@ -259,3 +262,32 @@ folder held a Resend key, both names were deployed again and both list an eighth
 Until the site repository publishes `https://openspineconsortium.com/beethoven/request.html`, that
 address answers 404 (checked at the same time), so a no sends a person to a page that is not there
 yet; `https://openspineconsortium.com/ashley/request.html` still works for the same approved list.
+
+## Proof, the rename to Beethoven, 2026-09-30 early morning
+
+Both names deployed again from WSL with `deploy.sh`, `beethoven-access` now the default and
+`WORKER_NAME=ashley-service` the second, with the vendor folder at its new place
+(`BEETHOVEN_VENDOR_DIR=/mnt/c/Users/grego/.beethoven-vendor`; `mail_from` rewritten to
+`Beethoven access <onboarding@resend.dev>` first). Both found the three KV namespaces by the ids in
+`wrangler.toml`, `deploy.sh` put the same eight secrets on both from the vendor folder, and it left the site's `beethoven/services.json`
+unchanged, since it already named `beethoven-access` for all six routes. Then, read-only, from WSL
+(`chrome-extension://...` as the Origin of the checks, product `bridge` and product `ashley`, version
+3.0.0), the same answers from both hosts:
+
+```
+health:        {"ok":true}
+allowlist:     {"about":"AccessIDs approved to use Beethoven","accessIds":[ ...
+revoked:       ASHLEYREV1. ...
+check bridge:  {"approved":false,"access_id":"zz9876","requestPage":"https://openspineconsortium.com/beethoven/request.html"}
+check ashley:  {"approved":false,"access_id":"zz9876","requestPage":"https://openspineconsortium.com/beethoven/request.html"}
+trial no auth: 401
+decide bad:    <h1>This link is not valid</h1> href="https://openspineconsortium.com/beethoven/admin.html"
+report bad:    {"error":"not a Beethoven report"}
+```
+
+`admin.mjs notify-test`, once through each name, printed `sent: the provider answered 200` both times
+(subject `Beethoven access: test e-mail`, sender from `mail_from`). At the same time
+`https://openspineconsortium.com/beethoven/admin.html` answered 404 (the site repository had not been
+pushed with it yet) while `/ashley/admin.html` answered 200: until that push, the admin-page link in
+the e-mails and on the `/decide` pages leads nowhere, and `/ashley/admin.html` is the admin page. The
+Approve and Deny links themselves do not depend on it.

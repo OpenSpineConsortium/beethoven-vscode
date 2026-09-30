@@ -1,13 +1,13 @@
 {
-  "name": "ashley",
-  "displayName": "Ashley: grid research environment",
-  "description": "Sets up a medical student's laptop for research on the the university HPC grid: SSH through the login node to a compute node, tokens for GitHub, Hugging Face and Claude, a persistent Claude Code worker in a Singularity container on the grid, and a bridge so the Claude Code extension can send it work.",
-  "version": "3.0.0",
+  "name": "beethoven",
+  "displayName": "Beethoven for VS Code",
+  "description": "Sets up a medical student's laptop for research on the university HPC grid: SSH through the login node to a compute node, tokens for GitHub, Hugging Face and Claude, a persistent Claude Code worker in a Singularity container on the grid, and a bridge so the Claude Code extension can send it work.",
+  "version": "4.0.0",
   "publisher": "openspineconsortium",
   "license": "SEE LICENSE IN LICENSE.txt",
   "repository": {
     "type": "git",
-    "url": "https://openspineconsortium.com/ashley"
+    "url": "https://openspineconsortium.com/beethoven/vscode/"
   },
   "icon": "media/icon.png",
   "engines": {
@@ -33,342 +33,342 @@
   "contributes": {
     "commands": [
       {
-        "command": "ashley.setup",
+        "command": "beethoven.setup",
         "title": "Set up my research environment (wizard)",
-        "category": "Ashley",
+        "category": "Beethoven",
         "icon": "$(rocket)"
       },
       {
-        "command": "ashley.license",
+        "command": "beethoven.license",
         "title": "License",
-        "category": "Ashley",
+        "category": "Beethoven",
         "icon": "$(key)"
       },
       {
-        "command": "ashley.errorReports",
+        "command": "beethoven.errorReports",
         "title": "Error reports",
-        "category": "Ashley",
+        "category": "Beethoven",
         "icon": "$(report)"
       },
       {
-        "command": "ashley.support",
+        "command": "beethoven.support",
         "title": "Support page",
-        "category": "Ashley",
+        "category": "Beethoven",
         "icon": "$(question)"
       },
       {
-        "command": "ashley.terms",
+        "command": "beethoven.terms",
         "title": "Read the license terms",
-        "category": "Ashley",
+        "category": "Beethoven",
         "icon": "$(law)"
       },
       {
-        "command": "ashley.doctor",
+        "command": "beethoven.doctor",
         "title": "Check everything (no repairs)",
-        "category": "Ashley",
+        "category": "Beethoven",
         "icon": "$(pulse)"
       },
       {
-        "command": "ashley.healthMenu",
+        "command": "beethoven.healthMenu",
         "title": "Health",
-        "category": "Ashley"
+        "category": "Beethoven"
       },
       {
-        "command": "ashley.investigate",
+        "command": "beethoven.investigate",
         "title": "Investigate the failure with Claude",
-        "category": "Ashley",
+        "category": "Beethoven",
         "icon": "$(sparkle)"
       },
       {
-        "command": "ashley.showLog",
+        "command": "beethoven.showLog",
         "title": "Show log",
-        "category": "Ashley",
+        "category": "Beethoven",
         "icon": "$(output)"
       },
       {
-        "command": "ashley.troubleshoot",
+        "command": "beethoven.troubleshoot",
         "title": "Troubleshoot and repair",
-        "category": "Ashley",
+        "category": "Beethoven",
         "icon": "$(tools)"
       },
       {
-        "command": "ashley.connect",
+        "command": "beethoven.connect",
         "title": "Open my grid files on a compute node (Remote-SSH)",
-        "category": "Ashley",
+        "category": "Beethoven",
         "icon": "$(remote)"
       },
       {
-        "command": "ashley.workerStart",
+        "command": "beethoven.workerStart",
         "title": "Start a Claude worker on the grid",
-        "category": "Ashley",
+        "category": "Beethoven",
         "icon": "$(debug-start)"
       },
       {
-        "command": "ashley.workerStop",
+        "command": "beethoven.workerStop",
         "title": "Stop a Claude worker",
-        "category": "Ashley",
+        "category": "Beethoven",
         "icon": "$(debug-stop)"
       },
       {
-        "command": "ashley.workerLogs",
+        "command": "beethoven.workerLogs",
         "title": "Show worker log",
-        "category": "Ashley",
+        "category": "Beethoven",
         "icon": "$(output)"
       },
       {
-        "command": "ashley.ask",
+        "command": "beethoven.ask",
         "title": "Ask the grid Claude",
-        "category": "Ashley",
+        "category": "Beethoven",
         "icon": "$(comment-discussion)"
       },
       {
-        "command": "ashley.phone",
+        "command": "beethoven.phone",
         "title": "Phone access: drive a grid worker from the Claude app",
-        "category": "Ashley",
+        "category": "Beethoven",
         "icon": "$(device-mobile)"
       },
       {
-        "command": "ashley.gridStatus",
+        "command": "beethoven.gridStatus",
         "title": "Grid status (my jobs, quota, workers)",
-        "category": "Ashley",
+        "category": "Beethoven",
         "icon": "$(server)"
       },
       {
-        "command": "ashley.gridBootstrap",
-        "title": "Install or update Ashley on the grid (job)",
-        "category": "Ashley",
+        "command": "beethoven.gridBootstrap",
+        "title": "Install or update Beethoven on the grid (job)",
+        "category": "Beethoven",
         "icon": "$(cloud-upload)"
       },
       {
-        "command": "ashley.access",
+        "command": "beethoven.access",
         "title": "Lab access to the shared library (request or manage)",
-        "category": "Ashley",
+        "category": "Beethoven",
         "icon": "$(organization)"
       },
       {
-        "command": "ashley.registerMcp",
+        "command": "beethoven.registerMcp",
         "title": "Connect the Claude Code extension to the grid (MCP)",
-        "category": "Ashley",
+        "category": "Beethoven",
         "icon": "$(plug)"
       },
       {
-        "command": "ashley.claudeSignIn",
+        "command": "beethoven.claudeSignIn",
         "title": "Sign in to Claude on the grid",
-        "category": "Ashley",
+        "category": "Beethoven",
         "icon": "$(sign-in)"
       },
       {
-        "command": "ashley.claudeLocalSignIn",
+        "command": "beethoven.claudeLocalSignIn",
         "title": "Sign in to Claude on this laptop",
-        "category": "Ashley",
+        "category": "Beethoven",
         "icon": "$(sign-in)"
       },
       {
-        "command": "ashley.wsuSignIn",
+        "command": "beethoven.wsuSignIn",
         "title": "Sign in with Wayne State",
-        "category": "Ashley",
+        "category": "Beethoven",
         "icon": "$(account)"
       },
       {
-        "command": "ashley.renewToken",
+        "command": "beethoven.renewToken",
         "title": "Renew a token",
-        "category": "Ashley",
+        "category": "Beethoven",
         "icon": "$(refresh)"
       },
       {
-        "command": "ashley.manageTokens",
+        "command": "beethoven.manageTokens",
         "title": "Manage stored tokens",
-        "category": "Ashley",
+        "category": "Beethoven",
         "icon": "$(lock)"
       },
       {
-        "command": "ashley.openManual",
+        "command": "beethoven.openManual",
         "title": "Open the manual",
-        "category": "Ashley",
+        "category": "Beethoven",
         "icon": "$(book)"
       },
       {
-        "command": "ashley.openTerminal",
+        "command": "beethoven.openTerminal",
         "title": "Open a terminal on the grid login node",
-        "category": "Ashley",
+        "category": "Beethoven",
         "icon": "$(terminal)"
       },
       {
-        "command": "ashley.refresh",
+        "command": "beethoven.refresh",
         "title": "Refresh",
-        "category": "Ashley",
+        "category": "Beethoven",
         "icon": "$(refresh)"
       },
       {
-        "command": "ashley.reset",
+        "command": "beethoven.reset",
         "title": "Reset this laptop (emulate a fresh install)",
-        "category": "Ashley",
+        "category": "Beethoven",
         "icon": "$(trash)"
       }
     ],
     "viewsContainers": {
       "activitybar": [
         {
-          "id": "ashley",
-          "title": "Ashley",
-          "icon": "media/ashley.svg"
+          "id": "beethoven",
+          "title": "Beethoven",
+          "icon": "media/beethoven.svg"
         }
       ]
     },
     "views": {
-      "ashley": [
+      "beethoven": [
         {
-          "id": "ashley.status",
+          "id": "beethoven.status",
           "name": "Wayne State grid",
-          "icon": "media/ashley.svg",
-          "contextualTitle": "Ashley"
+          "icon": "media/beethoven.svg",
+          "contextualTitle": "Beethoven"
         }
       ]
     },
     "viewsWelcome": [
       {
-        "view": "ashley.status",
-        "contents": "Ashley connects this laptop to the Wayne State grid and to a Claude Code worker running there.\n\n[Set up my research environment](command:ashley.setup)\n\n[Open the manual](command:ashley.openManual)"
+        "view": "beethoven.status",
+        "contents": "Beethoven connects this laptop to the Wayne State grid and to a Claude Code worker running there.\n\n[Set up my research environment](command:beethoven.setup)\n\n[Open the manual](command:beethoven.openManual)"
       }
     ],
     "menus": {
       "view/title": [
         {
-          "command": "ashley.refresh",
-          "when": "view == ashley.status",
+          "command": "beethoven.refresh",
+          "when": "view == beethoven.status",
           "group": "navigation@1"
         },
         {
-          "command": "ashley.setup",
-          "when": "view == ashley.status",
+          "command": "beethoven.setup",
+          "when": "view == beethoven.status",
           "group": "navigation@2"
         },
         {
-          "command": "ashley.doctor",
-          "when": "view == ashley.status",
+          "command": "beethoven.doctor",
+          "when": "view == beethoven.status",
           "group": "navigation@3"
         },
         {
-          "command": "ashley.troubleshoot",
-          "when": "view == ashley.status",
+          "command": "beethoven.troubleshoot",
+          "when": "view == beethoven.status",
           "group": "navigation@4"
         }
       ],
       "view/item/context": [
         {
-          "command": "ashley.workerStop",
-          "when": "view == ashley.status && viewItem == worker",
+          "command": "beethoven.workerStop",
+          "when": "view == beethoven.status && viewItem == worker",
           "group": "inline"
         },
         {
-          "command": "ashley.workerLogs",
-          "when": "view == ashley.status && viewItem == worker",
+          "command": "beethoven.workerLogs",
+          "when": "view == beethoven.status && viewItem == worker",
           "group": "inline"
         },
         {
-          "command": "ashley.connect",
-          "when": "view == ashley.status && viewItem == worker",
+          "command": "beethoven.connect",
+          "when": "view == beethoven.status && viewItem == worker",
           "group": "inline"
         },
         {
-          "command": "ashley.phone",
-          "when": "view == ashley.status && viewItem == worker",
+          "command": "beethoven.phone",
+          "when": "view == beethoven.status && viewItem == worker",
           "group": "inline"
         }
       ]
     },
     "walkthroughs": [
       {
-        "id": "ashley.gettingStarted",
-        "title": "Ashley: research on the Wayne State grid",
+        "id": "beethoven.gettingStarted",
+        "title": "Beethoven: research on the Wayne State grid",
         "description": "From a fresh laptop to a Claude worker on the grid, in one panel.",
         "steps": [
           {
             "id": "setup",
             "title": "Run the setup wizard",
-            "description": "AccessID, SSH key, sign-ins and tokens, and the grid install, in one panel.\n[Run the wizard](command:ashley.setup)",
+            "description": "AccessID, SSH key, sign-ins and tokens, and the grid install, in one panel.\n[Run the wizard](command:beethoven.setup)",
             "media": {
               "markdown": "media/walkthrough/setup.md"
             },
             "completionEvents": [
-              "onCommand:ashley.setup"
+              "onCommand:beethoven.setup"
             ]
           },
           {
             "id": "worker",
             "title": "Start a Claude worker",
-            "description": "A Slurm job that keeps a Claude Code session alive for you.\n[Start a worker](command:ashley.workerStart)",
+            "description": "A Slurm job that keeps a Claude Code session alive for you.\n[Start a worker](command:beethoven.workerStart)",
             "media": {
               "markdown": "media/walkthrough/worker.md"
             },
             "completionEvents": [
-              "onCommand:ashley.workerStart"
+              "onCommand:beethoven.workerStart"
             ]
           },
           {
             "id": "connect",
             "title": "Open your grid files",
-            "description": "Browse, edit and view images on the compute node with Remote-SSH.\n[Connect](command:ashley.connect)",
+            "description": "Browse, edit and view images on the compute node with Remote-SSH.\n[Connect](command:beethoven.connect)",
             "media": {
               "markdown": "media/walkthrough/connect.md"
             },
             "completionEvents": [
-              "onCommand:ashley.connect"
+              "onCommand:beethoven.connect"
             ]
           },
           {
             "id": "mcp",
             "title": "Let Claude Code use the grid",
-            "description": "Register the bridge so the Claude Code extension can dispatch work.\n[Register](command:ashley.registerMcp)",
+            "description": "Register the bridge so the Claude Code extension can dispatch work.\n[Register](command:beethoven.registerMcp)",
             "media": {
               "markdown": "media/walkthrough/mcp.md"
             },
             "completionEvents": [
-              "onCommand:ashley.registerMcp"
+              "onCommand:beethoven.registerMcp"
             ]
           }
         ]
       }
     ],
     "configuration": {
-      "title": "Ashley",
+      "title": "Beethoven",
       "properties": {
-        "ashley.accessId": {
+        "beethoven.accessId": {
           "type": "string",
           "default": "",
           "description": "Your Wayne State AccessID (set by the wizard's Wayne State sign-in)."
         },
-        "ashley.loginHost": {
+        "beethoven.loginHost": {
           "type": "string",
           "default": "warrior.grid.wayne.edu",
           "description": "The grid login node. Used only as an SSH jump host; nothing heavy runs there."
         },
-        "ashley.sshAlias": {
+        "beethoven.sshAlias": {
           "type": "string",
           "default": "wsu-grid",
           "description": "The Host alias written to ~/.ssh/config for the login node."
         },
-        "ashley.nodeDomain": {
+        "beethoven.nodeDomain": {
           "type": "string",
           "default": "nas.grid.wayne.edu",
           "description": "Domain suffix of compute nodes (voh3 -> voh3.nas.grid.wayne.edu)."
         },
-        "ashley.identityFile": {
+        "beethoven.identityFile": {
           "type": "string",
           "default": "~/.ssh/id_ed25519_wsu",
           "description": "SSH private key used for the grid."
         },
-        "ashley.gridRoot": {
+        "beethoven.gridRoot": {
           "type": "string",
           "default": "",
-          "description": "Where large files live on the grid (container, npm prefix, workspaces). Empty = /rs/rs_grp_oschome/<AccessID>/ashley when that volume is writable, else ~/ashley."
+          "description": "Where large files live on the grid (container, npm prefix, workspaces). Empty = /rs/rs_grp_oschome/<AccessID>/beethoven when that volume is writable, else ~/beethoven (an account set up before the rename keeps the folder it has)."
         },
-        "ashley.worker.partition": {
+        "beethoven.worker.partition": {
           "type": "string",
           "default": "reqp",
           "description": "Slurm partition for the Claude worker job."
         },
-        "ashley.worker.qos": {
+        "beethoven.worker.qos": {
           "type": "string",
           "default": "requeue",
           "enum": [
@@ -378,92 +378,92 @@
           ],
           "description": "QoS for the worker. requeue is the shared pool (job may be requeued; the worker resumes); primary is dedicated."
         },
-        "ashley.worker.hours": {
+        "beethoven.worker.hours": {
           "type": "number",
           "default": 24,
           "minimum": 1,
           "maximum": 720,
           "description": "Wall time of the worker job in hours."
         },
-        "ashley.worker.cpus": {
+        "beethoven.worker.cpus": {
           "type": "number",
           "default": 4,
           "description": "CPUs for the worker job."
         },
-        "ashley.worker.memory": {
+        "beethoven.worker.memory": {
           "type": "string",
           "default": "16G",
           "description": "Memory for the worker job."
         },
-        "ashley.worker.gpu": {
+        "beethoven.worker.gpu": {
           "type": "number",
           "default": 0,
           "description": "GPUs for the worker job (0 = CPU node). With a GPU the partition becomes gmsap,gvohp,galhp and the QoS gpu."
         },
-        "ashley.worker.concurrency": {
+        "beethoven.worker.concurrency": {
           "type": "number",
           "default": 2,
           "description": "How many prompts the worker runs at once."
         },
-        "ashley.defaultSession": {
+        "beethoven.defaultSession": {
           "type": "string",
           "default": "default",
           "description": "Session name used by 'Ask the grid Claude' (a session is a resumable conversation)."
         },
-        "ashley.injectTokensIntoTerminals": {
+        "beethoven.injectTokensIntoTerminals": {
           "type": "boolean",
           "default": true,
           "description": "Put GITHUB_TOKEN and HF_TOKEN into every integrated terminal. ANTHROPIC_API_KEY is never injected: it would switch the local Claude Code from your subscription to pay-per-use."
         },
-        "ashley.container": {
+        "beethoven.container": {
           "type": "string",
           "default": "auto",
           "description": "Which lab container a new worker runs: 'auto' = the lab's default, or the name of another container your lead published."
         },
-        "ashley.twoFactorDone": {
+        "beethoven.twoFactorDone": {
           "type": "boolean",
           "default": false,
           "description": "Set by the wizard once you confirmed a grid account with Google Authenticator (or once the grid accepted this laptop's key)."
         },
-        "ashley.wsuEmail": {
+        "beethoven.wsuEmail": {
           "type": "string",
           "default": "",
           "description": "The Wayne State account you signed in with (set by the wizard's first step)."
         },
-        "ashley.servicesUrl": {
+        "beethoven.servicesUrl": {
           "type": "string",
-          "default": "https://openspineconsortium.com/ashley/services.json",
-          "markdownDescription": "Where Ashley reads the lab's service addresses (access service, approved list, revocation list, error-report address, request page). Published with the support site so they can change without a new release; a non-empty address setting below always wins. Empty disables the lookup.",
+          "default": "https://openspineconsortium.com/beethoven/services.json",
+          "markdownDescription": "Where Beethoven reads the lab's service addresses (access service, approved list, revocation list, error-report address, request page). Published with the support site so they can change without a new release; a non-empty address setting below always wins. Empty disables the lookup.",
           "scope": "application"
         },
-        "ashley.allowlistUrl": {
+        "beethoven.allowlistUrl": {
           "type": "string",
           "default": "",
           "description": "Optional: where the list of approved AccessIDs is published (JSON {\"accessIds\": [...]}). Empty = the address from services.json, or, with no access service, the list shipped with this build."
         },
-        "ashley.licenseRevocationUrl": {
+        "beethoven.licenseRevocationUrl": {
           "type": "string",
           "default": "",
-          "markdownDescription": "Where Ashley fetches the signed list of withdrawn keys (checked daily; the list bundled with each release is always used). Empty = the address from services.json.",
+          "markdownDescription": "Where Beethoven fetches the signed list of withdrawn keys (checked daily; the list bundled with each release is always used). Empty = the address from services.json.",
           "scope": "application"
         },
-        "ashley.diagnostics.share": {
+        "beethoven.diagnostics.share": {
           "type": "string",
           "enum": [
             "on",
             "off"
           ],
           "default": "on",
-          "markdownDescription": "Send Ashley's maintainer an error report when a check fails (versions, which checks failed, messages with names, paths and secrets replaced). Never prompts, files, tokens or your AccessID. Off, or VS Code's own telemetry off, means nothing is sent. `Ashley: Error reports` shows what a report contains and what was sent.",
+          "markdownDescription": "Send Beethoven's maintainer an error report when a check fails (versions, which checks failed, messages with names, paths and secrets replaced). Never prompts, files, tokens or your AccessID. Off, or VS Code's own telemetry off, means nothing is sent. `Beethoven: Error reports` shows what a report contains and what was sent.",
           "scope": "application"
         },
-        "ashley.diagnostics.endpoint": {
+        "beethoven.diagnostics.endpoint": {
           "type": "string",
           "default": "",
           "markdownDescription": "Where error reports go. Empty = the address from services.json; with neither, reports stay on this laptop.",
           "scope": "application"
         },
-        "ashley.licenseServiceUrl": {
+        "beethoven.licenseServiceUrl": {
           "type": "string",
           "default": "",
           "markdownDescription": "The lab's access service (issues your key after the Wayne State sign-in). Empty = the address from services.json; with neither, your lead issues keys by hand.",
@@ -481,7 +481,7 @@
     "test:vscode": "node esbuild.mjs --tests && vscode-test --label unit",
     "test": "npm run test:unit && npm run test:vscode",
     "notices": "node ../tools/third_party_notices.mjs",
-    "package": "node esbuild.mjs --production && node ../tools/third_party_notices.mjs && vsce package --no-dependencies --out ../dist/ && node ../tools/release_check.mjs ../dist/ashley-2.0.0.vsix",
+    "package": "node esbuild.mjs --production && node ../tools/third_party_notices.mjs && vsce package --no-dependencies --out ../dist/ && node ../tools/release_check.mjs ../dist/beethoven-4.0.0.vsix",
     "vscode:prepublish": "node esbuild.mjs --production"
   },
   "dependencies": {
@@ -504,7 +504,7 @@
   "capabilities": {
     "untrustedWorkspaces": {
       "supported": true,
-      "description": "Ashley reads no workspace files. It opens terminals that run ssh to your own grid account, installs its scripts there, starts Slurm jobs, and registers an MCP server with Claude Code; see What Ashley accesses in the README."
+      "description": "Beethoven reads no workspace files. It opens terminals that run ssh to your own grid account, installs its scripts there, starts Slurm jobs, and registers an MCP server with Claude Code; see What Beethoven accesses in the README."
     },
     "virtualWorkspaces": {
       "supported": "limited",
@@ -512,11 +512,11 @@
     }
   },
   "pricing": "Free",
-  "homepage": "https://openspineconsortium.com/ashley/",
+  "homepage": "https://openspineconsortium.com/beethoven/vscode/",
   "bugs": {
-    "url": "https://openspineconsortium.com/ashley/support.html"
+    "url": "https://openspineconsortium.com/beethoven/support.html"
   },
-  "qna": "https://openspineconsortium.com/ashley/support.html",
+  "qna": "https://openspineconsortium.com/beethoven/support.html",
   "galleryBanner": {
     "color": "#1f3b2e",
     "theme": "dark"

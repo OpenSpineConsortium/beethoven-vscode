@@ -20,10 +20,10 @@ function testKeys() {
   return { test: der.subarray(der.length - 32).toString('base64') };
 }
 if (production && Object.keys(JSON.parse(readFileSync('../grid/license_keys.json', 'utf8'))).length === 0) {
-  throw new Error('grid/license_keys.json trusts no signing key: run tools/license/ashley-license.mjs init before a release build');
+  throw new Error('grid/license_keys.json trusts no signing key: run tools/license/beethoven-license.mjs init before a release build');
 }
 
-const NOTICE = '/*! Ashley (c) 2026 OpenSpineConsortium. Licensed software: use requires an access key. See LICENSE.txt (Trial Edition), LICENSE-FULL.txt (Full Edition) and THIRD_PARTY_NOTICES.md. */';
+const NOTICE = '/*! Beethoven for VS Code (c) 2026 OpenSpineConsortium. Licensed software: use requires an access key. See LICENSE.txt (Trial Edition), LICENSE-FULL.txt (Full Edition) and THIRD_PARTY_NOTICES.md. */';
 const common = {
   bundle: true,
   platform: 'node',
@@ -37,8 +37,10 @@ const common = {
   logLevel: 'info',
   metafile: true,
   define: {
-    'process.env.ASHLEY_BUILD': JSON.stringify(new Date().toISOString()),
-    __ASHLEY_TEST_KEYS__: tests ? JSON.stringify(testKeys()) : 'undefined',
+    'process.env.BEETHOVEN_BUILD': JSON.stringify(new Date().toISOString()),
+    // the CLI and the MCP server report the extension's version (they cannot read package.json at run time)
+    'process.env.BEETHOVEN_VERSION': JSON.stringify(JSON.parse(readFileSync('package.json', 'utf8')).version),
+    __BEETHOVEN_TEST_KEYS__: tests ? JSON.stringify(testKeys()) : 'undefined',
   },
 };
 
@@ -48,7 +50,7 @@ const builds = [
   // The MCP server Claude Code launches as a child process (plain Node, no vscode).
   { ...common, entryPoints: ['src/mcp/server.ts'], outfile: 'dist/mcp-server.js', external: ['cpu-features', '*.node'], banner: { js: `#!/usr/bin/env node\n${NOTICE}` } },
   // The local CLI (plain Node), used by Xcode / terminal users and by the tests.
-  { ...common, entryPoints: ['src/cli/main.ts'], outfile: 'dist/ashley-cli.js', external: ['cpu-features', '*.node'], banner: { js: `#!/usr/bin/env node\n${NOTICE}` } },
+  { ...common, entryPoints: ['src/cli/main.ts'], outfile: 'dist/beethoven-cli.js', external: ['cpu-features', '*.node'], banner: { js: `#!/usr/bin/env node\n${NOTICE}` } },
 ];
 
 function listTests(dir) {
@@ -72,6 +74,8 @@ if (tests) {
 
 // The grid-side scripts ship inside the extension so the wizard can upload them. They are
 // copied with LF line endings whatever the checkout did: CR breaks bash and sbatch on the grid.
+// The folder is emptied first, so a script renamed in grid/ (ashley -> beethoven) leaves no stale copy.
+rmSync('dist/grid', { recursive: true, force: true });
 mkdirSync('dist/grid', { recursive: true });
 const gridSrc = join('..', 'grid');
 if (existsSync(gridSrc)) {

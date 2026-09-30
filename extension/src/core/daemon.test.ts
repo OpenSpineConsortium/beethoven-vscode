@@ -1,4 +1,4 @@
-// End-to-end test of the grid daemon (grid/ashleyd.js) with a fake claude, on the laptop.
+// End-to-end test of the grid daemon (grid/beethovend.js) with a fake claude, on the laptop.
 // Exercises: claim from inbox, events stream, final result, session persistence (--session-id
 // then --resume), account rotation on a rate limit, crash handling, clean stop.
 import { test, before, after } from 'node:test';
@@ -13,18 +13,18 @@ import * as L from '../../../grid/license.js';
 const here = __dirname; // dist-test/unit/core
 const repo = path.resolve(here, '..', '..', '..', '..');
 const fake = path.join(repo, 'extension', 'test-fixtures', 'fake-claude.js');
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ashley-test-'));
+const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'beethoven-test-'));
 // The daemon runs from a copy that trusts the test signing key (grid/license_keys.json holds the
 // release keys, whose private half is not in the repository).
 const bin = path.join(tmp, 'bin');
 fs.mkdirSync(bin, { recursive: true });
-for (const f of ['ashleyd.js', 'phone.js', 'license.js']) fs.copyFileSync(path.join(repo, 'grid', f), path.join(bin, f));
+for (const f of ['beethovend.js', 'phone.js', 'license.js']) fs.copyFileSync(path.join(repo, 'grid', f), path.join(bin, f));
 const testKey = crypto.createPrivateKey(fs.readFileSync(path.join(repo, 'extension', 'test-fixtures', 'license', 'test-signing-key.pem'), 'utf8'));
 fs.writeFileSync(path.join(bin, 'license_keys.json'), JSON.stringify({ test: L.rawFromPublicKey(crypto.createPublicKey(testKey)) }));
-const daemon = path.join(bin, 'ashleyd.js');
+const daemon = path.join(bin, 'beethovend.js');
 const user = os.userInfo().username;
 const licenseFor = (sub: string, days = 30) => L.signLicense({ kid: 'test', sub, exp: Math.floor(Date.now() / 1000) + days * 86400 } as never, testKey);
-const home = path.join(tmp, 'ashley-home');
+const home = path.join(tmp, 'beethoven-home');
 const worker = path.join(home, 'workers', 'w1');
 const claudeHome = path.join(home, 'claude');
 const root = path.join(tmp, 'root');
@@ -66,7 +66,7 @@ before(async () => {
   fs.writeFileSync(path.join(worker, 'job.id'), '123\n');
   // the daemon runs a .js "claude" with its own node binary (Windows cannot spawn .cmd wrappers without a shell)
   child = spawn(process.execPath, [daemon, '--worker-dir', worker, '--claude', fake, '--concurrency', '2', '--poll-ms', '200'], {
-    env: { ...process.env, ASHLEY_HOME: home, ASHLEY_ROOT: root, ASHLEY_LICENSE_RECHECK_MS: '300' },
+    env: { ...process.env, BEETHOVEN_HOME: home, BEETHOVEN_ROOT: root, BEETHOVEN_LICENSE_RECHECK_MS: '300' },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   child.stdout?.on('data', () => {});
@@ -90,15 +90,15 @@ test('a request is answered, with events and a saved session', async () => {
   assert.equal(r.node, 'testnode');
   assert.equal(r.num_turns, 2);
   const events = fs.readFileSync(path.join(worker, 'outbox', 'r1.events.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l));
-  assert.equal(events[0].type, 'ashley');
+  assert.equal(events[0].type, 'beethoven');
   assert.ok(events.some((e) => e.type === 'assistant'));
   assert.equal(events[events.length - 1].event, 'exit');
   const sess = JSON.parse(fs.readFileSync(path.join(home, 'sessions', 's1.json'), 'utf8'));
   assert.equal(sess.session_id, r.session_id);
-  assert.ok(sess.cwd.startsWith(root), 'session cwd under ASHLEY_ROOT/workspaces');
+  assert.ok(sess.cwd.startsWith(root), 'session cwd under BEETHOVEN_ROOT/workspaces');
   const argv = JSON.parse(fs.readFileSync(path.join(sess.cwd, 'fake_argv.json'), 'utf8'));
   assert.ok(argv.args.includes('--session-id'), 'first turn sets the session id');
-  assert.equal(argv.env.CLAUDE_CODE_OAUTH_TOKEN, null, 'Ashley passes no Claude credential: Claude Code uses the sign-in it stored');
+  assert.equal(argv.env.CLAUDE_CODE_OAUTH_TOKEN, null, 'Beethoven passes no Claude credential: Claude Code uses the sign-in it stored');
   assert.equal(argv.env.ANTHROPIC_API_KEY, null, 'subscription runs never see the API key');
   assert.equal(argv.env.HF_TOKEN, 'hf_fake');
   assert.ok(argv.env.CLAUDE_CONFIG_DIR.endsWith('claude'), `config dir is the sign-in folder (${argv.env.CLAUDE_CONFIG_DIR})`);

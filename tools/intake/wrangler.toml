@@ -1,8 +1,9 @@
-# One Worker, two names. This file names ashley-service (Ashley in VS Code, and Beethoven 4.0.0 to 6.0.0,
-# which were built when Beethoven was called Ashley Bridge). The same code is deployed a second time as
-# beethoven-access (Beethoven 7.0.0 on) with `WORKER_NAME=beethoven-access bash deploy.sh`, which passes
-# --name and uses these same vars and KV namespace ids; deploy.sh gives both names the same secrets.
-name = "ashley-service"
+# One Worker, two names. This file names beethoven-access, the primary name (Beethoven 7.0.0 on, Beethoven
+# for VS Code 4.0.0 on). The same code stays deployed as ashley-service, with
+# `WORKER_NAME=ashley-service bash deploy.sh`, because Ashley for VS Code 3.0.0 and Beethoven 4.0.0 to 6.0.0
+# were built with that address and know no other; deploy.sh passes --name, uses these same vars and KV
+# namespace ids, and gives both names the same secrets.
+name = "beethoven-access"
 main = "worker.js"
 compatibility_date = "2026-09-01"
 
@@ -11,10 +12,18 @@ ALLOWED_DOMAINS = "wayne.edu"
 TRIAL_DAYS = "365"
 # the website the request and admin pages are served from: the only origin /request and /admin/* accept
 SITE_ORIGIN = "https://openspineconsortium.com"
-# where /trial, and an access check from any product but Beethoven, send a person who is not approved yet
-REQUEST_PAGE = "https://openspineconsortium.com/ashley/request.html"
-# where an access check from Beethoven (product "bridge" or "beethoven") sends a person who is not approved yet
+# where /trial, and an access check from any product but the browser edition, send a person who is not
+# approved yet (/ashley/request.html, which older builds open, redirects to the same page)
+REQUEST_PAGE = "https://openspineconsortium.com/beethoven/request.html"
+# where an access check from the browser edition (product "bridge" or "beethoven") sends that person
 BEETHOVEN_REQUEST_PAGE = "https://openspineconsortium.com/beethoven/request.html"
+# the maintainer's page the request e-mails and the /decide pages link to
+ADMIN_PAGE = "https://openspineconsortium.com/beethoven/admin.html"
+# the prefixes /trial signs keys and /revoked signs its list with: "ashley" (ASHLEY1, ASHLEYREV1), or
+# "beethoven" (BEETHOVEN1, BEETHOVENREV1). Flip only after every installed build older than Beethoven 8.0.0
+# and Beethoven for VS Code 4.0.0 is retired: those builds, and the grid scripts before 7, accept the old
+# prefixes only. Deploy both names after a change.
+KEY_PREFIX = "ashley"
 
 # secrets, never here: TRIAL_KEY_PKCS8_B64, TRIAL_KID, ADMIN_TOKEN, IP_SALT, GITHUB_TOKEN, GITHUB_REPO,
 # DECIDE_KEY, NOTIFY_TO, MAIL_FROM, RESEND_API_KEY (the e-mail about each request; no binding needed)

@@ -1,19 +1,4 @@
 #!/usr/bin/env bash
-# ashley (laptop, macOS/Linux/WSL): forwards to the grid-side CLI over ssh, for people who do not
-# use VS Code (Xcode users, terminal users). Needs only ssh and the ~/.ssh/config block that the
-# wizard writes (or `ashley-cli ssh-config` prints). Reads a prompt on stdin for `send`/`ask`.
-#   ashley status
-#   ashley worker start --name default --hours 24
-#   echo '{"id":"...","prompt":"...","session":"default"}' | ashley ask --worker default --json --stream
-#   ashley connect            print the ssh command for the worker's node (VS Code Remote-SSH host)
-GRID="${ASHLEY_GRID:-wsu-grid}"
-if [ "${1:-}" = "connect" ]; then
-  node=$(ssh -o BatchMode=yes "$GRID" '~/.ashley/bin/ashley worker node --name '"${2:-default}") || exit 1
-  echo "ssh $node        # Remote-SSH host: $node"
-  exit 0
-fi
-if [ -t 0 ]; then
-  exec ssh -o BatchMode=yes -o ConnectTimeout=20 "$GRID" -- '~/.ashley/bin/ashley' "$@"
-else
-  exec ssh -o BatchMode=yes -o ConnectTimeout=20 "$GRID" -- '~/.ashley/bin/ashley' "$@" < /dev/stdin
-fi
+# The forwarder's name before the rename (it is now cli/beethoven), kept so scripts and notes that
+# call it keep working: it runs the beethoven forwarder beside it.
+exec "$(dirname "$0")/beethoven" "$@"

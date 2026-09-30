@@ -1,49 +1,57 @@
 #!/bin/bash
-# Ashley (c) 2026 OpenSpineConsortium. Licensed software: use requires a license key. See LICENSE.txt.
-# ashley: the grid-side command. Lives at ~/.ashley/bin/ashley; the laptop calls it over
+# Beethoven for VS Code (c) 2026 OpenSpineConsortium. Licensed software: use requires a license key. See LICENSE.txt.
+# beethoven: the grid-side command. Lives at ~/.beethoven/bin/beethoven; the laptop calls it over
 # ssh, students can call it from a grid shell. Bash + coreutils only, so it works on the
 # login node without any environment. Nothing heavy runs here: building the container and
 # running Claude happen in Slurm jobs.
 #
-#   ashley install [--root DIR]      layout, bashrc block, submit the bootstrap job
-#   ashley status [--json]           ready? jobs, workers, accounts, quota
-#   ashley doctor                    every check with a pass/fail line
-#   ashley worker start --name N [--hours 24 --cpus 4 --mem 16G --partition reqp --qos requeue --gpus 0 --concurrency 2]
-#   ashley worker stop|list|log|node [--name N] [--json] [--lines 80]
-#   ashley send --worker N --json    (JSON request on stdin)  -> prints "queued <id>"
-#   ashley wait [--worker N] [--timeout S] [--stream] <id>    -> result JSON (EVENT/RESULT lines with --stream)
-#   ashley ask  --worker N --json [--stream] [--timeout S]    (JSON request on stdin) = send + wait
-#   ashley result [--worker N] <id>
-#   ashley tail [--worker N] <id>
-#   ashley sessions [--json]
-#   ashley claude login|status|remote-consent|forget      your Claude sign-in on the grid (Claude Code's own flow)
-#   ashley accounts list|add-key apikey|enable|disable|remove   your optional Anthropic Console key
-#   ashley bootstrap [--resubmit] [--update]
-#   ashley version
+# Until 2026-09-30 the product was called Ashley, this command ashley and its folder ~/.ashley. The
+# old names stay as links, made by `beethoven install`: ~/.ashley -> ~/.beethoven, bin/ashley ->
+# beethoven and bin/ashleyd.js -> beethovend.js, because Ashley for VS Code 3.0.0, the browser
+# edition's framework before 7 and worker job files written before this version still name them.
+#
+#   beethoven install [--root DIR]      layout, bashrc block, submit the bootstrap job
+#   beethoven migrate                   ~/.ashley becomes ~/.beethoven (install does this by itself)
+#   beethoven status [--json]           ready? jobs, workers, accounts, quota
+#   beethoven doctor                    every check with a pass/fail line
+#   beethoven worker start --name N [--hours 24 --cpus 4 --mem 16G --partition reqp --qos requeue --gpus 0 --concurrency 2]
+#   beethoven worker stop|list|log|node [--name N] [--json] [--lines 80]
+#   beethoven send --worker N --json    (JSON request on stdin)  -> prints "queued <id>"
+#   beethoven wait [--worker N] [--timeout S] [--stream] <id>    -> result JSON (EVENT/RESULT lines with --stream)
+#   beethoven ask  --worker N --json [--stream] [--timeout S]    (JSON request on stdin) = send + wait
+#   beethoven result [--worker N] <id>
+#   beethoven tail [--worker N] <id>
+#   beethoven sessions [--json]
+#   beethoven claude login|status|remote-consent|forget      your Claude sign-in on the grid (Claude Code's own flow)
+#   beethoven accounts list|add-key apikey|enable|disable|remove   your optional Anthropic Console key
+#   beethoven bootstrap [--resubmit] [--update]
+#   beethoven version
 set -uo pipefail
-ASHLEY_HOME="${ASHLEY_HOME:-$HOME/.ashley}"
-BIN="$ASHLEY_HOME/bin"
-CFG="$ASHLEY_HOME/config.env"
+# BEETHOVEN_HOME, else ASHLEY_HOME (its name before 2026-09-30, still set by older job files), else ~/.beethoven
+BEETHOVEN_HOME="${BEETHOVEN_HOME:-${ASHLEY_HOME:-$HOME/.beethoven}}"
+BIN="$BEETHOVEN_HOME/bin"
+CFG="$BEETHOVEN_HOME/config.env"
 VERSION=$(cat "$BIN/VERSION" 2>/dev/null || echo 0)
 # The student's own Claude sign-in, stored by Claude Code itself (never read, copied or relayed by
-# Ashley): the CLAUDE_CONFIG_DIR of every Claude Code process Ashley starts on the grid.
-CLAUDE_HOME="$ASHLEY_HOME/claude"
-die() { echo "ashley: $*" >&2; exit 1; }
+# Beethoven): the CLAUDE_CONFIG_DIR of every Claude Code process Beethoven starts on the grid.
+CLAUDE_HOME="$BEETHOVEN_HOME/claude"
+die() { echo "beethoven: $*" >&2; exit 1; }
 json_str() { # escape a string for JSON (control characters dropped)
   local s; s=$(printf '%s' "$1" | tr -d '\000-\010\013\014\016-\037'); s=${s//\\/\\\\}; s=${s//\"/\\\"}; s=${s//$'\n'/\\n}; s=${s//$'\r'/}; s=${s//$'\t'/\\t}; printf '"%s"' "$s"
 }
 # Destructive commands (uninstall, claude forget) are for a person at a terminal. A Claude Code
 # session (CLAUDECODE is set in every shell it runs) or a worker request must never remove the
-# student's installation or their sign-in: on 2026-09-28 the whole ~/.ashley folder vanished while a
-# Remote Control session was open, with the sign-in inside it.
+# student's installation or their sign-in: on 2026-09-28 the whole grid folder (then ~/.ashley)
+# vanished while a Remote Control session was open, with the sign-in inside it. A worker sets
+# BEETHOVEN_REQUEST_ID and BEETHOVEN_WORKER in Claude's shell, and the ASHLEY_ twins for older readers.
 refuse_destructive_from_agent() { # $1 what
-  if [ -n "${CLAUDECODE:-}" ] || [ -n "${ASHLEY_REQUEST_ID:-}" ] || [ -n "${ASHLEY_WORKER:-}" ]; then
-    die "refusing to $1 from inside a Claude Code session or worker: a person runs this at a terminal (ashley $1 --yes)"
+  if [ -n "${CLAUDECODE:-}" ] || [ -n "${BEETHOVEN_REQUEST_ID:-}" ] || [ -n "${BEETHOVEN_WORKER:-}" ] || [ -n "${ASHLEY_REQUEST_ID:-}" ] || [ -n "${ASHLEY_WORKER:-}" ]; then
+    die "refusing to $1 from inside a Claude Code session or worker: a person runs this at a terminal (beethoven $1 --yes)"
   fi
-  [ -t 0 ] || die "refusing to $1 without a terminal: a person runs this (ashley $1 --yes)"
+  [ -t 0 ] || die "refusing to $1 without a terminal: a person runs this (beethoven $1 --yes)"
 }
 load_cfg() { [ -s "$CFG" ] && source "$CFG"; ROOT="${ROOT:-}"; RUNTIME="${RUNTIME:-}"; SANDBOX="${SANDBOX:-}"; CLAUDE_BIN="${CLAUDE_BIN:-}"; BOOTSTRAP_JOB="${BOOTSTRAP_JOB:-}"; BINDS="${BINDS:-}"; CONTAINER="${CONTAINER:-}"; SOURCE="${SOURCE:-}"; }
-is_ready() { load_cfg; [ -s "$ASHLEY_HOME/READY" ] && [ -n "$CLAUDE_BIN" ] && [ -x "$CLAUDE_BIN" ] && [ -x "$SANDBOX/usr/local/bin/node" ]; }
+is_ready() { load_cfg; [ -s "$BEETHOVEN_HOME/READY" ] && [ -n "$CLAUDE_BIN" ] && [ -x "$CLAUDE_BIN" ] && [ -x "$SANDBOX/usr/local/bin/node" ]; }
 job_state() { # $1 job id -> state or "" if gone
   [ -n "${1:-}" ] || { echo ""; return; }
   local s; s=$(squeue -j "$1" -h -o %T 2>/dev/null | head -1)
@@ -51,11 +59,12 @@ job_state() { # $1 job id -> state or "" if gone
   sacct -j "$1" -n -X -o State -P 2>/dev/null | head -1 | cut -d' ' -f1
 }
 set_cfg() { # KEY VALUE
-  mkdir -p "$ASHLEY_HOME"; touch "$CFG"
+  mkdir -p "$BEETHOVEN_HOME"; touch "$CFG"
   { grep -v -E "^$1=" "$CFG"; printf '%s=%q\n' "$1" "$2"; } > "$CFG.part" && mv "$CFG.part" "$CFG"; chmod 600 "$CFG"
 }
 default_root() {
-  if [ -d "/rs/rs_grp_oschome/$USER" ] && [ -w "/rs/rs_grp_oschome/$USER" ]; then echo "/rs/rs_grp_oschome/$USER/ashley"; else echo "$HOME/ashley"; fi
+  # a new account's work folder; an account set up before the rename keeps the ROOT its config.env names
+  if [ -d "/rs/rs_grp_oschome/$USER" ] && [ -w "/rs/rs_grp_oschome/$USER" ]; then echo "/rs/rs_grp_oschome/$USER/beethoven"; else echo "$HOME/beethoven"; fi
 }
 
 # ---- the lab's shared container library -------------------------------------------------
@@ -63,7 +72,8 @@ default_root() {
 # inside. A student who can read it adopts an entry in a second instead of building for seven
 # minutes and 1.8 GB. Containers are read-only at run time: every account's state lives in its
 # own home, so sharing costs nothing in isolation.
-LIBRARY_ROOT="${ASHLEY_LIBRARY:-/rs/rs_grp_oschome/shared/ashley}"
+# /rs/rs_grp_oschome/shared/ashley, its name before 2026-09-30, is a link to it (older builds name it)
+LIBRARY_ROOT="${BEETHOVEN_LIBRARY:-${ASHLEY_LIBRARY:-/rs/rs_grp_oschome/shared/beethoven}}"
 SHARED="$(dirname "$LIBRARY_ROOT")"      # the lab folder: students read it, never write it
 ACCESS_ROOT="$SHARED/access"
 lib_file() { echo "$LIBRARY_ROOT/library.json"; }
@@ -86,15 +96,15 @@ cmd_library() {
       else echo "shared library at $LIBRARY_ROOT (default: $(lib_default))"; for n in $(lib_names); do printf '  %-22s %s  [%s]%s\n' "$n" "$(lib_field "$n" purpose)" "$(lib_field "$n" claude_version)" "$([ "$(lib_field "$n" gpu)" = true ] && echo ' gpu' || true)"; done; fi;;
     publish)
       is_admin || die "only the lab admin publishes containers"
-      # leads only: builds an entry as a job, then group-readable. ashley library publish --name NAME --image docker://... [--gpu] [--purpose "..."] [--partition P --qos Q]
+      # leads only: builds an entry as a job, then group-readable. beethoven library publish --name NAME --image docker://... [--gpu] [--purpose "..."] [--partition P --qos Q]
       local name="" image="docker://node:22-bookworm" gpu=0 purpose="" part="secp" qos="secondary"
       while [ $# -gt 0 ]; do case "$1" in --name) name="$2"; shift 2;; --image) image="$2"; shift 2;; --gpu) gpu=1; shift;; --purpose) purpose="$2"; shift 2;; --partition) part="$2"; shift 2;; --qos) qos="$2"; shift 2;; *) shift;; esac; done
       [[ "$name" =~ ^[A-Za-z0-9_.-]+$ ]] || die "library publish needs --name"
-      mkdir -p "$LIBRARY_ROOT" "$ASHLEY_HOME/log" || die "cannot create $LIBRARY_ROOT"
+      mkdir -p "$LIBRARY_ROOT" "$BEETHOVEN_HOME/log" || die "cannot create $LIBRARY_ROOT"
       # the purpose travels in the environment (--export=ALL): inside --export a comma would cut it
       chmod 2750 "$LIBRARY_ROOT" 2>/dev/null   # group reads, only the admin writes; approved students read by ACL
-      local id; id=$(cd "$ASHLEY_HOME/log" && PURPOSE="$purpose" sbatch --parsable --partition="$part" --qos="$qos" --export="ALL,LIBRARY=1,ROOT_OVERRIDE=$LIBRARY_ROOT,LIB_NAME=$name,IMAGE=$image,GPU=$gpu" "$BIN/bootstrap.sbatch" 2>&1) || die "sbatch failed: $id"
-      echo "publish job ${id%%;*} submitted: $name from $image into $LIBRARY_ROOT (log $ASHLEY_HOME/log/bootstrap_${id%%;*}.out)";;
+      local id; id=$(cd "$BEETHOVEN_HOME/log" && PURPOSE="$purpose" sbatch --parsable --partition="$part" --qos="$qos" --export="ALL,LIBRARY=1,ROOT_OVERRIDE=$LIBRARY_ROOT,LIB_NAME=$name,IMAGE=$image,GPU=$gpu" "$BIN/bootstrap.sbatch" 2>&1) || die "sbatch failed: $id"
+      echo "publish job ${id%%;*} submitted: $name from $image into $LIBRARY_ROOT (log $BEETHOVEN_HOME/log/bootstrap_${id%%;*}.out)";;
     *) die "library: list|publish";;
   esac
 }
@@ -104,7 +114,7 @@ cmd_adopt() { # use a shared container instead of building: writes config.env + 
   [ -n "$name" ] || name=$(lib_default)
   local sandbox claude runtime ver
   sandbox=$(lib_field "$name" sandbox); claude=$(lib_field "$name" claude_bin); runtime=$(lib_field "$name" runtime); ver=$(lib_field "$name" claude_version)
-  [ -n "$sandbox" ] || die "no library entry '$name' (ashley library)"
+  [ -n "$sandbox" ] || die "no library entry '$name' (beethoven library)"
   [ -x "$sandbox/usr/local/bin/node" ] || die "cannot read the shared container $sandbox (ask your lead for the oschome group)"
   [ -r "$claude" ] || die "cannot read $claude"
   load_cfg; [ -n "$ROOT" ] || set_cfg ROOT "$(default_root)"; load_cfg
@@ -114,39 +124,100 @@ cmd_adopt() { # use a shared container instead of building: writes config.env + 
   case "$ROOT" in "/rs/rs_grp_oschome/$USER"/*|"$HOME"/*) ;; *) binds="$binds -B $ROOT";; esac
   binds="$binds -B $SHARED"   # the lab folder (containers, datasets, software), read-only by permission
   set_cfg RUNTIME "$runtime"; set_cfg SANDBOX "$sandbox"; set_cfg CLAUDE_BIN "$claude"; set_cfg BINDS "$binds"; set_cfg CONTAINER "$name"; set_cfg SOURCE "shared"; set_cfg BOOTSTRAP_STATE "adopted"
-  printf '{"claude_version":"%s","runtime":"%s","sandbox":"%s","container":"%s","source":"shared","adopted":"%s","host":"%s"}\n' "$ver" "$runtime" "$sandbox" "$name" "$(date -u +%FT%TZ)" "$(hostname)" > "$ASHLEY_HOME/READY.part" && mv "$ASHLEY_HOME/READY.part" "$ASHLEY_HOME/READY"
+  printf '{"claude_version":"%s","runtime":"%s","sandbox":"%s","container":"%s","source":"shared","adopted":"%s","host":"%s"}\n' "$ver" "$runtime" "$sandbox" "$name" "$(date -u +%FT%TZ)" "$(hostname)" > "$BEETHOVEN_HOME/READY.part" && mv "$BEETHOVEN_HOME/READY.part" "$BEETHOVEN_HOME/READY"
   echo "adopted shared container '$name' ($ver); nothing to build"
+}
+
+# ---- the rename: ~/.ashley becomes ~/.beethoven, the old names stay as links ---------------------
+# The folder moves in one step (mv, then a relative link back), so the Claude sign-in, the license,
+# the tokens and the workers' records move with it and nothing is entered again. Never a copy, never
+# a deletion of a file. Only the default location moves: a folder named by BEETHOVEN_HOME or
+# ASHLEY_HOME is left where it is.
+OLD_HOME="$HOME/.ashley"; NEW_HOME="$HOME/.beethoven"
+busy_workers() { # DIR: workers under DIR whose job is queued or running
+  local w out=""; for w in "$1"/workers/*/; do [ -d "$w" ] || continue
+    case "$(job_state "$(cat "$w/job.id" 2>/dev/null)")" in PENDING|RUNNING|CONFIGURING|COMPLETING|SUSPENDED) out="$out $(basename "$w")";; esac; done
+  printf '%s' "$out"
+}
+migrate_home() { # [--merge]: 0 when ~/.beethoven is the folder and ~/.ashley leads to it
+  local merge=0; [ "${1:-}" = --merge ] && merge=1
+  [ "$BEETHOVEN_HOME" = "$NEW_HOME" ] || return 0
+  if [ -L "$OLD_HOME" ]; then return 0; fi
+  if [ ! -e "$OLD_HOME" ]; then   # a new account: the old name is made to lead here, for older builds
+    mkdir -p "$NEW_HOME" && chmod 700 "$NEW_HOME" && ln -s .beethoven "$OLD_HOME"; return 0
+  fi
+  [ -d "$OLD_HOME" ] || die "$OLD_HOME exists and is not a folder; nothing moved"
+  local busy; busy=$(busy_workers "$OLD_HOME")
+  [ -z "$busy" ] || die "worker(s)$busy still run from ~/.ashley: stop them (beethoven worker stop --name NAME), then run this again; nothing moved"
+  if [ ! -e "$NEW_HOME" ] && [ ! -L "$NEW_HOME" ]; then
+    mv -T "$OLD_HOME" "$NEW_HOME" && ln -s .beethoven "$OLD_HOME" || die "could not move ~/.ashley to ~/.beethoven"
+    echo "moved ~/.ashley to ~/.beethoven; ~/.ashley is now a link to it"
+    return 0
+  fi
+  [ $merge = 1 ] || die "both ~/.ashley and ~/.beethoven are folders; nothing moved. Run: beethoven migrate (it moves the old folder's contents in and keeps the rest aside)"
+  # both are folders: an installer made ~/.beethoven first (the new scripts and empty folders). The old
+  # folder's contents move in; a name the new folder already holds with content stays in the old one,
+  # which is then renamed aside (~/.ashley.before-beethoven.<time>), never deleted.
+  local e b t kept="" aside
+  for e in "$OLD_HOME"/* "$OLD_HOME"/.[!.]* "$OLD_HOME"/..?*; do
+    [ -e "$e" ] || [ -L "$e" ] || continue
+    b=$(basename "$e"); t="$NEW_HOME/$b"
+    if [ "$b" = bin ]; then kept="$kept bin"; continue; fi   # the new scripts are already in place
+    # an empty placeholder the installer made (folders only, no file inside) gives way
+    if [ -d "$t" ] && [ ! -L "$t" ] && [ -z "$(find "$t" ! -type d -print -quit 2>/dev/null)" ]; then find "$t" -depth -type d -empty -delete 2>/dev/null; fi
+    if [ ! -e "$t" ] && [ ! -L "$t" ]; then mv "$e" "$t" || kept="$kept $b"; else kept="$kept $b"; fi
+  done
+  aside="$HOME/.ashley.before-beethoven.$(date +%Y%m%d-%H%M%S)"
+  mv -T "$OLD_HOME" "$aside" && ln -s .beethoven "$OLD_HOME" || die "could not rename ~/.ashley aside"
+  echo "moved the contents of ~/.ashley into ~/.beethoven; ~/.ashley is now a link to it${kept:+ (left in $aside:$kept)}"
+}
+cmd_migrate() { migrate_home --merge; echo "grid folder: $NEW_HOME$([ -L "$OLD_HOME" ] && echo "; ~/.ashley -> $(readlink "$OLD_HOME")")"; }
+old_names() { # the scripts' names before grid scripts 7, as links beside the new files
+  # Ashley for VS Code 3.0.0 runs ~/.ashley/bin/ashley; worker job files written before 7 run bin/ashleyd.js
+  ln -sfn beethoven "$BIN/ashley" && ln -sfn beethovend.js "$BIN/ashleyd.js"
+}
+# The ~/.bashrc block: markers "# >>> beethoven" and, before grid scripts 7, "# >>> ashley". Both are
+# recognised, so an old block is replaced where it stands and never duplicated.
+BASHRC_START='^# >>> (beethoven|ashley)'; BASHRC_END='^# <<< (beethoven|ashley)'
+has_bashrc_block() { grep -Eq "$BASHRC_START" "${1:-$HOME/.bashrc}" 2>/dev/null; }
+bashrc_without_blocks() { # FILE: the file without any of the blocks
+  awk -v s="$BASHRC_START" -v e="$BASHRC_END" '$0 ~ s {skip=1; next} skip && $0 ~ e {skip=0; next} !skip {print}' "$1"
 }
 
 cmd_install() {
   local root="" pass=() build_own=0
   while [ $# -gt 0 ]; do case "$1" in --root) root="$2"; shift 2;; --partition|--qos) pass+=("$1" "$2"); shift 2;; --build-own) build_own=1; shift;; *) shift;; esac; done
-  mkdir -p "$ASHLEY_HOME"/{bin,log,accounts,workers,sessions} && chmod 700 "$ASHLEY_HOME" "$ASHLEY_HOME/accounts"
+  migrate_home
+  VERSION=$(cat "$BIN/VERSION" 2>/dev/null || echo "$VERSION")   # run from the old folder, the file is read again after the move
+  mkdir -p "$BEETHOVEN_HOME"/{bin,log,accounts,workers,sessions} && chmod 700 "$BEETHOVEN_HOME" "$BEETHOVEN_HOME/accounts"
   # scripts uploaded from a Windows checkout may carry CR line endings, which break bash and sbatch
-  for f in "$BIN"/ashley "$BIN"/*.sbatch "$BIN"/*.tpl "$BIN"/*.js "$BIN"/*.block; do [ -f "$f" ] && sed -i 's/\r$//' "$f"; done
-  chmod +x "$BIN"/ashley "$BIN"/*.sbatch 2>/dev/null
+  # (links are skipped: sed -i would put a copy in a link's place)
+  for f in "$BIN"/beethoven "$BIN"/*.sbatch "$BIN"/*.tpl "$BIN"/*.js "$BIN"/*.block "$BIN"/*.sh; do [ -f "$f" ] && [ ! -L "$f" ] && sed -i 's/\r$//' "$f"; done
+  chmod +x "$BIN"/beethoven "$BIN"/*.sbatch "$BIN"/*.sh 2>/dev/null
+  old_names || die "could not link the old names ashley and ashleyd.js in $BIN"
   load_cfg
   [ -n "$root" ] && set_cfg ROOT "$root"
   load_cfg; [ -n "$ROOT" ] || set_cfg ROOT "$(default_root)"
   load_cfg
   mkdir -p "$ROOT" 2>/dev/null || die "cannot create ROOT=$ROOT"
-  # bashrc block (VS Code glibc sysroot + PATH), idempotent by markers
+  # bashrc block (VS Code glibc sysroot + PATH), idempotent by markers: the first block (new or old
+  # marker) is replaced where it stands, any further one is dropped
   local rc="$HOME/.bashrc" blk="$BIN/bashrc.block"
   touch "$rc"
-  if grep -q '# >>> ashley' "$rc"; then
-    awk -v blk="$blk" 'BEGIN{skip=0} /^# >>> ashley/{skip=1; while ((getline l < blk) > 0) print l; next} /^# <<< ashley/{skip=0; next} skip==0{print}' "$rc" > "$rc.ashley.tmp" && mv "$rc.ashley.tmp" "$rc"
+  if has_bashrc_block "$rc"; then
+    awk -v blk="$blk" -v s="$BASHRC_START" -v e="$BASHRC_END" 'BEGIN{skip=0; done=0} $0 ~ s {skip=1; if (!done) {while ((getline l < blk) > 0) print l; done=1}; next} skip && $0 ~ e {skip=0; next} skip==0{print}' "$rc" > "$rc.beethoven.tmp" && mv "$rc.beethoven.tmp" "$rc"
   else
     { echo; cat "$blk"; } >> "$rc"
   fi
-  echo "installed ashley $VERSION at $ASHLEY_HOME (ROOT=$ROOT); bashrc block written"
-  if is_ready; then echo "grid already ready: $(cat "$ASHLEY_HOME/READY")"; return 0; fi
+  echo "installed beethoven $VERSION at $BEETHOVEN_HOME (ROOT=$ROOT); bashrc block written"
+  if is_ready; then echo "grid already ready: $(cat "$BEETHOVEN_HOME/READY")"; return 0; fi
   # the shared library first: instant, consistent across the lab, no storage used
   if [ $build_own -eq 0 ] && lib_readable && cmd_adopt "$(lib_default)" 2>/dev/null; then return 0; fi
   # Not readable yet. When the lab runs access requests, the container arrives with access (the
   # wizard's last step): do not spend 1.8 GB and seven minutes of the student's space on a copy.
   if [ $build_own -eq 0 ] && lab_mode; then
     set_cfg AWAITING_ACCESS 1
-    echo "the lab's shared container comes with lab access: request it as the wizard's last step (Ashley: Lab access)"
+    echo "the lab's shared container comes with lab access: request it as the wizard's last step (Beethoven: Lab access)"
     return 0
   fi
   cmd_bootstrap "${pass[@]}"
@@ -162,13 +233,13 @@ cmd_bootstrap() {
     local st; st=$(job_state "$BOOTSTRAP_JOB")
     case "$st" in PENDING|RUNNING|CONFIGURING|COMPLETING) echo "bootstrap job $BOOTSTRAP_JOB is $st"; return 0;; esac
   fi
-  mkdir -p "$ASHLEY_HOME/log"
+  mkdir -p "$BEETHOVEN_HOME/log"
   local exp="ALL"; [ $update -eq 1 ] && exp="ALL,UPDATE=1"
   local extra=(); [ -n "$part" ] && extra+=(--partition="$part"); [ -n "$qos" ] && extra+=(--qos="$qos")
-  local id; id=$(cd "$ASHLEY_HOME/log" && sbatch --parsable --export="$exp" "${extra[@]}" "$BIN/bootstrap.sbatch" 2>&1) || die "sbatch failed: $id"
+  local id; id=$(cd "$BEETHOVEN_HOME/log" && sbatch --parsable --export="$exp" "${extra[@]}" "$BIN/bootstrap.sbatch" 2>&1) || die "sbatch failed: $id"
   id=${id%%;*}
   set_cfg BOOTSTRAP_JOB "$id"; set_cfg BOOTSTRAP_STATE "submitted"
-  echo "bootstrap job $id submitted (log: $ASHLEY_HOME/log/bootstrap_$id.out)"
+  echo "bootstrap job $id submitted (log: $BEETHOVEN_HOME/log/bootstrap_$id.out)"
 }
 
 home_quota() { # prints used_gb soft_gb or "0 0"
@@ -177,9 +248,9 @@ home_quota() { # prints used_gb soft_gb or "0 0"
   df -BG "$HOME" 2>/dev/null | awk 'NR==2 {gsub("G","",$3); gsub("G","",$2); print $3, $2}'
 }
 
-worker_dirs() { [ -d "$ASHLEY_HOME/workers" ] && for d in "$ASHLEY_HOME"/workers/*/; do [ -d "$d" ] && basename "$d"; done; }
+worker_dirs() { [ -d "$BEETHOVEN_HOME/workers" ] && for d in "$BEETHOVEN_HOME"/workers/*/; do [ -d "$d" ] && basename "$d"; done; }
 worker_json() { # $1 name
-  local w="$ASHLEY_HOME/workers/$1" jid st node alive="false" state="{}"
+  local w="$BEETHOVEN_HOME/workers/$1" jid st node alive="false" state="{}"
   jid=$(cat "$w/job.id" 2>/dev/null || echo ""); st=$(job_state "$jid"); node=$(cat "$w/node" 2>/dev/null || echo "")
   if [ -s "$w/state.json" ]; then state=$(tr -d '\n' < "$w/state.json"); fi
   if [ "$st" = "RUNNING" ] && [ -s "$w/state.json" ]; then
@@ -194,7 +265,7 @@ accounts_json() { # the sign-in (presence only) and the optional Console key
   if [ -s "$CLAUDE_HOME/.credentials.json" ]; then
     printf '{"name":"claude","kind":"login","enabled":%s,"cooldown_until":%s}' "$([ -e "$CLAUDE_HOME/disabled" ] && echo false || echo true)" "$(cooldown_of "$CLAUDE_HOME")"; first=0
   fi
-  local d="$ASHLEY_HOME/accounts/apikey"
+  local d="$BEETHOVEN_HOME/accounts/apikey"
   if [ -s "$d/apikey" ]; then
     [ $first -eq 1 ] || printf ','
     printf '{"name":"apikey","kind":"api-key","enabled":%s,"cooldown_until":%s}' "$([ -e "$d/disabled" ] && echo false || echo true)" "$(cooldown_of "$d")"
@@ -203,8 +274,8 @@ accounts_json() { # the sign-in (presence only) and the optional Console key
 }
 secrets_json() { # names (never values) of the variables in secrets.env
   local first=1; printf '['
-  if [ -s "$ASHLEY_HOME/secrets.env" ]; then
-    while IFS='=' read -r k _; do [[ "$k" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || continue; [ $first -eq 1 ] || printf ','; first=0; printf '"%s"' "$k"; done < "$ASHLEY_HOME/secrets.env"
+  if [ -s "$BEETHOVEN_HOME/secrets.env" ]; then
+    while IFS='=' read -r k _; do [[ "$k" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || continue; [ $first -eq 1 ] || printf ','; first=0; printf '"%s"' "$k"; done < "$BEETHOVEN_HOME/secrets.env"
   fi; printf ']'
 }
 jobs_json() {
@@ -215,8 +286,8 @@ jobs_json() {
   done < <(squeue -u "$USER" -h -o '%i|%j|%T|%N|%M|%l|%P|%R' 2>/dev/null); printf ']'
 }
 license_fp() { # first 16 hex digits of the license key's SHA-256 (the laptop compares it with its own)
-  [ -s "$ASHLEY_HOME/license.key" ] || return 0
-  tr -d '\r\n' < "$ASHLEY_HOME/license.key" | sha256sum | cut -c1-16
+  [ -s "$BEETHOVEN_HOME/license.key" ] || return 0
+  tr -d '\r\n' < "$BEETHOVEN_HOME/license.key" | sha256sum | cut -c1-16
 }
 cmd_status() {
   local as_json=0; [ "${1:-}" = "--json" ] && as_json=1
@@ -224,7 +295,7 @@ cmd_status() {
   if ! is_ready && lib_readable; then ( cmd_adopt "$(lib_default)" ) >/dev/null 2>&1; load_cfg; fi
   local ready=false cv="" bst=""
   is_ready && ready=true
-  [ -s "$ASHLEY_HOME/READY" ] && cv=$(grep -o '"claude_version":"[^"]*"' "$ASHLEY_HOME/READY" | cut -d'"' -f4)
+  [ -s "$BEETHOVEN_HOME/READY" ] && cv=$(grep -o '"claude_version":"[^"]*"' "$BEETHOVEN_HOME/READY" | cut -d'"' -f4)
   [ -n "$BOOTSTRAP_JOB" ] && bst=$(job_state "$BOOTSTRAP_JOB")
   read -r used soft < <(home_quota)
   if [ $as_json -eq 1 ]; then
@@ -235,7 +306,7 @@ cmd_status() {
     local first=1; for w in $(worker_dirs); do [ $first -eq 1 ] || printf ','; first=0; worker_json "$w"; done
     printf '],"accounts":%s,"secrets":%s,"jobs":%s,"license":%s,"claude_login":%s,"claude_dir":%s}\n' "$(accounts_json)" "$(secrets_json)" "$(jobs_json)" "$(json_str "$(license_fp)")" "$(claude_login_json)" "$([ -s "$CLAUDE_HOME/.credentials.json" ] && echo true || echo false)"
   else
-    echo "ashley $VERSION on $(hostname)  ready=$ready  claude=${cv:-?}  root=${ROOT:-?}"
+    echo "beethoven $VERSION on $(hostname)  ready=$ready  claude=${cv:-?}  root=${ROOT:-?}"
     [ -n "$BOOTSTRAP_JOB" ] && echo "bootstrap job $BOOTSTRAP_JOB: ${bst:-finished}"
     echo "home: ${used:-?} GB used of ${soft:-?} GB soft quota"
     echo "accounts: $(accounts_json)"
@@ -247,14 +318,16 @@ cmd_status() {
 cmd_doctor() {
   load_cfg; local fail=0
   ok() { echo "PASS  $*"; }; bad() { echo "FAIL  $*"; fail=1; }
-  [ -x "$BIN/ashley" ] && ok "ashley $VERSION installed at $BIN" || bad "ashley not executable"
-  grep -q '# >>> ashley' "$HOME/.bashrc" && ok "bashrc block present (VS Code glibc sysroot, PATH)" || bad "bashrc block missing: run ashley install"
+  [ -x "$BIN/beethoven" ] && ok "beethoven $VERSION installed at $BIN" || bad "beethoven not executable"
+  { [ -L "$BIN/ashley" ] && [ -L "$BIN/ashleyd.js" ]; } && ok "the old names ashley and ashleyd.js lead to the new files" || bad "the links ashley and ashleyd.js are missing: run beethoven install"
+  if [ "$BEETHOVEN_HOME" = "$NEW_HOME" ]; then [ -L "$OLD_HOME" ] && ok "~/.ashley leads to ~/.beethoven" || bad "~/.ashley is not a link to ~/.beethoven: run beethoven install"; fi
+  has_bashrc_block && ok "bashrc block present (VS Code glibc sysroot, PATH)" || bad "bashrc block missing: run beethoven install"
   for f in /wsu/apps/vscode/sysroot/x86_64-linux-gnu/x86_64-linux-gnu/sysroot/lib/ld-linux-x86-64.so.2 /wsu/apps/vscode/patchelf/0.19.1/bin/patchelf; do [ -e "$f" ] && ok "C&IT VS Code sysroot: $f" || bad "missing $f (C&IT moved the sysroot?)"; done
   [ -n "$ROOT" ] && [ -w "$ROOT" ] && ok "ROOT $ROOT writable" || bad "ROOT not writable (${ROOT:-unset})"
-  if is_ready; then ok "READY: $(cat "$ASHLEY_HOME/READY")"; else bad "not ready (bootstrap job ${BOOTSTRAP_JOB:-none}: $(job_state "$BOOTSTRAP_JOB"))"; fi
+  if is_ready; then ok "READY: $(cat "$BEETHOVEN_HOME/READY")"; else bad "not ready (bootstrap job ${BOOTSTRAP_JOB:-none}: $(job_state "$BOOTSTRAP_JOB"))"; fi
   [ -n "$RUNTIME" ] && [ -x "$RUNTIME" ] && ok "runtime $RUNTIME" || bad "runtime missing on this host (fine on the login node if the compute nodes have it)"
-  [ -s "$CLAUDE_HOME/.credentials.json" ] && ok "Claude signed in on the grid (Claude Code's own store in $CLAUDE_HOME)" || bad "Claude not signed in on the grid (ashley claude login)"
-  [ -s "$ASHLEY_HOME/secrets.env" ] && ok "secrets.env present ($(stat -c %a "$ASHLEY_HOME/secrets.env")): $(cmd_verify_tokens 2>/dev/null | tr '\n' ';')" || bad "secrets.env missing (GitHub / Hugging Face tokens for the worker)"
+  [ -s "$CLAUDE_HOME/.credentials.json" ] && ok "Claude signed in on the grid (Claude Code's own store in $CLAUDE_HOME)" || bad "Claude not signed in on the grid (beethoven claude login)"
+  [ -s "$BEETHOVEN_HOME/secrets.env" ] && ok "secrets.env present ($(stat -c %a "$BEETHOVEN_HOME/secrets.env")): $(cmd_verify_tokens 2>/dev/null | tr '\n' ';')" || bad "secrets.env missing (GitHub / Hugging Face tokens for the worker)"
   read -r used soft < <(home_quota); ok "home quota ${used:-?}/${soft:-?} GB"
   for w in $(worker_dirs); do echo "      worker $(worker_json "$w")"; done
   [ $fail -eq 0 ] && echo "doctor: all checks passed" || echo "doctor: some checks failed"
@@ -270,14 +343,14 @@ cmd_worker() {
     --container) container="$2"; shift 2;;
     --lines) lines="$2"; shift 2;; --json) as_json=1; shift;; *) shift;; esac; done
   [[ "$name" =~ ^[A-Za-z0-9_-]+$ ]] || die "worker name must be letters, digits, _ or -"
-  local w="$ASHLEY_HOME/workers/$name"
+  local w="$BEETHOVEN_HOME/workers/$name"
   case "$sub" in
     start)
       # access granted since the last install: adopt the lab's container on the spot
       if ! is_ready && lib_readable; then ( cmd_adopt "$(lib_default)" ) >/dev/null 2>&1; load_cfg; fi
       if ! is_ready && ! lib_readable && lab_mode; then die "no container yet: it comes with lab access (the last setup step; your lead approves it)"; fi
-      is_ready || die "grid not ready yet (bootstrap job ${BOOTSTRAP_JOB:-none}: $(job_state "${BOOTSTRAP_JOB:-}")); try again when 'ashley status' says ready=true"
-      [ -s "$ASHLEY_HOME/license.key" ] || die "no Ashley license on the grid yet: run the setup's grid step in VS Code (it copies your license here)"
+      is_ready || die "grid not ready yet (bootstrap job ${BOOTSTRAP_JOB:-none}: $(job_state "${BOOTSTRAP_JOB:-}")); try again when 'beethoven status' says ready=true"
+      [ -s "$BEETHOVEN_HOME/license.key" ] || die "no Beethoven license on the grid yet: run the setup's grid step in VS Code (it copies your license here)"
       mkdir -p "$w"/{inbox,outbox,log}
       rm -f "$w/stop"
       local jid st; jid=$(cat "$w/job.id" 2>/dev/null || echo ""); st=$(job_state "$jid")
@@ -290,7 +363,7 @@ cmd_worker() {
       if [ -n "$container" ]; then
         lib_readable || die "--container needs the shared library ($LIBRARY_ROOT)"
         w_sandbox=$(lib_field "$container" sandbox); w_claude=$(lib_field "$container" claude_bin)
-        [ -n "$w_sandbox" ] || die "no library entry '$container' (ashley library)"
+        [ -n "$w_sandbox" ] || die "no library entry '$container' (beethoven library)"
         [ -x "$w_sandbox/usr/local/bin/node" ] || die "cannot read the shared container $w_sandbox"
         echo "$container" > "$w/container"
       fi
@@ -312,7 +385,7 @@ cmd_worker() {
       else
         [ -s "$w/job.sbatch" ] || die "worker $name has no job script to restart"
         local nj; nj=$(cd "$w" && sbatch --parsable job.sbatch 2>&1) || die "sbatch failed: $nj"
-        echo "${nj%%;*}" > "$w/job.id"; echo "restarted worker $name as job ${nj%%;*} with its old job script (start it once with ashley worker start to pick up a newer template)"
+        echo "${nj%%;*}" > "$w/job.id"; echo "restarted worker $name as job ${nj%%;*} with its old job script (start it once with beethoven worker start to pick up a newer template)"
       fi;;
     stop)
       [ -d "$w" ] || die "no worker $name"
@@ -325,7 +398,9 @@ cmd_worker() {
       else for x in $(worker_dirs); do worker_json "$x"; echo; done; fi;;
     log)
       [ -d "$w" ] || die "no worker $name"
-      echo "--- ashleyd.log"; tail -n "$lines" "$w/log/ashleyd.log" 2>/dev/null
+      # beethovend.log; a worker started before grid scripts 7 writes ashleyd.log
+      local dl="$w/log/beethovend.log"; [ -s "$dl" ] || [ ! -s "$w/log/ashleyd.log" ] || dl="$w/log/ashleyd.log"
+      echo "--- $(basename "$dl")"; tail -n "$lines" "$dl" 2>/dev/null
       echo "--- slurm"; ls -t "$w"/log/slurm_*.out 2>/dev/null | head -1 | xargs -r tail -n 40;;
     node)
       [ -s "$w/node" ] || die "worker $name has no node yet ($(job_state "$(cat "$w/job.id" 2>/dev/null)"))"
@@ -341,8 +416,8 @@ req_id_from_stdin() { # reads JSON on stdin into $REQ, extracts id
   [[ "$RID" =~ ^[A-Za-z0-9_.-]+$ ]] || die "request JSON needs an id"
 }
 enqueue() { # $1 worker; uses REQ/RID; prints the queued line
-  local worker="$1" w="$ASHLEY_HOME/workers/$1"
-  [ -d "$w" ] || die "no worker '$worker' (ashley worker start --name $worker)"
+  local worker="$1" w="$BEETHOVEN_HOME/workers/$1"
+  [ -d "$w" ] || die "no worker '$worker' (beethoven worker start --name $worker)"
   mkdir -p "$w/inbox" "$w/outbox"
   printf '%s' "$REQ" > "$w/inbox/$RID.json.part" && mv "$w/inbox/$RID.json.part" "$w/inbox/$RID.json"
   local jid st n; jid=$(cat "$w/job.id" 2>/dev/null || echo ""); st=$(job_state "$jid"); n=$(ls "$w/inbox" 2>/dev/null | grep -c '\.json$' || true)
@@ -358,7 +433,7 @@ cmd_wait() {
   local worker="default" timeout=3600 stream=0 id=""
   while [ $# -gt 0 ]; do case "$1" in --worker) worker="$2"; shift 2;; --timeout) timeout="$2"; shift 2;; --stream) stream=1; shift;; --json) shift;; *) id="$1"; shift;; esac; done
   [[ "$id" =~ ^[A-Za-z0-9_.-]+$ ]] || die "wait: request id required"
-  local w="$ASHLEY_HOME/workers/$worker" out="$ASHLEY_HOME/workers/$worker/outbox/$id.json" ev="$ASHLEY_HOME/workers/$worker/outbox/$id.events.jsonl"
+  local w="$BEETHOVEN_HOME/workers/$worker" out="$BEETHOVEN_HOME/workers/$worker/outbox/$id.json" ev="$BEETHOVEN_HOME/workers/$worker/outbox/$id.events.jsonl"
   local start; start=$(date +%s); local off=0
   while :; do
     if [ $stream -eq 1 ] && [ -f "$ev" ]; then
@@ -371,7 +446,7 @@ cmd_wait() {
     fi
     if [ $(( $(date +%s) - start )) -ge "$timeout" ]; then
       [ $stream -eq 1 ] && echo "TIMEOUT $id"
-      echo "ashley: no result for $id after ${timeout}s (worker job $(cat "$w/job.id" 2>/dev/null) $(job_state "$(cat "$w/job.id" 2>/dev/null)"))" >&2; return 124
+      echo "beethoven: no result for $id after ${timeout}s (worker job $(cat "$w/job.id" 2>/dev/null) $(job_state "$(cat "$w/job.id" 2>/dev/null)"))" >&2; return 124
     fi
     sleep 0.5
   done
@@ -388,20 +463,20 @@ cmd_ask() {
 cmd_result() {
   local worker="default" id=""
   while [ $# -gt 0 ]; do case "$1" in --worker) worker="$2"; shift 2;; *) id="$1"; shift;; esac; done
-  local f="$ASHLEY_HOME/workers/$worker/outbox/$id.json"; [ -s "$f" ] || { echo "no result yet for $id" >&2; exit 1; }; cat "$f"
+  local f="$BEETHOVEN_HOME/workers/$worker/outbox/$id.json"; [ -s "$f" ] || { echo "no result yet for $id" >&2; exit 1; }; cat "$f"
 }
 cmd_tail() {
   local worker="default" id=""
   while [ $# -gt 0 ]; do case "$1" in --worker) worker="$2"; shift 2;; *) id="$1"; shift;; esac; done
-  tail -n 50 -f "$ASHLEY_HOME/workers/$worker/outbox/$id.events.jsonl"
+  tail -n 50 -f "$BEETHOVEN_HOME/workers/$worker/outbox/$id.events.jsonl"
 }
 cmd_sessions() {
   local as_json=0; [ "${1:-}" = "--json" ] && as_json=1
-  if [ $as_json -eq 1 ]; then printf '{"sessions":['; local first=1; for f in "$ASHLEY_HOME"/sessions/*.json; do [ -s "$f" ] || continue; [ $first -eq 1 ] || printf ','; first=0; tr -d '\n' < "$f"; done; printf ']}\n'
-  else for f in "$ASHLEY_HOME"/sessions/*.json; do [ -s "$f" ] && { basename "$f" .json; sed 's/^/    /' "$f"; }; done; fi
+  if [ $as_json -eq 1 ]; then printf '{"sessions":['; local first=1; for f in "$BEETHOVEN_HOME"/sessions/*.json; do [ -s "$f" ] || continue; [ $first -eq 1 ] || printf ','; first=0; tr -d '\n' < "$f"; done; printf ']}\n'
+  else for f in "$BEETHOVEN_HOME"/sessions/*.json; do [ -s "$f" ] && { basename "$f" .json; sed 's/^/    /' "$f"; }; done; fi
 }
-share_transcripts() { # every account's projects/ links to one ~/.ashley/projects (see ashleyd.js)
-  local p="$1/projects" s="$ASHLEY_HOME/projects" proj f
+share_transcripts() { # every account's projects/ links to one ~/.beethoven/projects (see beethovend.js)
+  local p="$1/projects" s="$BEETHOVEN_HOME/projects" proj f
   mkdir -p "$s" && chmod 700 "$s"
   [ -L "$p" ] && return 0
   if [ -d "$p" ]; then
@@ -412,10 +487,10 @@ share_transcripts() { # every account's projects/ links to one ~/.ashley/project
   ln -s "$s" "$p"
 }
 cmd_accounts() {
-  local sub="${1:-list}" name="${2:-apikey}"; local d="$ASHLEY_HOME/accounts/apikey"
+  local sub="${1:-list}" name="${2:-apikey}"; local d="$BEETHOVEN_HOME/accounts/apikey"
   case "$sub" in
     list) accounts_json; echo;;
-    add-token) die "Ashley no longer stores Claude tokens. Sign in on the grid through Claude Code's own flow: ashley claude login";;
+    add-token) die "Beethoven no longer stores Claude tokens. Sign in on the grid through Claude Code's own flow: beethoven claude login";;
     add-key) [ "$name" = apikey ] || die "the Console key is stored as 'apikey' (accounts add-key apikey, key on stdin)"
       umask 077; mkdir -p "$d"; head -1 | tr -d '\r\n' > "$d/apikey.part"; [ -s "$d/apikey.part" ] || { rm -f "$d/apikey.part"; die "empty key"; }
       mv "$d/apikey.part" "$d/apikey"; rm -f "$d/disabled" "$d/state.json"; share_transcripts "$d"; echo "your Anthropic Console key is stored (used only when your subscription window is exhausted)";;
@@ -429,7 +504,7 @@ cmd_accounts() {
 # ---- your Claude sign-in on the grid: Claude Code's own flow, in your allocation -----------------
 claude_in_alloc() { # run Claude Code interactively inside the container, in a running worker's allocation or a short one
   load_cfg; is_ready || die "the lab container is not adopted yet (lab access is the step before this)"
-  local jid="" wk; for wk in $(worker_dirs); do local j; j=$(cat "$ASHLEY_HOME/workers/$wk/job.id" 2>/dev/null); [ "$(job_state "$j")" = RUNNING ] && { jid=$j; break; }; done
+  local jid="" wk; for wk in $(worker_dirs); do local j; j=$(cat "$BEETHOVEN_HOME/workers/$wk/job.id" 2>/dev/null); [ "$(job_state "$j")" = RUNNING ] && { jid=$j; break; }; done
   local cwd="$ROOT/workspaces/phone"; mkdir -p "$cwd" "$CLAUDE_HOME"; chmod 700 "$CLAUDE_HOME"
   # first-run settings so Claude Code asks no onboarding questions in the terminal (settings, not credentials)
   # shellcheck disable=SC2016
@@ -440,15 +515,19 @@ claude_in_alloc() { # run Claude Code interactively inside the container, in a r
     srun --jobid="$jid" --overlap -N1 -n1 --pty "$RUNTIME" exec $BINDS "$SANDBOX" env -u CLAUDE_CODE_OAUTH_TOKEN -u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN -u ANTHROPIC_BASE_URL -u CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC HOME="$HOME" CLAUDE_CONFIG_DIR="$CLAUDE_HOME" TERM="${TERM:-xterm-256color}" BROWSER=/bin/false bash -c "$inner"
   else
     echo "(no worker is running: asking Slurm for a short session on a compute node; this can take a minute)"
-    srun -p secp -q secondary -t 00:30:00 -N1 -n1 --mem=2G -J ashley_claude --pty "$RUNTIME" exec $BINDS "$SANDBOX" env -u CLAUDE_CODE_OAUTH_TOKEN -u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN -u ANTHROPIC_BASE_URL -u CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC HOME="$HOME" CLAUDE_CONFIG_DIR="$CLAUDE_HOME" TERM="${TERM:-xterm-256color}" BROWSER=/bin/false bash -c "$inner"
+    srun -p secp -q secondary -t 00:30:00 -N1 -n1 --mem=2G -J beethoven_claude --pty "$RUNTIME" exec $BINDS "$SANDBOX" env -u CLAUDE_CODE_OAUTH_TOKEN -u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN -u ANTHROPIC_BASE_URL -u CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC HOME="$HOME" CLAUDE_CONFIG_DIR="$CLAUDE_HOME" TERM="${TERM:-xterm-256color}" BROWSER=/bin/false bash -c "$inner"
   fi
 }
-consent_given() { # the student answered Claude Code's one-time Remote Control question (Claude Code's own record, or Ashley's marker)
-  [ -e "$CLAUDE_HOME/.ashley-remote-consent" ] && return 0
+# The student's answer to Claude Code's one-time Remote Control question, when Claude Code has not
+# recorded it itself: .beethoven-remote-consent, and .ashley-remote-consent (its name before grid
+# scripts 7), which the browser edition's framework before 7 reads. Both are written, either counts.
+CONSENT_MARKERS=("$CLAUDE_HOME/.beethoven-remote-consent" "$CLAUDE_HOME/.ashley-remote-consent")
+consent_given() { # the student answered Claude Code's one-time Remote Control question (Claude Code's own record, or Beethoven's marker)
+  local m; for m in "${CONSENT_MARKERS[@]}"; do [ -e "$m" ] && return 0; done
   grep -q '"remoteDialogSeen": *true' "$CLAUDE_HOME/.claude.json" 2>/dev/null
 }
 claude_login_json() { # what the newest running worker's Claude Code said about the sign-in (heartbeat), or null
-  local wk best="" bt=0; for wk in $(worker_dirs); do local wd="$ASHLEY_HOME/workers/$wk"
+  local wk best="" bt=0; for wk in $(worker_dirs); do local wd="$BEETHOVEN_HOME/workers/$wk"
     [ "$(job_state "$(cat "$wd/job.id" 2>/dev/null)")" = RUNNING ] || continue
     local m; m=$(stat -c %Y "$wd/state.json" 2>/dev/null || echo 0); [ "$m" -gt "$bt" ] && { bt=$m; best="$wd"; }; done
   [ -n "$best" ] && tr -d '\n' < "$best/state.json" | grep -o '"claude_login": *{[^}]*}' | sed 's/^"claude_login": *//' | head -1 | grep . || echo null
@@ -461,7 +540,7 @@ cmd_claude() {
 Sign in to Claude on the grid.
 
 Claude Code itself does the sign-in, in your own grid account, and keeps its credential in
-~/.ashley/claude (permissions 700). Ashley never sees, copies or stores it. The same sign-in serves
+~/.beethoven/claude (permissions 700). Beethoven never sees, copies or stores it. The same sign-in serves
 your Claude worker and phone access.
 
 Claude will print a link: Ctrl+click it (or copy it into your browser), sign in with the Claude
@@ -479,7 +558,7 @@ compute node and asks "Enable Remote Control? (y/n)". Answer y, wait for "Connec
 Ctrl+C. After that your workers host phone access by themselves; you will not be asked again.
 EOT
         claude_in_alloc remote-control || true
-        if consent_given; then echo; echo "Done. Phone access is enabled for your workers (Ashley: Phone access)."; else echo; echo "Not recorded yet: run  ashley claude remote-consent  when you want phone access."; fi
+        if consent_given; then echo; echo "Done. Phone access is enabled for your workers (Beethoven: Phone access)."; else echo; echo "Not recorded yet: run  beethoven claude remote-consent  when you want phone access."; fi
       fi;;
     remote-consent)
       cat <<'EOT'
@@ -491,16 +570,16 @@ the session transcript (your messages, Claude's answers, tool activity) is store
 servers: keep confidential data out of phone sessions.
 EOT
       if consent_given; then echo "Already answered: your workers host Remote Control whenever phone access is on."; else claude_in_alloc remote-control || true; fi
-      if consent_given; then echo; echo "recorded by Claude Code: your workers may now host Remote Control (Ashley: Phone access)"
+      if consent_given; then echo; echo "recorded by Claude Code: your workers may now host Remote Control (Beethoven: Phone access)"
       else echo; printf 'Did you answer y to "Enable Remote Control?" [y/N] '; local a; read -r a
-        if [[ "$a" =~ ^[Yy] ]]; then date -u +%FT%TZ > "$CLAUDE_HOME/.ashley-remote-consent"; echo "recorded: your workers may now host Remote Control (Ashley: Phone access)"; else echo "not recorded; run this again when you want phone access"; fi
+        if [[ "$a" =~ ^[Yy] ]]; then local m t; t=$(date -u +%FT%TZ); for m in "${CONSENT_MARKERS[@]}"; do printf '%s\n' "$t" > "$m"; done; echo "recorded: your workers may now host Remote Control (Beethoven: Phone access)"; else echo "not recorded; run this again when you want phone access"; fi
       fi;;
     status)
       local present=false consent=false; [ -s "$CLAUDE_HOME/.credentials.json" ] && present=true; consent_given && consent=true
       if [ "${1:-}" = "--json" ]; then printf '{"dir_present":%s,"consent":%s,"login":%s}\n' "$present" "$consent" "$(claude_login_json)"
       else echo "sign-in file present: $present; Remote Control consent: $consent; a running worker says: $(claude_login_json)"; fi;;
     forget)
-      [ "${1:-}" = "--yes" ] || die "this deletes Claude Code's stored sign-in in $CLAUDE_HOME (your workers stop until you sign in again): ashley claude forget --yes"
+      [ "${1:-}" = "--yes" ] || die "this deletes Claude Code's stored sign-in in $CLAUDE_HOME (your workers stop until you sign in again): beethoven claude forget --yes"
       refuse_destructive_from_agent "claude forget"
       rm -rf "$CLAUDE_HOME"; echo "removed $CLAUDE_HOME";;
     *) die "claude: login|status [--json]|remote-consent|forget --yes";;
@@ -527,14 +606,14 @@ cmd_relay() {
         SEND)
           worker=${rest%% *}; json=${rest#* }
           id=$(printf '%s' "$json" | grep -o '"id": *"[^"]*"' | head -1 | sed 's/.*"\([^"]*\)"$/\1/')
-          if [[ ! "$id" =~ ^[A-Za-z0-9_.-]+$ ]] || [ ! -d "$ASHLEY_HOME/workers/$worker" ]; then echo "ERROR bad request or unknown worker '$worker'"; continue; fi
-          mkdir -p "$ASHLEY_HOME/workers/$worker/inbox" "$ASHLEY_HOME/workers/$worker/outbox"
-          printf '%s' "$json" > "$ASHLEY_HOME/workers/$worker/inbox/$id.json.part" && mv "$ASHLEY_HOME/workers/$worker/inbox/$id.json.part" "$ASHLEY_HOME/workers/$worker/inbox/$id.json"
+          if [[ ! "$id" =~ ^[A-Za-z0-9_.-]+$ ]] || [ ! -d "$BEETHOVEN_HOME/workers/$worker" ]; then echo "ERROR bad request or unknown worker '$worker'"; continue; fi
+          mkdir -p "$BEETHOVEN_HOME/workers/$worker/inbox" "$BEETHOVEN_HOME/workers/$worker/outbox"
+          printf '%s' "$json" > "$BEETHOVEN_HOME/workers/$worker/inbox/$id.json.part" && mv "$BEETHOVEN_HOME/workers/$worker/inbox/$id.json.part" "$BEETHOVEN_HOME/workers/$worker/inbox/$id.json"
           pw[$id]=$worker; poff[$id]=0
           echo "QUEUED $id $(date +%s%3N)";;
         RESULT)
           worker=${rest%% *}; id=${rest#* }
-          if [ -s "$ASHLEY_HOME/workers/$worker/outbox/$id.json" ]; then printf 'RESULT %s ' "$id"; tr -d '\n' < "$ASHLEY_HOME/workers/$worker/outbox/$id.json"; echo; else echo "PENDING $id"; fi;;
+          if [ -s "$BEETHOVEN_HOME/workers/$worker/outbox/$id.json" ]; then printf 'RESULT %s ' "$id"; tr -d '\n' < "$BEETHOVEN_HOME/workers/$worker/outbox/$id.json"; echo; else echo "PENDING $id"; fi;;
         PING) echo "PONG $(date +%s%3N)";;
         QUIT) exit 0;;
         *) echo "ERROR unknown command";;
@@ -543,7 +622,7 @@ cmd_relay() {
       [ $? -gt 128 ] || exit 0   # stdin closed: the laptop went away
       for id in "${!pw[@]}"; do
         worker=${pw[$id]}
-        local ev="$ASHLEY_HOME/workers/$worker/outbox/$id.events.jsonl" out="$ASHLEY_HOME/workers/$worker/outbox/$id.json"
+        local ev="$BEETHOVEN_HOME/workers/$worker/outbox/$id.events.jsonl" out="$BEETHOVEN_HOME/workers/$worker/outbox/$id.json"
         if [ -f "$ev" ]; then
           local size; size=$(stat -c %s "$ev" 2>/dev/null || echo 0)
           if [ "$size" -gt "${poff[$id]}" ]; then tail -c +$(( poff[$id] + 1 )) "$ev" | head -c $(( size - poff[$id] )) | sed "s/^/EVENT $id /"; poff[$id]=$size; fi
@@ -559,7 +638,11 @@ cmd_relay() {
 # containers, software). Students only ever READ it; they do all their science in their own grid
 # accounts. So nothing under the volume is writable by students, not even a request drop-box.
 #
-# A request is a held, zero-work Slurm job named ashley_access whose comment carries the note.
+# A request is a held, zero-work Slurm job named ashley_access whose comment ("ashley-access v1
+# note=...") carries the note. That job name and tag are a format between the student's command and
+# the admin's, and keep their spelling from before the rename: an admin whose tool is older than grid
+# scripts 7 looks for exactly them. The admin's side accepts beethoven_access and "beethoven-access v1
+# note=" as well, for the day every such tool is retired and the student side can switch.
 # Slurm authenticates the submitter, so a request cannot be forged or squatted, and it uses no
 # storage. The admin's ingest reads them (squeue shows every user's jobs on this grid), writes a
 # status file only the admin can write and only that student can read, and gives the applicant a
@@ -575,15 +658,16 @@ cmd_relay() {
 VOL="$(dirname "$SHARED")"
 STATUS_DIR="$ACCESS_ROOT/status"
 LOG_DIR="$ACCESS_ROOT/requests"
-access_admin() { stat -c %U "$SHARED" 2>/dev/null || echo "${ASHLEY_ADMIN:-}"; }
+access_admin() { stat -c %U "$SHARED" 2>/dev/null || echo "${BEETHOVEN_ADMIN:-${ASHLEY_ADMIN:-}}"; }
 is_admin() { [ "$(access_admin)" = "$USER" ]; }
-lab_mode() { [ "${ASHLEY_LAB:-1}" = 1 ]; }    # Ashley is the lab's tool: the container comes with lab access
+lab_mode() { [ "${BEETHOVEN_LAB:-${ASHLEY_LAB:-1}}" = 1 ]; }    # Beethoven is the lab's tool: the container comes with lab access
 status_file() { echo "$STATUS_DIR/$1.json"; }
 status_field() { # ID FIELD
   [ -r "$(status_file "$1")" ] || { echo ""; return; }
   grep -o "\"$2\": *\"[^\"]*\"" "$(status_file "$1")" | head -1 | sed 's/.*"\([^"]*\)"$/\1/'
 }
-own_request_job() { squeue -h -u "$USER" -n ashley_access -t PD -o %i 2>/dev/null | head -1; }
+REQUEST_JOB=ashley_access; REQUEST_JOBS=ashley_access,beethoven_access   # filed under the first, both are read
+own_request_job() { squeue -h -u "$USER" -n "$REQUEST_JOBS" -t PD -o %i 2>/dev/null | head -1; }
 sanitize_note() { printf '%s' "$1" | tr -cd 'A-Za-z0-9 ,.:;()/_@+-' | cut -c1-200; }
 decision_log() { printf '%s %s %s %s\n' "$(date -u +%FT%TZ)" "$1" "$2" "$3" >> "$LOG_DIR/decisions.log" 2>/dev/null; }
 write_status() { # ID STATE NOTE MESSAGE REQUESTED JOB
@@ -651,11 +735,11 @@ admin_ingest() { # read pending request jobs; open a status file for each new ap
     [ -n "$u" ] || continue
     getent passwd "$u" >/dev/null || continue
     [ -s "$(status_file "$u")" ] && continue       # already known (pending or decided)
-    note=$(sanitize_note "${note#ashley-access v1 note=}")
+    note="${note#ashley-access v1 note=}"; note=$(sanitize_note "${note#beethoven-access v1 note=}")
     path_traverse "$u" add
     write_status "$u" pending "$note" "" "$req" "$id"
     decision_log "$u" filed "job $id"
-  done < <(squeue -h -n ashley_access -t PD -o '%i|%u|%k|%V' 2>/dev/null)
+  done < <(squeue -h -n "$REQUEST_JOBS" -t PD -o '%i|%u|%k|%V' 2>/dev/null)
 }
 cmd_access() {
   local sub="${1:-status}"; shift || true
@@ -680,9 +764,9 @@ cmd_access() {
       rm -rf "$ACCESS_ROOT/inbox" && echo "removed the old world-writable drop-box"
       chmod 2710 "$ACCESS_ROOT" "$STATUS_DIR"; chmod 2700 "$LOG_DIR"
       local f; for f in "$STATUS_DIR"/*.json; do [ -s "$f" ] || continue; chmod 600 "$f"; setfacl -m "u:$(basename "$f" .json):r--" "$f" 2>/dev/null; path_traverse "$(basename "$f" .json)" add; done
-      mkdir -p "$ASHLEY_HOME/bin"; printf '#!/bin/bash\ntrue\n' > "$BIN/access_request.sbatch"; chmod 755 "$BIN/access_request.sbatch"
+      mkdir -p "$BEETHOVEN_HOME/bin"; printf '#!/bin/bash\ntrue\n' > "$BIN/access_request.sbatch"; chmod 755 "$BIN/access_request.sbatch"
       cmd_access admin resync >/dev/null && echo "re-applied access for approved users"
-      echo "access ready: requests arrive as held Slurm jobs named ashley_access";;
+      echo "access ready: requests arrive as held Slurm jobs named $REQUEST_JOB (or beethoven_access)";;
     whoami)
       local adm st; adm=$(access_admin); st=$(is_admin && echo admin || student_state)
       is_admin || tidy_request_job
@@ -700,7 +784,7 @@ cmd_access() {
       local vt; vt=$(cmd_verify_tokens 2>/dev/null || true)
       echo "$vt" | grep "^HF_TOKEN ok" >/dev/null || missing+=("Hugging Face token missing or rejected")
       echo "$vt" | grep "^GITHUB_TOKEN ok" >/dev/null || missing+=("GitHub token missing or rejected")
-      grep -q '# >>> ashley' "$HOME/.bashrc" 2>/dev/null || missing+=("bashrc block missing (run the grid step again)")
+      has_bashrc_block || missing+=("bashrc block missing (run the grid step again)")
       if [ $as_json -eq 1 ]; then
         printf '{"ok":%s,"missing":[' "$([ ${#missing[@]} -eq 0 ] && echo true || echo false)"; local first=1; for m in "${missing[@]}"; do [ $first -eq 1 ] || printf ','; first=0; json_str "$m"; done; echo ']}'
       else
@@ -719,8 +803,8 @@ cmd_access() {
       cmd_access requirements >/dev/null || { cmd_access requirements; die "finish the setup first; requests are for working environments"; }
       [ -x "$BIN/access_request.sbatch" ] || { printf '#!/bin/bash\ntrue\n' > "$BIN/access_request.sbatch"; chmod 755 "$BIN/access_request.sbatch"; }
       note=$(sanitize_note "$note")
-      local out; out=$(cd "$ASHLEY_HOME/log" 2>/dev/null || cd "$HOME"; sbatch --parsable --hold -J ashley_access -p reqp -q requeue -t 1 -n 1 --mem=16M -o /dev/null --comment "ashley-access v1 note=$note" "$BIN/access_request.sbatch" 2>&1) || die "could not file the request: $out"
-      echo "request filed (held Slurm job ${out%%;*}; it never runs); your lead approves it in Ashley";;
+      local out; out=$(cd "$BEETHOVEN_HOME/log" 2>/dev/null || cd "$HOME"; sbatch --parsable --hold -J "$REQUEST_JOB" -p reqp -q requeue -t 1 -n 1 --mem=16M -o /dev/null --comment "ashley-access v1 note=$note" "$BIN/access_request.sbatch" 2>&1) || die "could not file the request: $out"
+      echo "request filed (held Slurm job ${out%%;*}; it never runs); your lead approves it in Beethoven";;
     admin)
       is_admin || die "only the lab admin ($(access_admin)) can manage requests"
       local act="${1:-list}"; shift || true
@@ -759,20 +843,20 @@ cmd_phone() { # phone access through Claude Code Remote Control, hosted by a wor
   local worker="default" as_json=0
   while [ $# -gt 0 ]; do case "$1" in --worker) worker="$2"; shift 2;; --json) as_json=1; shift;; *) shift;; esac; done
   [[ "$worker" =~ ^[A-Za-z0-9_-]+$ ]] || die "bad worker name"
-  local w="$ASHLEY_HOME/workers/$worker" rc="$ASHLEY_HOME/workers/$worker/rc"
+  local w="$BEETHOVEN_HOME/workers/$worker" rc="$BEETHOVEN_HOME/workers/$worker/rc"
   [ -d "$w" ] || die "no worker '$worker' (start one first)"
   case "$sub" in
     on) # one worker hosts phone access (they share one login); turning it on here turns it off elsewhere
-      local ow moved=""; for ow in "$ASHLEY_HOME"/workers/*/rc/enable; do [ -e "$ow" ] || continue; ow=$(basename "$(dirname "$(dirname "$ow")")")
-        [ "$ow" = "$worker" ] || { rm -f "$ASHLEY_HOME/workers/$ow/rc/enable"; moved="$moved $ow"; }; done
-      [ -s "$CLAUDE_HOME/.credentials.json" ] || echo "note: Claude is not signed in on the grid yet (ashley claude login); phone access waits for it"
-      consent_given || echo "note: Remote Control has not been enabled yet (ashley claude remote-consent); phone access waits for it"
+      local ow moved=""; for ow in "$BEETHOVEN_HOME"/workers/*/rc/enable; do [ -e "$ow" ] || continue; ow=$(basename "$(dirname "$(dirname "$ow")")")
+        [ "$ow" = "$worker" ] || { rm -f "$BEETHOVEN_HOME/workers/$ow/rc/enable"; moved="$moved $ow"; }; done
+      [ -s "$CLAUDE_HOME/.credentials.json" ] || echo "note: Claude is not signed in on the grid yet (beethoven claude login); phone access waits for it"
+      consent_given || echo "note: Remote Control has not been enabled yet (beethoven claude remote-consent); phone access waits for it"
       mkdir -p "$rc" && chmod 700 "$rc" && touch "$rc/enable" && echo "phone access starting on worker $worker ($(cat "$w/node" 2>/dev/null || echo 'node not assigned yet'))${moved:+; moved from$moved}";;
     off) rm -f "$rc/enable"; echo "phone access off on worker $worker";;
     status)
       local alive=false; [ "$(job_state "$(cat "$w/job.id" 2>/dev/null)")" = RUNNING ] && alive=true
       if [ $as_json -eq 1 ]; then
-        local host="null"; [ -s "$ASHLEY_HOME/remote/host.lock/holder.json" ] && host=$(tr -d '\n' < "$ASHLEY_HOME/remote/host.lock/holder.json")
+        local host="null"; [ -s "$BEETHOVEN_HOME/remote/host.lock/holder.json" ] && host=$(tr -d '\n' < "$BEETHOVEN_HOME/remote/host.lock/holder.json")
         printf '{"worker":%s,"job_running":%s,"enabled":%s,"host":%s,"status":' "$(json_str "$worker")" "$alive" "$([ -e "$rc/enable" ] && echo true || echo false)" "$host"
         if [ -s "$rc/status.json" ]; then tr -d '\n' < "$rc/status.json"; else printf '{"phase":"off"}'; fi; echo '}'
       else echo "worker $worker running=$alive enabled=$([ -e "$rc/enable" ] && echo yes || echo no)"; cat "$rc/status.json" 2>/dev/null; fi;;
@@ -781,7 +865,7 @@ cmd_phone() { # phone access through Claude Code Remote Control, hosted by a wor
 }
 
 # ---- diagnostics: every grid-side assumption as a checkable node ------------------------------
-# `ashley diag --json [--repair] [--node]` prints {"nodes":[{id, ok, warn, skip, detail, repaired}]}.
+# `beethoven diag --json [--repair] [--node]` prints {"nodes":[{id, ok, warn, skip, detail, repaired}]}.
 # The laptop maps these into its dependency graph. Checks are cheap; nothing heavy runs on the
 # login node. --node also checks the compute node inside a running worker's allocation.
 diag_emit() { # ID OK(true|false) WARN SKIP DETAIL [REPAIRED]
@@ -794,12 +878,13 @@ discover_sysroot() { # newest C&IT VS Code sysroot and patchelf, if Wayne State 
   pe=$(ls -1d /wsu/apps/vscode/patchelf/*/bin/patchelf 2>/dev/null | sort -V | tail -1)
   [ -n "$ld" ] && [ -n "$pe" ] || return 1
   local lib; lib=$(dirname "$ld")
-  printf '%s\n' "# >>> ashley (managed; \"ashley install\" rewrites this block) >>>" \
-    "# VS Code Remote-SSH on this grid needs the sysroot C&IT provides (rediscovered by ashley diag --repair)." \
+  printf '%s\n' "# >>> beethoven (managed; \"beethoven install\" rewrites this block) >>>" \
+    "# VS Code Remote-SSH on this grid needs the sysroot C&IT provides (rediscovered by beethoven diag --repair)." \
     "export VSCODE_SERVER_CUSTOM_GLIBC_LINKER=\"$ld\"" \
     "export VSCODE_SERVER_CUSTOM_GLIBC_PATH=\"$lib:${lib}64\"" \
     "export VSCODE_SERVER_PATCHELF_PATH=\"$pe\"" \
-    "export PATH=\"\$HOME/.ashley/bin:\$PATH\"" "# <<< ashley <<<" > "$BIN/bashrc.block"
+    "# The Beethoven grid command (beethoven status, beethoven worker start, beethoven ask ...)." \
+    "export PATH=\"\$HOME/.beethoven/bin:\$PATH\"" "# <<< beethoven <<<" > "$BIN/bashrc.block"
 }
 discover_runtime() { bash -lc 'module load apptainer >/dev/null 2>&1 && command -v apptainer' 2>/dev/null | tail -1; }
 cmd_diag() {
@@ -808,13 +893,16 @@ cmd_diag() {
   load_cfg
   DIAG_FIRST=1; printf '{"version":%s,"host":%s,"user":%s,"nodes":[' "$(json_str "$VERSION")" "$(json_str "$(hostname)")" "$(json_str "$USER")"
   # scripts
-  local miss=""; for f in ashley ashleyd.js phone.js license.js license_keys.json worker.sbatch.tpl bootstrap.sbatch bashrc.block VERSION; do [ -s "$BIN/$f" ] || miss="$miss $f"; done
-  if grep -q $'\r' "$BIN/ashley" "$BIN/ashleyd.js" 2>/dev/null; then miss="$miss (CR line endings)"; fi
-  if [ -z "$miss" ]; then diag_emit grid.scripts true false false "Ashley v$VERSION in $BIN"; else diag_emit grid.scripts false false false "missing or damaged:$miss"; fi
+  local miss=""; for f in beethoven beethovend.js phone.js license.js license_keys.json worker.sbatch.tpl bootstrap.sbatch bashrc.block VERSION; do [ -s "$BIN/$f" ] || miss="$miss $f"; done
+  if grep -q $'\r' "$BIN/beethoven" "$BIN/beethovend.js" 2>/dev/null; then miss="$miss (CR line endings)"; fi
+  # the old names lead to the new files (older builds and job files call them); repair makes the links
+  if { [ ! -L "$BIN/ashley" ] || [ ! -L "$BIN/ashleyd.js" ]; } && [ $repair = 1 ] && [ -s "$BIN/beethoven" ]; then old_names 2>/dev/null; fi
+  { [ -L "$BIN/ashley" ] && [ -L "$BIN/ashleyd.js" ]; } || miss="$miss (links ashley, ashleyd.js)"
+  if [ -z "$miss" ]; then diag_emit grid.scripts true false false "Beethoven v$VERSION in $BIN"; else diag_emit grid.scripts false false false "missing or damaged:$miss"; fi
   # bashrc block and the VS Code sysroot it points at
-  if grep -q '# >>> ashley' "$HOME/.bashrc" 2>/dev/null; then diag_emit grid.bashrc-block true false false "present in ~/.bashrc"
-  elif [ $repair = 1 ] && cmd_install >/dev/null 2>&1 && grep -q '# >>> ashley' "$HOME/.bashrc"; then diag_emit grid.bashrc-block true false false "rewritten" "ran ashley install"
-  else diag_emit grid.bashrc-block false false false "the Ashley block is missing from ~/.bashrc"; fi
+  if has_bashrc_block; then diag_emit grid.bashrc-block true false false "present in ~/.bashrc"
+  elif [ $repair = 1 ] && cmd_install >/dev/null 2>&1 && has_bashrc_block; then diag_emit grid.bashrc-block true false false "rewritten" "ran beethoven install"
+  else diag_emit grid.bashrc-block false false false "the Beethoven block is missing from ~/.bashrc"; fi
   local p gone=""; for p in $(sysroot_paths); do [ -e "$p" ] || gone="$gone $p"; done
   if [ -z "$gone" ]; then diag_emit grid.vscode-sysroot true false false "C&IT VS Code sysroot and patchelf present"
   elif [ $repair = 1 ] && discover_sysroot && cmd_install >/dev/null 2>&1; then diag_emit grid.vscode-sysroot true false false "moved paths rediscovered" "rewrote the bashrc block with the new sysroot"
@@ -850,18 +938,18 @@ cmd_diag() {
   # the Claude sign-in: Claude Code's own answer from a running worker; the file's presence otherwise
   local lj; lj=$(claude_login_json)
   if echo "$lj" | grep '"loggedIn": *true' >/dev/null; then diag_emit grid.claude-login true false false "Claude Code on the grid is signed in$(echo "$lj" | grep -o '"email": *"[^"]*"' | cut -d'"' -f4 | sed 's/^/ as /')"
-  elif [ "$lj" != null ] && echo "$lj" | grep '"loggedIn": *false' >/dev/null; then diag_emit grid.claude-login false false false "Claude Code on the grid is not signed in: run Ashley: Sign in to Claude on the grid"
+  elif [ "$lj" != null ] && echo "$lj" | grep '"loggedIn": *false' >/dev/null; then diag_emit grid.claude-login false false false "Claude Code on the grid is not signed in: run Beethoven: Sign in to Claude on the grid"
   elif [ -s "$CLAUDE_HOME/.credentials.json" ]; then diag_emit grid.claude-login true true false "a sign-in is stored; a running worker will confirm it"
-  else diag_emit grid.claude-login false false false "not signed in on the grid yet: run Ashley: Sign in to Claude on the grid"; fi
-  # accounts: no stored Claude tokens (Ashley stopped storing them), session history shared across accounts
+  else diag_emit grid.claude-login false false false "not signed in on the grid yet: run Beethoven: Sign in to Claude on the grid"; fi
+  # accounts: no stored Claude tokens (the tool stopped storing them before the rename), session history shared across accounts
   local legacy="" unshared="" fixed="" ad
-  for ad in "$ASHLEY_HOME"/accounts/*/; do [ -d "$ad" ] || continue
+  for ad in "$BEETHOVEN_HOME"/accounts/*/; do [ -d "$ad" ] || continue
     { [ -s "$ad/token" ] || [ -s "$ad/.credentials.json" ]; } && legacy="$legacy $(basename "$ad")"
   done
-  for ad in "$CLAUDE_HOME" "$ASHLEY_HOME/accounts/apikey"; do [ -d "$ad" ] && [ ! -L "$ad/projects" ] && unshared="$unshared $(basename "$ad")"; done
-  if [ -n "$legacy" ] && [ $repair = 1 ]; then for ad in $legacy; do rm -f "$ASHLEY_HOME/accounts/$ad/token" "$ASHLEY_HOME/accounts/$ad/minted_at" "$ASHLEY_HOME/accounts/$ad/.credentials.json"; rmdir "$ASHLEY_HOME/accounts/$ad" 2>/dev/null; done; fixed="removed stored Claude tokens of$legacy"; legacy=""; fi
-  if [ -n "$unshared" ] && [ $repair = 1 ]; then for ad in $unshared; do [ "$ad" = claude ] && share_transcripts "$CLAUDE_HOME" || share_transcripts "$ASHLEY_HOME/accounts/$ad"; done; fixed="${fixed:+$fixed; }linked the session history of$unshared"; unshared=""; fi
-  if [ -n "$legacy" ]; then diag_emit grid.accounts false false false "Claude tokens stored by an earlier Ashley are still in accounts/:$legacy (repair deletes them; Ashley no longer stores Claude credentials)"
+  for ad in "$CLAUDE_HOME" "$BEETHOVEN_HOME/accounts/apikey"; do [ -d "$ad" ] && [ ! -L "$ad/projects" ] && unshared="$unshared $(basename "$ad")"; done
+  if [ -n "$legacy" ] && [ $repair = 1 ]; then for ad in $legacy; do rm -f "$BEETHOVEN_HOME/accounts/$ad/token" "$BEETHOVEN_HOME/accounts/$ad/minted_at" "$BEETHOVEN_HOME/accounts/$ad/.credentials.json"; rmdir "$BEETHOVEN_HOME/accounts/$ad" 2>/dev/null; done; fixed="removed stored Claude tokens of$legacy"; legacy=""; fi
+  if [ -n "$unshared" ] && [ $repair = 1 ]; then for ad in $unshared; do [ "$ad" = claude ] && share_transcripts "$CLAUDE_HOME" || share_transcripts "$BEETHOVEN_HOME/accounts/$ad"; done; fixed="${fixed:+$fixed; }linked the session history of$unshared"; unshared=""; fi
+  if [ -n "$legacy" ]; then diag_emit grid.accounts false false false "Claude tokens stored by an earlier version are still in accounts/:$legacy (repair deletes them; Beethoven no longer stores Claude credentials)"
   elif [ -n "$unshared" ]; then diag_emit grid.accounts false false false "session history is not shared for:$unshared (repair links it)"
   else diag_emit grid.accounts true false false "no stored Claude tokens; session history shared" "$fixed"; fi
   # lab access and the container
@@ -870,12 +958,12 @@ cmd_diag() {
     approved) diag_emit grid.lab-access true false false "approved: the lab folder is readable";;
     pending|filed) diag_emit grid.lab-access true true false "requested; waiting for the lab admin";;
     denied|removed) diag_emit grid.lab-access false false false "$(student_state): $(status_field "$USER" message)";;
-    approved_unreadable) diag_emit grid.lab-access false false false "approved, but the lab folder is not readable: the admin should run ashley access admin resync";;
+    approved_unreadable) diag_emit grid.lab-access false false false "approved, but the lab folder is not readable: the admin should run beethoven access admin resync";;
     *) diag_emit grid.lab-access false false false "not requested yet (the wizard's last step)";;
   esac; fi
   if is_ready; then diag_emit grid.container true false false "${CONTAINER:-own} ready: $(basename "$SANDBOX")"
-  elif lib_readable && [ $repair = 1 ] && ( cmd_adopt "$(lib_default)" ) >/dev/null 2>&1 && is_ready; then diag_emit grid.container true false false "adopted the lab container" "ran ashley adopt"
-  elif lib_readable; then diag_emit grid.container false false false "the lab container is readable but not adopted (repair runs ashley adopt)"
+  elif lib_readable && [ $repair = 1 ] && ( cmd_adopt "$(lib_default)" ) >/dev/null 2>&1 && is_ready; then diag_emit grid.container true false false "adopted the lab container" "ran beethoven adopt"
+  elif lib_readable; then diag_emit grid.container false false false "the lab container is readable but not adopted (repair runs beethoven adopt)"
   else diag_emit grid.container false false false "no container yet: it comes with lab access"; fi
   if [ -n "$RUNTIME" ] && [ -x "$RUNTIME" ]; then diag_emit grid.runtime true false false "$RUNTIME"
   else
@@ -887,7 +975,7 @@ cmd_diag() {
   # workers and the relay
   local wk any=0
   for wk in $(worker_dirs); do
-    any=1; local wd="$ASHLEY_HOME/workers/$wk" jid st beat now; jid=$(cat "$wd/job.id" 2>/dev/null); st=$(job_state "$jid")
+    any=1; local wd="$BEETHOVEN_HOME/workers/$wk" jid st beat now; jid=$(cat "$wd/job.id" 2>/dev/null); st=$(job_state "$jid")
     beat=$(stat -c %Y "$wd/state.json" 2>/dev/null || echo 0); now=$(date +%s)
     case "$st" in
       RUNNING) if [ $((now - beat)) -lt 90 ]; then diag_emit "grid.worker.$wk" true false false "job $jid on $(cat "$wd/node" 2>/dev/null) alive"
@@ -898,10 +986,10 @@ cmd_diag() {
   done
   [ $any = 1 ] || diag_emit grid.worker true false true "no worker started yet"
   # the license: the copy the laptop put here, and each running worker's own verdict (the daemon verifies it)
-  if [ ! -s "$ASHLEY_HOME/license.key" ]; then diag_emit grid.license false false false "no Ashley license on the grid (repair copies it from this laptop)"
+  if [ ! -s "$BEETHOVEN_HOME/license.key" ]; then diag_emit grid.license false false false "no Beethoven license on the grid (repair copies it from this laptop)"
   else
     local lw="" lb="" lstate
-    for wk in $(worker_dirs); do local wd="$ASHLEY_HOME/workers/$wk"
+    for wk in $(worker_dirs); do local wd="$BEETHOVEN_HOME/workers/$wk"
       [ "$(job_state "$(cat "$wd/job.id" 2>/dev/null)")" = RUNNING ] || continue
       lstate=$(tr -d '\n' < "$wd/state.json" 2>/dev/null | grep -o '"license": *{[^}]*}' || true)
       if [ -z "$lstate" ]; then lb="$lb $wk (started before licensing; restart it)"
@@ -914,34 +1002,35 @@ cmd_diag() {
   fi
   # Slurm from inside the workers' containers: each worker tests it at start and puts it in its heartbeat
   local sw="" sb="" sold="" s
-  for wk in $(worker_dirs); do local wd="$ASHLEY_HOME/workers/$wk"
+  for wk in $(worker_dirs); do local wd="$BEETHOVEN_HOME/workers/$wk"
     [ "$(job_state "$(cat "$wd/job.id" 2>/dev/null)")" = RUNNING ] || continue
     s=$(tr -d '\n' < "$wd/state.json" 2>/dev/null | grep -o '"slurm": *{[^}]*}' || true)
     if [ -z "$s" ]; then sold="$sold $wk"
     elif echo "$s" | grep '"ok": *true' >/dev/null; then sw="$sw $wk"
     else sb="$sb $wk ($(echo "$s" | grep -o '"detail": *"[^"]*"' | cut -d'"' -f4))"; fi
   done
-  if [ -n "$sold" ] && [ $repair = 1 ]; then for wk in $sold; do "$BIN/ashley" worker restart --name "$wk" >/dev/null 2>&1 || true; done; fi
+  if [ -n "$sold" ] && [ $repair = 1 ]; then for wk in $sold; do "$BIN/beethoven" worker restart --name "$wk" >/dev/null 2>&1 || true; done; fi
   if [ -n "$sb" ]; then diag_emit grid.slurm-in-worker false false false "Slurm is not available inside:$sb"
-  elif [ -n "$sold" ]; then diag_emit grid.slurm-in-worker false false false "started before Ashley version 3, without Slurm inside:$sold (repair restarts them)" "$([ $repair = 1 ] && echo "restarted:$sold")"
+  elif [ -n "$sold" ]; then diag_emit grid.slurm-in-worker false false false "started before grid scripts version 3, without Slurm inside:$sold (repair restarts them)" "$([ $repair = 1 ] && echo "restarted:$sold")"
   elif [ -n "$sw" ]; then diag_emit grid.slurm-in-worker true false false "Slurm works inside:$sw"
   else diag_emit grid.slurm-in-worker true false true "no worker running"; fi
-  if printf 'PING\nQUIT\n' | timeout 20 "$BIN/ashley" relay 2>/dev/null | grep '^PONG' >/dev/null; then diag_emit grid.relay true false false "the prompt relay answers"; else diag_emit grid.relay false false false "the prompt relay does not answer"; fi
+  if printf 'PING\nQUIT\n' | timeout 20 "$BIN/beethoven" relay 2>/dev/null | grep '^PONG' >/dev/null; then diag_emit grid.relay true false false "the prompt relay answers"; else diag_emit grid.relay false false false "the prompt relay does not answer"; fi
   # the lab folder layout (admin only)
   if is_admin; then
     local bad=""; [ -n "$(find -L "$VOL" -maxdepth 0 -perm /o=rwx 2>/dev/null)" ] && bad="$bad volume-root-open"
     [ -d "$ACCESS_ROOT/inbox" ] && bad="$bad old-drop-box"
-    [ -n "$(find "$SHARED" -maxdepth 1 -perm /o=w 2>/dev/null)" ] && bad="$bad world-writable-in-shared"
+    # links are left out: a link's own mode is always rwxrwxrwx (shared/ashley -> beethoven, the old name)
+    [ -n "$(find "$SHARED" -maxdepth 1 ! -type l -perm /o=w 2>/dev/null)" ] && bad="$bad world-writable-in-shared"
     if [ -z "$bad" ]; then diag_emit grid.lab-folder true false false "lab folder closed to other users; requests via Slurm"
-    elif [ $repair = 1 ] && cmd_access init >/dev/null 2>&1; then diag_emit grid.lab-folder true false false "layout restored" "ran ashley access init"
+    elif [ $repair = 1 ] && cmd_access init >/dev/null 2>&1; then diag_emit grid.lab-folder true false false "layout restored" "ran beethoven access init"
     else diag_emit grid.lab-folder false false false "layout drifted:$bad"; fi
   else diag_emit grid.lab-folder true false true "admin only"; fi
   # the compute node, inside a running worker (slow; only with --node)
   if [ $node = 1 ]; then
-    local jid=""; for wk in $(worker_dirs); do local j; j=$(cat "$ASHLEY_HOME/workers/$wk/job.id" 2>/dev/null); [ "$(job_state "$j")" = RUNNING ] && { jid=$j; break; }; done
+    local jid=""; for wk in $(worker_dirs); do local j; j=$(cat "$BEETHOVEN_HOME/workers/$wk/job.id" 2>/dev/null); [ "$(job_state "$j")" = RUNNING ] && { jid=$j; break; }; done
     if [ -z "$jid" ]; then diag_emit node.probe true false true "no running worker to probe from"
     else
-      local out; out=$(timeout 120 srun --jobid="$jid" --overlap -N1 -n1 --quiet "$BIN/ashley" diag-node 2>&1)
+      local out; out=$(timeout 120 srun --jobid="$jid" --overlap -N1 -n1 --quiet "$BIN/beethoven" diag-node 2>&1)
       if echo "$out" | grep '^NODE-OK' >/dev/null; then diag_emit node.probe true false false "$(echo "$out" | grep '^NODE-OK' | cut -c9-)"
       else diag_emit node.probe false false false "$(echo "$out" | tail -3 | tr '\n' ' ' | cut -c1-300)"; fi
     fi
@@ -959,10 +1048,10 @@ cmd_diag_node() { # runs on the compute node inside a worker allocation
 }
 
 cmd_verify_tokens() { # prove the stored tokens work, from the login node (tiny requests); prints names, never values
-  [ -s "$ASHLEY_HOME/secrets.env" ] || { echo "no secrets.env"; return 1; }
+  [ -s "$BEETHOVEN_HOME/secrets.env" ] || { echo "no secrets.env"; return 1; }
   unset HF_TOKEN GITHUB_TOKEN GH_TOKEN
   # shellcheck disable=SC1090
-  source "$ASHLEY_HOME/secrets.env"
+  source "$BEETHOVEN_HOME/secrets.env"
   if [ -n "${HF_TOKEN:-}" ]; then
     local who; who=$(curl_auth "$HF_TOKEN" https://huggingface.co/api/whoami-v2 | grep -o '"name":"[^"]*"' | head -1 | cut -d'"' -f4)
     [ -n "$who" ] && echo "HF_TOKEN ok ($who)" || echo "HF_TOKEN rejected or unreachable"
@@ -972,20 +1061,26 @@ cmd_verify_tokens() { # prove the stored tokens work, from the login node (tiny 
     [ -n "$gl" ] && echo "GITHUB_TOKEN ok ($gl)" || echo "GITHUB_TOKEN rejected or unreachable"
   else echo "GITHUB_TOKEN missing"; fi
 }
-cmd_uninstall() { # what a brand-new grid account looks like to Ashley
+cmd_uninstall() { # what a brand-new grid account looks like to Beethoven
   refuse_destructive_from_agent uninstall
   local purge=0; [ "${1:-}" = "--purge-root" ] && purge=1
   load_cfg
-  for w in $(worker_dirs); do local jid; jid=$(cat "$ASHLEY_HOME/workers/$w/job.id" 2>/dev/null || echo ""); [ -n "$jid" ] && scancel "$jid" 2>/dev/null && echo "cancelled worker $w (job $jid)"; done
+  for w in $(worker_dirs); do local jid; jid=$(cat "$BEETHOVEN_HOME/workers/$w/job.id" 2>/dev/null || echo ""); [ -n "$jid" ] && scancel "$jid" 2>/dev/null && echo "cancelled worker $w (job $jid)"; done
   local rc="$HOME/.bashrc"
-  if [ -f "$rc" ] && grep -q '# >>> ashley' "$rc"; then awk '/^# >>> ashley/{skip=1; next} /^# <<< ashley/{skip=0; next} skip==0{print}' "$rc" > "$rc.ashley.tmp" && mv "$rc.ashley.tmp" "$rc"; echo "bashrc block removed"; fi
+  if [ -f "$rc" ] && has_bashrc_block "$rc"; then bashrc_without_blocks "$rc" > "$rc.beethoven.tmp" && mv "$rc.beethoven.tmp" "$rc"; echo "bashrc block removed"; fi
   if [ $purge -eq 1 ] && [ -n "$ROOT" ] && [ -d "$ROOT" ]; then rm -rf "$ROOT" && echo "removed $ROOT"; fi
+  # the folder itself, found through any link (~/.ashley leads to ~/.beethoven); links are removed as
+  # links, never followed by rm
+  local real; real=$(cd "$BEETHOVEN_HOME" 2>/dev/null && pwd -P) || real=""
+  case "$real" in ""|/|"$HOME"|"$(cd "$HOME" && pwd -P)") die "refusing to remove '$BEETHOVEN_HOME' (resolves to '${real:-nothing}')";; esac
+  local l; for l in "$OLD_HOME" "$NEW_HOME" "$BEETHOVEN_HOME"; do [ -L "$l" ] && [ "$(cd "$l" 2>/dev/null && pwd -P)" = "$real" ] && rm -f "$l" && echo "removed the link $l"; done
   # remove ourselves last; the shell keeps running the already-read script
-  rm -rf "$ASHLEY_HOME" && echo "removed $ASHLEY_HOME; Ashley is uninstalled for $USER"
+  rm -rf "$real" && echo "removed $real; Beethoven is uninstalled for $USER"
 }
 
 case "${1:-help}" in
   install) shift; cmd_install "$@";;
+  migrate) shift; cmd_migrate "$@";;
   verify-tokens) shift; cmd_verify_tokens "$@";;
   relay) shift; cmd_relay "$@";;
   library) shift; cmd_library "$@";;
@@ -1008,6 +1103,6 @@ case "${1:-help}" in
   accounts) shift; cmd_accounts "$@";;
   claude) shift; cmd_claude "$@";;
   version) echo "$VERSION";;
-  help|-h|--help) sed -n '2,22p' "$0";;
-  *) die "unknown command '$1' (ashley help)";;
+  help|-h|--help) awk 'NR > 1 && /^set -uo pipefail/ { exit } NR > 1' "$0";;
+  *) die "unknown command '$1' (beethoven help)";;
 esac

@@ -1,12 +1,14 @@
 #!/usr/bin/env node
 'use strict';
-/*! Ashley (c) 2026 OpenSpineConsortium. Licensed software: use requires a license key. See LICENSE.txt. */
-// ashleyd: the persistent Claude Code worker. Runs inside the container on a compute node.
+/*! Beethoven for VS Code (c) 2026 OpenSpineConsortium. Licensed software: use requires a license key. See LICENSE.txt. */
+// beethovend: the persistent Claude Code worker. Runs inside the container on a compute node.
+// (Called ashleyd.js before grid scripts 7; bin/ashleyd.js stays a link to this file, because worker
+// job files written before then run it by that name.)
 //
 //   inbox/<id>.json  ->  claim (rename to .claimed)  ->  claude -p ... --output-format stream-json
 //                    ->  outbox/<id>.events.jsonl (live)  ->  outbox/<id>.json (final)
 //
-// One credential per account directory (~/.ashley/accounts/<name>/):
+// One credential per account directory (~/.beethoven/accounts/<name>/):
 //   .credentials.json  a copied Claude Code login (CLAUDE_CONFIG_DIR style)
 //   apikey             an Anthropic API key (pay-per-use overflow)
 //   disabled           present = hold this account out of rotation
@@ -32,20 +34,23 @@ const CONCURRENCY = parseInt(argv.concurrency || '2', 10);
 // 250 ms: a readdir of a tiny directory four times a second is nothing for the filesystem,
 // and it takes the poll out of the latency budget (measured 2026-09-28).
 const POLL_MS = parseInt(argv['poll-ms'] || '250', 10);
-const ASHLEY_HOME = process.env.ASHLEY_HOME || path.join(os.homedir(), '.ashley');
-const ROOT = process.env.ASHLEY_ROOT || path.join(os.homedir(), 'ashley');
+// Each BEETHOVEN_ variable is read first, then its ASHLEY_ twin (the names before grid scripts 7, which
+// worker job files written before then still set).
+const envOf = (name) => process.env[`BEETHOVEN_${name}`] || process.env[`ASHLEY_${name}`] || '';
+const BEETHOVEN_HOME = envOf('HOME') || path.join(os.homedir(), '.beethoven');
+const ROOT = envOf('ROOT') || path.join(os.homedir(), 'beethoven');
 const WORKER = path.basename(WORKER_DIR);
 const INBOX = path.join(WORKER_DIR, 'inbox');
 const OUTBOX = path.join(WORKER_DIR, 'outbox');
 const LOGDIR = path.join(WORKER_DIR, 'log');
-const SESSIONS = path.join(ASHLEY_HOME, 'sessions');
-const ACCOUNTS = path.join(ASHLEY_HOME, 'accounts');
-// The student's own Claude sign-in, made by Claude Code itself (`ashley claude login` runs
-// `claude auth login` in the student's allocation). Ashley never reads, copies or relays it; it
+const SESSIONS = path.join(BEETHOVEN_HOME, 'sessions');
+const ACCOUNTS = path.join(BEETHOVEN_HOME, 'accounts');
+// The student's own Claude sign-in, made by Claude Code itself (`beethoven claude login` runs
+// `claude auth login` in the student's allocation). Beethoven never reads, copies or relays it; it
 // only points every Claude Code process it starts at this folder. One person, one login.
-const CLAUDE_HOME = process.env.ASHLEY_CLAUDE_HOME || path.join(ASHLEY_HOME, 'claude');
+const CLAUDE_HOME = envOf('CLAUDE_HOME') || path.join(BEETHOVEN_HOME, 'claude');
 const AUTH_VARS = ['CLAUDE_CODE_OAUTH_TOKEN', 'ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_BASE_URL', 'CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR', 'CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR'];
-const SECRETS = path.join(ASHLEY_HOME, 'secrets.env');
+const SECRETS = path.join(BEETHOVEN_HOME, 'secrets.env');
 const STATE = path.join(WORKER_DIR, 'state.json');
 const STOP = path.join(WORKER_DIR, 'stop');
 const HARD_CAP_MS = 6 * 3600e3;
@@ -53,7 +58,7 @@ const MAX_ATTEMPTS = 3;
 
 // ---- license ------------------------------------------------------------------------------
 // The worker runs only for the person the license names: the key the laptop copied to
-// ~/.ashley/license.key must verify against the keys shipped beside this file, name this unix
+// ~/.beethoven/license.key must verify against the keys shipped beside this file, name this unix
 // account (the AccessID), and be in date. Checked at start and every minute; a clock set back
 // does not revive an ended key (the latest time seen is kept in license.state).
 const LIC = require(path.join(__dirname, 'license.js'));
@@ -64,12 +69,12 @@ const LIC_KEYS = (() => {
     return {};
   }
 })();
-const LICENSE_RECHECK_MS = parseInt(process.env.ASHLEY_LICENSE_RECHECK_MS || '60000', 10);
+const LICENSE_RECHECK_MS = parseInt(envOf('LICENSE_RECHECK_MS') || '60000', 10);
 let license = { ok: false, status: 'missing', detail: 'not checked yet' };
 function checkLicense() {
   const read = (f) => {
     try {
-      return fs.readFileSync(path.join(ASHLEY_HOME, f), 'utf8');
+      return fs.readFileSync(path.join(BEETHOVEN_HOME, f), 'utf8');
     } catch {
       return '';
     }
@@ -82,7 +87,7 @@ function checkLicense() {
   }
   const now = LIC.effectiveNow(Date.now() / 1000, lastSeen);
   try {
-    fs.writeFileSync(path.join(ASHLEY_HOME, 'license.state'), JSON.stringify({ last_seen: now }));
+    fs.writeFileSync(path.join(BEETHOVEN_HOME, 'license.state'), JSON.stringify({ last_seen: now }));
   } catch {
     /* read-only home: keep going */
   }
@@ -95,7 +100,7 @@ function checkLicense() {
 }
 
 for (const d of [INBOX, OUTBOX, LOGDIR, SESSIONS, ACCOUNTS]) fs.mkdirSync(d, { recursive: true });
-const logStream = fs.createWriteStream(path.join(LOGDIR, 'ashleyd.log'), { flags: 'a' });
+const logStream = fs.createWriteStream(path.join(LOGDIR, 'beethovend.log'), { flags: 'a' });
 function log(...a) {
   const line = `${new Date().toISOString()} ${a.join(' ')}`;
   logStream.write(line + '\n');
@@ -137,7 +142,7 @@ function claudeCommand(args) {
   return CLAUDE.endsWith('.js') ? { cmd: process.execPath, args: [CLAUDE, ...args] } : { cmd: CLAUDE, args };
 }
 // Slurm inside the container (see worker.sbatch.tpl): tested once at start by asking for this job
-const SLURM_BIN = process.env.ASHLEY_SLURM_BIN || '';
+const SLURM_BIN = envOf('SLURM_BIN');
 const SLURM = (() => {
   if (!SLURM_BIN) return { ok: false, detail: 'the worker job found no Slurm client to bind' };
   const r = spawnSync(path.join(SLURM_BIN, 'squeue'), ['-h', '-j', String(process.env.SLURM_JOB_ID || ''), '-o', '%T'], { encoding: 'utf8', timeout: 30_000 });
@@ -156,7 +161,7 @@ const startedAt = new Date().toISOString();
 // phone access (Remote Control) lives in its own module and only acts when <worker>/rc/enable exists
 let phone = null;
 try {
-  phone = require(path.join(__dirname, 'phone.js')).startPhone({ workerDir: WORKER_DIR, ashleyHome: ASHLEY_HOME, claudeHome: CLAUDE_HOME, root: ROOT, claude: CLAUDE, node, job, log });
+  phone = require(path.join(__dirname, 'phone.js')).startPhone({ workerDir: WORKER_DIR, beethovenHome: BEETHOVEN_HOME, claudeHome: CLAUDE_HOME, root: ROOT, claude: CLAUDE, node, job, log });
 } catch (e) {
   log(`phone access unavailable: ${e.message}`);
 }
@@ -201,7 +206,7 @@ const phoneTimer = setInterval(() => {
 }, 1000);
 
 recoverClaimed();
-log(`ashleyd start worker=${WORKER} node=${node} job=${job} pid=${process.pid} claude=${claudeVersion} concurrency=${CONCURRENCY}`);
+log(`beethovend start worker=${WORKER} node=${node} job=${job} pid=${process.pid} claude=${claudeVersion} concurrency=${CONCURRENCY}`);
 writeState('starting');
 process.on('SIGTERM', () => beginStop('SIGTERM'));
 process.on('SIGINT', () => beginStop('SIGINT'));
@@ -251,7 +256,7 @@ function tick() {
 function startRequest(req, claimedPath) {
   const started = new Date();
   if (!license.ok) {
-    writeResult(req, { status: 'error', result: '', error: `Ashley license: ${license.detail}. Open VS Code and run "Ashley: License", then the setup's grid step.`, started: started.toISOString() });
+    writeResult(req, { status: 'error', result: '', error: `Beethoven license: ${license.detail}. Open VS Code and run "Beethoven: License", then the setup's grid step.`, started: started.toISOString() });
     fs.rmSync(claimedPath, { force: true });
     log(`refused ${req.id}: license ${license.status}`);
     return;
@@ -264,7 +269,7 @@ function startRequest(req, claimedPath) {
     writeResult(req, {
       status,
       result: '',
-      error: cool ? `your Claude account is on cooldown until ${cool}` : 'Claude is not signed in on the grid: run "Ashley: Sign in to Claude on the grid" (on the grid: ashley claude login)',
+      error: cool ? `your Claude account is on cooldown until ${cool}` : 'Claude is not signed in on the grid: run "Beethoven: Sign in to Claude on the grid" (on the grid: beethoven claude login)',
       retry_after: cool || undefined,
       started: started.toISOString(),
     });
@@ -289,11 +294,17 @@ function startRequest(req, claimedPath) {
     DISABLE_AUTOUPDATER: '1',
     CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
     DISABLE_TELEMETRY: '1',
+    // what Claude's shell is told: this request and worker (the beethoven command refuses its
+    // destructive subcommands when they are set), under both names: the ASHLEY_ twins are what the
+    // browser edition's framework before 7 and the grid scripts before 7 look for
+    BEETHOVEN_REQUEST_ID: req.id,
+    BEETHOVEN_WORKER: WORKER,
+    BEETHOVEN_ROOT: ROOT,
     ASHLEY_REQUEST_ID: req.id,
     ASHLEY_WORKER: WORKER,
     ASHLEY_ROOT: ROOT,
-    // the ashley CLI and (when the worker job set it up) the host's Slurm client, for Claude's shell
-    PATH: [path.dirname(CLAUDE), path.join(ASHLEY_HOME, 'bin'), SLURM.ok ? SLURM_BIN : '', process.env.PATH || ''].filter(Boolean).join(':'),
+    // the beethoven command and (when the worker job set it up) the host's Slurm client, for Claude's shell
+    PATH: [path.dirname(CLAUDE), path.join(BEETHOVEN_HOME, 'bin'), SLURM.ok ? SLURM_BIN : '', process.env.PATH || ''].filter(Boolean).join(':'),
   });
   // only the chosen account's credential: nothing from the job environment or secrets.env may
   // override it (ANTHROPIC_AUTH_TOKEN) or send it elsewhere (ANTHROPIC_BASE_URL)
@@ -303,7 +314,7 @@ function startRequest(req, claimedPath) {
 
   const eventsPath = path.join(OUTBOX, `${req.id}.events.jsonl`);
   const events = fs.createWriteStream(eventsPath, { flags: 'a' });
-  events.write(JSON.stringify({ type: 'ashley', event: 'start', id: req.id, worker: WORKER, node, job, account: account.name, session: req.session, session_id: session.session_id, resume: session.resume, cwd, ts: started.toISOString() }) + '\n');
+  events.write(JSON.stringify({ type: 'beethoven', event: 'start', id: req.id, worker: WORKER, node, job, account: account.name, session: req.session, session_id: session.session_id, resume: session.resume, cwd, ts: started.toISOString() }) + '\n');
   log(`start ${req.id} session=${req.session} sid=${session.session_id} resume=${session.resume} account=${account.name} cwd=${cwd} attempt=${req.attempt || 1}`);
 
   const cc = claudeCommand(args);
@@ -335,7 +346,7 @@ function startRequest(req, claimedPath) {
     running.delete(req.id);
     processed++;
     const finished = new Date();
-    events.write(JSON.stringify({ type: 'ashley', event: 'exit', code, signal, ts: finished.toISOString() }) + '\n');
+    events.write(JSON.stringify({ type: 'beethoven', event: 'exit', code, signal, ts: finished.toISOString() }) + '\n');
     events.end();
     const text = result ? String(result.result || '') : '';
     const errText = `${text}\n${entry.stderr}`;
@@ -401,21 +412,21 @@ function writeResult(req, r) {
 function peerNote() {
   const peers = [];
   try {
-    for (const name of fs.readdirSync(path.join(ASHLEY_HOME, 'workers'))) {
+    for (const name of fs.readdirSync(path.join(BEETHOVEN_HOME, 'workers'))) {
       if (name === WORKER) continue;
-      const st = safe(() => JSON.parse(fs.readFileSync(path.join(ASHLEY_HOME, 'workers', name, 'state.json'), 'utf8')), null);
+      const st = safe(() => JSON.parse(fs.readFileSync(path.join(BEETHOVEN_HOME, 'workers', name, 'state.json'), 'utf8')), null);
       if (st && Date.now() - Date.parse(st.last_beat) < 90e3) peers.push(`${name} (node ${st.node}, ${st.status})`);
     }
   } catch {
     /* no workers dir */
   }
   return [
-    `You are the Ashley worker "${WORKER}" of user ${os.userInfo().username} on Wayne State grid node ${node}, inside Slurm job ${job} (${process.env.SLURM_CPUS_PER_TASK || '?'} CPUs), in a container; the ashley command is on PATH.`,
+    `You are the Beethoven worker "${WORKER}" of user ${os.userInfo().username} on Wayne State grid node ${node}, inside Slurm job ${job} (${process.env.SLURM_CPUS_PER_TASK || '?'} CPUs), in a container; the beethoven command is on PATH.`,
     SLURM.ok
       ? 'Slurm works from your shell (sbatch, squeue, scancel, sacct): submit heavy or long work as its own job instead of running it in this allocation; a submitted job runs on the host with the student\'s normal environment, not in this container.'
       : `Slurm is NOT available from your shell (${SLURM.detail}): run work inside this job's allocation, and ask the student to start more workers from the laptop.`,
     peers.length ? `Other live workers of this account: ${peers.join('; ')}.` : 'No other worker of this account is alive right now.',
-    'To hand work to another worker, write a request from your shell: printf \'%s\' \'{"v":1,"id":"<unique>","prompt":"...","session":"<name>","mode":"acceptEdits","max_turns":50,"created":"<iso>","from":"' + WORKER + '"}\' | ashley send --worker <name> --json ; collect it later with: ashley result --worker <name> <id> (or ashley wait). Start one with: ashley worker start --name <name> [--container <library entry>] [--gpus 1].',
+    'To hand work to another worker, write a request from your shell: printf \'%s\' \'{"v":1,"id":"<unique>","prompt":"...","session":"<name>","mode":"acceptEdits","max_turns":50,"created":"<iso>","from":"' + WORKER + '"}\' | beethoven send --worker <name> --json ; collect it later with: beethoven result --worker <name> <id> (or beethoven wait). Start one with: beethoven worker start --name <name> [--container <library entry>] [--gpus 1].',
     'Never run heavy work on the login node; submit jobs. Read files before changing them; keep results in files.',
   ].join(' ');
 }
@@ -424,8 +435,8 @@ function peerNote() {
 // --resume finds a session only under <CLAUDE_CONFIG_DIR>/projects (measured on Claude Code
 // 2.1.283: "No conversation found" from another config folder), so a request moved to another of
 // the student's accounts would lose its conversation. Every account's projects/ is therefore a link
-// to one ~/.ashley/projects. All accounts belong to one person, so this shares nothing between people.
-const SHARED_PROJECTS = path.join(ASHLEY_HOME, 'projects');
+// to one ~/.beethoven/projects. All accounts belong to one person, so this shares nothing between people.
+const SHARED_PROJECTS = path.join(BEETHOVEN_HOME, 'projects');
 function shareTranscripts(dir) {
   const p = path.join(dir, 'projects');
   try {
@@ -458,7 +469,7 @@ function listAccounts() {
     }
     return st.cooldown_until && new Date(st.cooldown_until) > new Date() ? st.cooldown_until : null;
   };
-  // the sign-in: present when Claude Code has stored its credential there (Ashley checks presence, never content)
+  // the sign-in: present when Claude Code has stored its credential there (Beethoven checks presence, never content)
   if (fs.existsSync(path.join(CLAUDE_HOME, '.credentials.json'))) {
     out.push({ name: 'claude', dir: CLAUDE_HOME, kind: 'login', secret: null, enabled: !fs.existsSync(path.join(CLAUDE_HOME, 'disabled')), cooldown_until: stateOf(CLAUDE_HOME) });
   }
@@ -590,7 +601,7 @@ function parseArgs(a) {
 }
 function must(v, name) {
   if (!v) {
-    process.stderr.write(`ashleyd: ${name} is required\n`);
+    process.stderr.write(`beethovend: ${name} is required\n`);
     process.exit(2);
   }
   return v;

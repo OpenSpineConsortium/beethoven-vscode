@@ -34,7 +34,7 @@ export interface SharedReport {
   signature: string;
 }
 
-const TOKEN_LIKE = /\b(?:sk-ant-[A-Za-z0-9_\-]{8,}|ghp_[A-Za-z0-9]{8,}|github_pat_[A-Za-z0-9_]{8,}|hf_[A-Za-z0-9]{8,}|ASHLEY1\.[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+|eyJ[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{10,})/g;
+const TOKEN_LIKE = /\b(?:sk-ant-[A-Za-z0-9_\-]{8,}|ghp_[A-Za-z0-9]{8,}|github_pat_[A-Za-z0-9_]{8,}|hf_[A-Za-z0-9]{8,}|(?:ASHLEY|BEETHOVEN)(?:REV)?1\.[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+|eyJ[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{10,})/g;
 const EMAIL = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
 const ACCESS_ID = /\b[a-z]{2}\d{4}\b/gi;
 const WIN_PATH = /[A-Za-z]:\\(?:[^\\\s"']+\\)*[^\\\s"']*/g;
@@ -108,12 +108,12 @@ export function worthSending(rep: DiagReport): boolean {
 /** The fields a report can contain, for the privacy statement and the "what is sent" view. */
 export const REPORT_FIELDS: Array<[string, string]> = [
   ['install_id', 'a random id made on this laptop; not derived from you or the machine'],
-  ['product, version, grid_scripts_version', 'which Ashley this is'],
+  ['product, version, grid_scripts_version', 'which Beethoven this is'],
   ['vscode, os, arch', 'VS Code version, operating system and processor family'],
   ['when', 'the time of the check'],
   ['nodes[].id, status, ms', 'each troubleshooter check, its verdict and how long it took'],
   ['nodes[].detail, repair', 'the check\'s message with e-mails, AccessIDs, paths, hostnames, addresses, job ids and anything token-shaped replaced by placeholders'],
   ['root_causes', 'which checks were the cause'],
-  ['errors', 'the last ERROR lines of the Ashley log, scrubbed the same way'],
+  ['errors', 'the last ERROR lines of the Beethoven log, scrubbed the same way'],
   ['signature', 'a hash of the failing checks, so one failure is reported once a day'],
 ];
