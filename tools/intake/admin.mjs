@@ -1,13 +1,18 @@
 #!/usr/bin/env node
 // The maintainer's command-line door to the access service, for when the admin page is not handy:
-//   node tools/intake/admin.mjs list          pending, approved (with grants), denied, revoked, the access checks,
-//                                             the seats and the refusals on record (counts and dates only)
+//   node tools/intake/admin.mjs list          one line per request (mailbox, stage, age) and per approval (grants and
+//                                             its stage: submitted, confirmed, decided, invited, installed; the seat
+//                                             and the refusals), then denied, revoked and the access checks
+//   node tools/intake/admin.mjs list --json   everything as the service answers it (GET /admin/list)
 //   node tools/intake/admin.mjs add <accessId> "<name>" [<email>] ["<note>"]     approve without a request (both grants)
-//   node tools/intake/admin.mjs approve <accessId> ["<note>"]                     Beethoven and the lab
+//   node tools/intake/admin.mjs approve <accessId> ["<note>"]                     Beethoven and the lab; prints the next
+//                                                                                 step (the Google account to invite)
 //   node tools/intake/admin.mjs approve-lab <accessId> ["<note>"]                 lab membership only
 //   node tools/intake/admin.mjs deny <accessId> ["<reason>"]
 //   node tools/intake/admin.mjs remove <accessId>                                 withdraws approval, revokes the person's keys,
-//                                                                                 deletes their seat and CV
+//                                                                                 deletes their seat, CV and access-check records
+//   node tools/intake/admin.mjs invited <accessId> [clear]                        marks them invited to the Google Group
+//                                                                                 Beethoven-users (clear: takes the mark away)
 //   node tools/intake/admin.mjs grant <accessId> extension,lab|lab|extension       sets an approved person's grants exactly
 //   node tools/intake/admin.mjs seat <accessId>                                   the installation the account is bound to
 //                                                                                 (by fingerprint) and its refusals
@@ -40,15 +45,52 @@ async function call(route, body) {
   return j;
 }
 const id = (a1 || '').toLowerCase();
+// a time in one short column: the date and the minute, UTC; a dash when there is none
+const at = (t) => (t ? String(t).slice(0, 16).replace('T', ' ') : '-');
+// one line per request: where it stands, its mailbox and its age (an unconfirmed one also says when it goes)
+function requestLine(p) {
+  const until = p.stage === 'unconfirmed' ? `, dropped ${at(p.expires_at)}${p.confirm_mail === 'failed' ? ', the confirmation e-mail could not be sent' : ''}` : '';
+  return `${p.accessId}  ${p.name || ''}  <${p.google_account || 'no Google account'}>  ${p.stage}: mailbox ${p.mailbox || 'not_verified'}, ${p.age_hours ?? '?'} h old${until}${p.cv ? `, CV ${p.cv.name}` : ''}`;
+}
+// one line per approval: its grants, its stage, the lifecycle's times, the seat and the refusals
+function approvalLine(a) {
+  const life = `submitted ${at(a.submitted_at)} · confirmed ${at(a.confirmed_at)} · decided ${a.decision || 'approve'} ${at(a.decided_at || a.approved_at)} · invited ${at(a.invited_at)} · installed ${at(a.installed_at)}`;
+  const seat = a.seat && a.seat.bound ? `seat bound (last check ${at(a.seat.last_seen)})` : 'no seat';
+  return `${a.accessId}  ${a.name || ''}  <${a.google_account || 'no Google account'}>  [${(a.grants || []).join(',')}]  stage ${a.stage}  ${life}  ${seat}, ${a.conflicts || 0} refusal(s)${a.any_installation ? ', any installation on a localhost portal' : ''}`;
+}
 switch (cmd) {
   case 'list': {
     const j = await call('list');
-    for (const k of ['pending', 'approved', 'denied', 'revoked', 'checks', 'seats', 'conflicts']) console.log(`${k} (${(j[k] || []).length}):`, JSON.stringify(j[k] || [], null, 1));
+    if (a1 === '--json') {
+      console.log(JSON.stringify(j, null, 1));
+      break;
+    }
+    console.log(`group: ${j.group ? `${j.group.name} (${j.group.mode}) ${j.group.members_url}` : '?'}`);
+    console.log(`pending (${(j.pending || []).length}):`);
+    for (const p of j.pending || []) console.log(`  ${requestLine(p)}`);
+    console.log(`approved (${(j.approved || []).length}):`);
+    for (const a of j.approved || []) console.log(`  ${approvalLine(a)}`);
+    for (const k of ['denied', 'revoked', 'checks']) console.log(`${k} (${(j[k] || []).length}):`, JSON.stringify(j[k] || [], null, 1));
     break;
   }
   case 'add': console.log(JSON.stringify(await call('add', { accessId: id, name: a2 || '', email: a3 || `${id}@wayne.edu`, note: a4 || 'added by the maintainer' }))); break;
   // a note only when one is given: the service keeps the student's own note unless the admin writes one
-  case 'approve': console.log(JSON.stringify(await call('approve', { accessId: id, ...(a2 ? { note: a2 } : {}) }))); break;
+  case 'approve': {
+    const j = await call('approve', { accessId: id, ...(a2 ? { note: a2 } : {}) });
+    console.log(JSON.stringify(j));
+    const inv = j.invite;
+    if (inv && inv.invited) console.log(`invited: ${inv.google_account} is in ${inv.group}${inv.mode === 'workspace' ? ` (${inv.address}), added by the service` : ''}`);
+    else if (inv) {
+      if (inv.error) console.log(`the service could not add them to the group itself: ${inv.error}`);
+      console.log(`next: invite ${inv.google_account || 'their Google account (ask them which one)'} at ${inv.members_url}, then: node tools/intake/admin.mjs invited ${id}`);
+    }
+    break;
+  }
+  case 'invited': {
+    if (a2 && a2 !== 'clear') { console.error('invited <accessId> [clear]'); process.exit(2); }
+    console.log(JSON.stringify(await call('invited', { accessId: id, ...(a2 === 'clear' ? { clear: true } : {}) })));
+    break;
+  }
   case 'approve-lab': console.log(JSON.stringify(await call('approve', { accessId: id, ...(a2 ? { note: a2 } : {}), grants: ['lab'] }))); break;
   case 'deny': console.log(JSON.stringify(await call('deny', { accessId: id, reason: a2 || '' }))); break;
   case 'remove': console.log(JSON.stringify(await call('remove', { accessId: id }))); break;
@@ -82,5 +124,5 @@ switch (cmd) {
     if (!j.sent) process.exit(1);
     break;
   }
-  default: console.error('usage: admin.mjs list | add <id> "<name>" [<email>] ["<note>"] | approve <id> ["<note>"] | approve-lab <id> ["<note>"] | deny <id> ["<reason>"] | remove <id> | grant <id> extension,lab|lab|extension | seat <id> | reset-seat <id> | seat-rule <id> any|one | cv <id> [<file>] | notify-test'); process.exit(2);
+  default: console.error('usage: admin.mjs list [--json] | invited <id> [clear] | add <id> "<name>" [<email>] ["<note>"] | approve <id> ["<note>"] | approve-lab <id> ["<note>"] | deny <id> ["<reason>"] | remove <id> | grant <id> extension,lab|lab|extension | seat <id> | reset-seat <id> | seat-rule <id> any|one | cv <id> [<file>] | notify-test'); process.exit(2);
 }

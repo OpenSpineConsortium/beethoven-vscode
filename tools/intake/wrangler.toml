@@ -29,14 +29,35 @@ KEY_PREFIX = "ashley"
 # listing and installed; from then on such a check is refused with reason update_required. A check that
 # carries install_id is held to one installation per account either way. Deploy both names after a change.
 REQUIRE_INSTALL_ID = "0"
-# "1": a request is first e-mailed to the student at <AccessID>@wayne.edu with a "Confirm it is you" link,
-# and reaches the maintainer only when they use it. Only after openspineconsortium.com is verified at
-# Resend and mail_from names it (README.md, "The request portal"); until then Resend refuses every address
-# but the account owner's, and each request goes to the maintainer marked "mailbox not verified".
+# "1": mailbox confirmation is required. A request is first e-mailed to the student at <AccessID>@wayne.edu
+# with a "Confirm it is you" link and reaches the maintainer only when they use it; one not confirmed is
+# dropped after 7 days; the student is e-mailed when approved for Beethoven. Only after
+# openspineconsortium.com is verified at Resend and mail_from names it (README.md, "The request portal"):
+# until then Resend refuses every address but the account owner's, and with "1" every request would be
+# answered "could not be sent" and wait unconfirmed. "0" (today): the maintainer is e-mailed at once, the
+# e-mail says "Mailbox: not verified", and nobody else is e-mailed.
 MAIL_STUDENTS = "0"
+# the Google Group of the private listing, Beethoven-users: "manual" (today; a consumer group has no API
+# for its members, so the Approve page shows the address to invite and a Done, invited button), or
+# "workspace" when the lab has a Google Workspace: the service then adds the account itself with the
+# Directory API on GROUP_ADDRESS (secrets GROUP_SA_KEY and GROUP_ADMIN_SUBJECT; README.md, "The private
+# listing"). Deploy both names after a change.
+GROUP_MODE = "manual"
+GROUP_ADDRESS = "beethoven-users@openspineconsortium.com"
+# "how it works", in the student's e-mail after approval (MAIL_STUDENTS "1")
+ONBOARDING_PAGE = "https://openspineconsortium.com/beethoven/"
+# The daily reminder of approvals not yet invited: both names run the cron below, only this one sends it
+# (deploy.sh gives each name SERVICE_NAME, its own name), and its Done, invited links point here.
+REMINDER_FROM = "beethoven-access"
+SERVICE_ORIGIN = "https://beethoven-access.openspineconsortium.workers.dev"
+
+# once a day, 13:00 UTC (9:00 in Detroit in summer, 8:00 in winter): the invitation reminder
+[triggers]
+crons = ["0 13 * * *"]
 
 # secrets, never here: TRIAL_KEY_PKCS8_B64, TRIAL_KID, ADMIN_TOKEN, IP_SALT, GITHUB_TOKEN, GITHUB_REPO,
-# DECIDE_KEY, NOTIFY_TO, MAIL_FROM, RESEND_API_KEY (the e-mail about each request; no binding needed)
+# DECIDE_KEY, NOTIFY_TO, MAIL_FROM, RESEND_API_KEY (the e-mail about each request; no binding needed),
+# and only with GROUP_MODE "workspace": GROUP_SA_KEY, GROUP_ADMIN_SUBJECT
 # (wrangler secret put, see README.md)
 
 # paste the ids that `wrangler kv namespace create` prints; both Worker names bind these same three

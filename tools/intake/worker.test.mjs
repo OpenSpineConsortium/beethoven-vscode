@@ -101,8 +101,21 @@ globalThis.fetch = async (url, init = {}) => {
     issues.push(JSON.parse(init.body));
     return Response.json({ number: issues.length }, { status: 201 });
   }
+  // Google's token endpoint and the Directory API (GROUP_MODE "workspace"), stubbed: never called live
+  if (u === 'https://oauth2.googleapis.com/token') {
+    google.calls.push({ url: u, headers: init.headers, body: String(init.body) });
+    if (google.tokenStatus !== 200) return Response.json({ error: 'unauthorized_client', error_description: 'Client is unauthorized to retrieve access tokens using this method.' }, { status: google.tokenStatus });
+    return Response.json({ access_token: 'ya29.test-access-token', token_type: 'Bearer', expires_in: 3600 });
+  }
+  if (u.startsWith('https://admin.googleapis.com/')) {
+    google.calls.push({ url: u, headers: init.headers, body: JSON.parse(init.body) });
+    if (google.insertStatus === 200) return Response.json({ kind: 'admin#directory#member', email: JSON.parse(init.body).email, role: 'MEMBER' });
+    if (google.insertStatus === 409) return Response.json({ error: { code: 409, message: 'Member already exists.' } }, { status: 409 });
+    return Response.json({ error: { code: google.insertStatus, message: 'Not Authorized to access this resource/api' } }, { status: google.insertStatus });
+  }
   throw new Error(`unexpected fetch ${u}`);
 };
+const google = { tokenStatus: 200, insertStatus: 200, calls: [] };
 
 // the Worker's "mail: ..." lines are kept here instead of printed, so a test can read them
 const logs = [];
@@ -298,7 +311,7 @@ test('/admin answers 401 without the token, with a wrong one, and when none is c
   assert.equal((await call(env, 'GET', '/admin/list', { headers: ADMIN, origin: 'https://evil.example' }).then(asJson)).status, 403);
   const ok = await adminList(env);
   assert.equal(ok.status, 200);
-  assert.deepEqual(ok.body, { pending: [], approved: [], denied: [], revoked: [], checks: [], seats: [], conflicts: [] });
+  assert.deepEqual(ok.body, { now: ok.body.now, group: { name: 'Beethoven-users', members_url: 'https://groups.google.com/g/beethoven-users/members', mode: 'manual' }, pending: [], approved: [], denied: [], revoked: [], checks: [], seats: [], conflicts: [] });
   assert.equal(ok.headers.get('access-control-allow-origin'), SITE);
   assert.equal((await call(env, 'OPTIONS', '/admin/approve')).status, 204);
   assert.equal((await adminPost(env, 'nothing', { accessId: 'ab1234' })).status, 404);
@@ -517,13 +530,19 @@ test('POST /access_check keeps one record per product and account, counts the da
   assert.deepEqual(list.body.pending, []);
   assert.deepEqual(list.body.denied, []);
   assert.equal(list.body.approved.length, 1);
-  // a withdrawal is recorded with the time the decision changed
-  await adminPost(env, 'remove', { accessId: 'st1234' });
+  // a change of decision is recorded with the time it changed (here: lab membership only from now on)
+  await adminPost(env, 'grant', { accessId: 'st1234', grants: ['lab'] });
   await check(env);
   const after = await env.ACCESS.get('seen:bridge:st1234', 'json');
   assert.equal(after.approved, false);
   assert.equal(after.checks, 3);
   assert.ok(after.changed_at >= after.first_seen);
+  // a removal deletes the account's check records with everything else (F1 d); the next check starts a new one
+  await adminPost(env, 'remove', { accessId: 'st1234' });
+  assert.equal(await env.ACCESS.get('seen:bridge:st1234'), null);
+  await check(env);
+  const fresh = await env.ACCESS.get('seen:bridge:st1234', 'json');
+  assert.deepEqual([fresh.approved, fresh.checks, fresh.changed_at], [false, 1, undefined]);
   // another product is its own record
   await check(env, { product: 'ashley', version: '3.0.0' });
   assert.equal((await env.ACCESS.get('seen:ashley:st1234', 'json')).checks, 1);
@@ -685,8 +704,11 @@ test('/request e-mails the maintainer once, with three decision links that verif
   const ca = claimOf(ta);
   const cl = claimOf(tl);
   const cd = claimOf(td);
-  assert.deepEqual(Object.keys(ca), ['v', 'access_id', 'decision', 'nonce', 'exp']);
+  assert.deepEqual(Object.keys(ca), ['v', 'access_id', 'decision', 'nonce', 'exp', 'ref']);
   assert.deepEqual([ca.v, ca.access_id, ca.decision, cl.decision, cd.decision], [1, 'ab1234', 'approve', 'lab', 'deny']);
+  // each link names the version of the request it was sent for (F1 c)
+  const version = (await env.ACCESS.get('pending:ab1234', 'json')).ref;
+  assert.ok(ca.ref === version && cl.ref === version && cd.ref === version, 'the links carry the request\'s ref');
   assert.ok(ca.nonce === cd.nonce && ca.nonce === cl.nonce, 'one e-mail, one nonce: using any of the three spends all three');
   assert.match(ca.nonce, /^[A-Za-z0-9_-]{22}$/);
   const days = (ca.exp - Date.now() / 1000) / 86400;
@@ -770,25 +792,39 @@ test('the e-mail says Beethoven access request; its headline names the edition t
   assert.equal((await check(env, { access_id: 'ab1234' })).body.approved, true);
 });
 
-test('one e-mail per AccessID a day; a failed send is logged with its status only and tried again', async () => {
+test('one e-mail per AccessID a day for the same request; a changed one is e-mailed at once; a failed send is logged with its status only and tried again', async () => {
   const env = mailEnv();
   mails.length = 0;
   await request(env);
-  await request(env, { note: 'again' });
   await request(env);
-  assert.equal(mails.length, 1, 'repeats within the day send nothing');
+  await request(env);
+  assert.equal(mails.length, 1, 'the same request again within the day sends nothing');
   assert.ok(env.ACCESS.m.has('notified:ab1234'));
   assert.equal(env.ACCESS.ttl.get('notified:ab1234'), 86400);
   await request(env, { accessId: 'cd5678', email: 'cd5678@wayne.edu' });
   assert.equal(mails.length, 2, 'another person is their own e-mail');
-  // a day later KV has dropped the key: a repeat sends one reminder, which says so
+  // a day later KV has dropped the key: the same request sends one reminder, which says so, with links to the same version
+  const ref = (await env.ACCESS.get('pending:ab1234', 'json')).ref;
   env.ACCESS.m.delete('notified:ab1234');
-  await request(env, { note: 'still waiting' });
-  assert.equal(mails.length, 3);
-  assert.match(mails[2].body.text, /^Asked again: /m);
-  assert.match(mails[2].body.text, /^What for: still waiting$/m);
   await request(env);
   assert.equal(mails.length, 3);
+  assert.match(mails[2].body.text, /^Asked again: /m);
+  assert.equal(claimOf(tokenOf(linksIn(mails[2].body.text).approve)).ref, ref, 'the same version');
+  await request(env);
+  assert.equal(mails.length, 3);
+  // changed: a new version, e-mailed at once (the older e-mail's links stop working), three a day at most
+  await request(env, { note: 'still waiting' });
+  assert.equal(mails.length, 4);
+  assert.match(mails[3].body.text, /^What for: still waiting$/m);
+  assert.match(mails[3].body.text, /^Asked again: .*links in an earlier e-mail about ab1234 no longer work/m);
+  assert.notEqual(claimOf(tokenOf(linksIn(mails[3].body.text).approve)).ref, ref);
+  await request(env, { note: 'third version' });
+  assert.equal(mails.length, 5);
+  logs.length = 0;
+  await request(env, { note: 'fourth version' });
+  assert.equal(mails.length, 5, 'the fourth version of the day is on the admin page only');
+  assert.deepEqual(logs, [{ level: 'log', line: 'mail: three e-mails about this AccessID today already; the newest request is on the admin page' }]);
+  assert.equal((await adminList(env)).body.pending.find((p) => p.accessId === 'ab1234').note, 'fourth version');
   // the provider refuses, then cannot be reached: the request is still stored and answered pending, the
   // log has the status and nothing else, and no day starts until an e-mail actually goes
   const bad = mailEnv();
@@ -846,8 +882,11 @@ test('the button applies the decision once, through the admin code, and spends b
   assert.ok(done.text.includes('A. Student can click the Beethoven icon now; the extension re-checks within ten minutes.'));
   assert.ok(done.text.includes(ADMIN_PAGE));
   const rec = await env.ACCESS.get('approved:ab1234', 'json');
-  assert.deepEqual({ ...rec, approved_at: 'x' }, { name: 'A. Student', email: 'ab1234@wayne.edu', note: 'spine segmentation project', approved_at: 'x', by: 'e-mail link', lids: [], grants: ['extension', 'lab'] });
+  // the lifecycle rides along: when the request was sent, its mailbox, the decision and when, and the version decided
+  const version = claimOf(ta).ref;
+  assert.deepEqual({ ...rec, approved_at: 'x', submitted_at: 'x', decided_at: 'x' }, { name: 'A. Student', email: 'ab1234@wayne.edu', note: 'spine segmentation project', approved_at: 'x', by: 'e-mail link', lids: [], submitted_at: 'x', mailbox: 'not_verified', ref: version, decided_at: 'x', decision: 'approve', grants: ['extension', 'lab'] });
   assert.ok(Math.abs(Date.parse(rec.approved_at) - Date.now()) < 5000);
+  assert.equal(rec.decided_at, rec.approved_at);
   assert.equal(await env.ACCESS.get('pending:ab1234'), null);
   const audits = [...env.ACCESS.m.entries()].filter(([k]) => k.startsWith('audit:')).map(([, v]) => JSON.parse(v));
   assert.deepEqual(audits, [{ action: 'approve', accessId: 'ab1234', by: 'e-mail link', grants: ['extension', 'lab'] }]);
@@ -900,6 +939,7 @@ test('the button applies the decision once, through the admin code, and spends b
   const late = await press(env3, tokenOf(linksIn(mails[0].body.text).deny));
   assert.equal(late.status, 409);
   assert.ok(late.text.includes('Nothing changed'));
+  assert.ok(late.text.includes('This request was decided already'));
   assert.ok(await env3.ACCESS.get('approved:ab1234'));
 });
 
@@ -923,6 +963,7 @@ test('a changed, cut, foreign or expired link decides nothing', async () => {
     'v 2': mint({ ...claim, v: 2 }),
     'no nonce': mint({ ...claim, nonce: '' }),
     'a decision that is neither': mint({ ...claim, decision: 'add' }),
+    'a ref that is not one': mint({ ...claim, ref: 'x' }),
   };
   for (const [why, t] of Object.entries(invalid)) {
     for (const res of [await open(env, t), await press(env, t)]) {
@@ -933,7 +974,15 @@ test('a changed, cut, foreign or expired link decides nothing', async () => {
     }
   }
   // a link signed here with the right key opens: the format is exactly the one README.md gives
-  assert.equal((await open(env, mint({ v: 1, access_id: 'ab1234', decision: 'approve', nonce: 'n'.repeat(22), exp: Math.floor(Date.now() / 1000) + 60 }))).status, 200);
+  assert.equal((await open(env, mint({ v: 1, access_id: 'ab1234', decision: 'approve', nonce: 'n'.repeat(22), exp: Math.floor(Date.now() / 1000) + 60, ref: claim.ref }))).status, 200);
+  // a good signature without a ref: a link from an e-mail sent before links named a version; it decides nothing
+  const legacy = mint({ v: 1, access_id: 'ab1234', decision: 'approve', nonce: 'm'.repeat(22), exp: Math.floor(Date.now() / 1000) + 60 });
+  for (const res of [await open(env, legacy), await press(env, legacy)]) {
+    assert.equal(res.status, 410);
+    plainPage(res, 'out of date');
+    assert.ok(res.text.includes('This link is out of date'));
+    assert.ok(res.text.includes(ADMIN_PAGE));
+  }
   const old = mint({ ...claim, exp: Math.floor(Date.now() / 1000) - 1 });
   for (const res of [await open(env, old), await press(env, old)]) {
     assert.equal(res.status, 410);
@@ -1173,7 +1222,9 @@ test('seat-rule any: an account every installation may use binds nothing (the st
   assert.equal(s.status, 200);
   assert.deepEqual(s.body, { status: 'seat-rule', accessId: 'st1234', any_installation: true });
   assert.equal((await env.ACCESS.get('approved:st1234', 'json')).any_installation, true);
-  for (const install_id of [IA, IB, IC, undefined]) assert.equal((await check(env, { install_id })).body.approved, true, String(install_id));
+  // the reviewers' mock portal runs on localhost: there, every installation (and a build without an identifier) gets in
+  const LOCAL = 'localhost:8080';
+  for (const install_id of [IA, IB, IC, undefined]) assert.equal((await check(env, { install_id, portal: LOCAL })).body.approved, true, String(install_id));
   assert.equal(await env.ACCESS.get('seat:st1234'), null);
   assert.equal(await env.ACCESS.get(`install:${IA}`), null);
   // re-adding the account keeps the rule
@@ -1182,7 +1233,7 @@ test('seat-rule any: an account every installation may use binds nothing (the st
   // an installation bound to another account serves it too, and takes nothing from that account
   await adminPost(env, 'add', { accessId: 'ab1234', name: 'A. Student' });
   assert.equal((await check(env, { access_id: 'ab1234', install_id: IC })).body.approved, true);
-  assert.equal((await check(env, { install_id: IC })).body.approved, true);
+  assert.equal((await check(env, { install_id: IC, portal: LOCAL })).body.approved, true);
   assert.equal((await env.ACCESS.get(`install:${IC}`, 'json')).access_id, 'ab1234');
   // back to one installation: the next check binds
   const off = await adminPost(env, 'seat-rule', { accessId: 'st1234', any: false });
@@ -1216,7 +1267,10 @@ test('a second installation e-mails the maintainer once a day, with a Move and a
   assert.equal(links.approve, null);
   const cm = claimOf(tokenOf(links.move));
   const cw = claimOf(tokenOf(links.withdraw));
-  assert.deepEqual(Object.keys(cm), ['v', 'access_id', 'decision', 'nonce', 'exp', 'install_id']);
+  assert.deepEqual(Object.keys(cm), ['v', 'access_id', 'decision', 'nonce', 'exp', 'install_id', 'ref']);
+  // both name the refusal e-mail they came in (the conflict record's ref, written once the e-mail went)
+  const cref = (await env.ACCESS.get('conflict:ab1234', 'json')).ref;
+  assert.ok(cref && cm.ref === cref && cw.ref === cref);
   assert.deepEqual([cm.decision, cm.install_id, cw.decision, cw.install_id], ['move', IB, 'withdraw', undefined]);
   assert.equal(cm.nonce, cw.nonce);
   assert.ok((cm.exp - Date.now() / 1000) / 86400 > 13.99);
@@ -1377,7 +1431,9 @@ test('POST /request v2: the fields are checked, the request stored, a CV kept as
   assert.deepEqual(r.body, { status: 'pending', mailbox: 'not_verified' });
   assert.equal(r.headers.get('access-control-allow-origin'), SITE);
   let rec = await env.ACCESS.get('pending:ab1234', 'json');
-  assert.deepEqual({ ...rec, requested_at: 'x', ref: 'x' }, { name: 'A. Student', email: 'ab1234@wayne.edu', note: 'spine segmentation project', google_account: 'a.student@gmail.com', asked_from: 'Beethoven', requested_at: 'x', v: 2, ref: 'x', mailbox: 'not_verified' });
+  assert.deepEqual({ ...rec, requested_at: 'x', submitted_at: 'x', ref: 'x' }, { name: 'A. Student', email: 'ab1234@wayne.edu', note: 'spine segmentation project', google_account: 'a.student@gmail.com', asked_from: 'Beethoven', requested_at: 'x', submitted_at: 'x', v: 2, ref: 'x', mailbox: 'not_verified' });
+  assert.equal(rec.submitted_at, rec.requested_at);
+  assert.equal(env.ACCESS.ttl.get('pending:ab1234'), undefined, 'with MAIL_STUDENTS "0" a request has no end');
   assert.match(rec.ref, /^[A-Za-z0-9_-]{22}$/);
   assert.equal(await env.ACCESS.get('cv:ab1234'), null);
   // with a PDF: the bytes as sent, the kind from the bytes (not from the name or the type the form gave)
@@ -1438,8 +1494,9 @@ test('the maintainer\'s e-mail for a v2 request: the Google account, the purpose
   assert.ok(links.cv.startsWith('https://service.example/cv?t='));
   assert.ok(m.html.includes(`href="${links.cv}"`));
   const cc = claimOf(tokenOf(links.cv));
-  assert.deepEqual(Object.keys(cc), ['v', 'access_id', 'decision', 'nonce', 'exp']);
+  assert.deepEqual(Object.keys(cc), ['v', 'access_id', 'decision', 'nonce', 'exp', 'ref']);
   assert.equal(cc.decision, 'cv');
+  assert.equal(cc.ref, (await env.ACCESS.get('pending:ab1234', 'json')).ref);
   assert.notEqual(cc.nonce, claimOf(tokenOf(links.approve)).nonce, 'the CV link is its own');
   assert.ok((cc.exp - Date.now() / 1000) / 86400 > 13.99);
   assert.ok(!m.text.includes(PDF.toString('base64').slice(0, 40)), 'the file is not in the e-mail');
@@ -1461,7 +1518,7 @@ test('the maintainer\'s e-mail for a v2 request: the Google account, the purpose
   await requestV2(env2);
   const ok = await press(env2, tokenOf(linksIn(mails[0].body.text).approve));
   assert.ok(ok.text.includes('<h1>Approved.</h1>'));
-  assert.ok(ok.text.includes('Add a.student@gmail.com to the Google Group'));
+  assert.ok(ok.text.includes('Next: add a.student@gmail.com to the Google Group Beethoven-users.'));
   assert.deepEqual((await env2.ACCESS.get('approved:ab1234', 'json')).grants, ['extension', 'lab']);
   assert.equal((await check(env2, { access_id: 'ab1234' })).body.approved, true);
   // Deny deletes the CV at once
@@ -1629,7 +1686,7 @@ test('mailbox proof: with MAIL_STUDENTS "1" the student confirms from their Wayn
   assert.ok(p.text.includes('<h1>Confirmed.</h1>'));
   rec = await env.ACCESS.get('pending:ab1234', 'json');
   assert.equal(rec.mailbox, 'confirmed');
-  assert.ok(rec.verified_at);
+  assert.ok(rec.confirmed_at);
   assert.equal(mails.length, 2);
   m = mails[1].body;
   assert.deepEqual(m.to, ['maintainer@example.edu']);
@@ -1664,7 +1721,8 @@ test('mailbox proof: with MAIL_STUDENTS "1" the student confirms from their Wayn
   await requestV2(env4);
   await adminPost(env4, 'approve', { accessId: 'ab1234' });
   assert.equal((await pressC(env4, tokenOf(linksIn(mails[0].body.text).confirm))).status, 409);
-  // the student e-mail refused (Resend, before the domain is verified): the maintainer hears at once, unverified
+  // the student e-mail refused (Resend, before the domain is verified): confirmation is required, so the
+  // maintainer hears nothing; the student is told it did not go, and the request waits unconfirmed (F2)
   const env3 = mailEnv({ MAIL_STUDENTS: '1' });
   mails.length = 0;
   try {
@@ -1673,11 +1731,13 @@ test('mailbox proof: with MAIL_STUDENTS "1" the student confirms from their Wayn
   } finally {
     resend.refuseTo = null;
   }
-  assert.deepEqual(r.body, { status: 'pending', mailbox: 'not_verified' });
-  assert.equal(mails.length, 2);
-  assert.deepEqual(mails[1].body.to, ['maintainer@example.edu']);
-  assert.match(mails[1].body.text, /^Mailbox: not verified/m);
-  assert.equal((await env3.ACCESS.get('pending:ab1234', 'json')).mailbox, 'not_verified');
+  assert.equal(r.status, 502);
+  assert.match(r.body.error, /^the confirmation e-mail to ab1234@wayne\.edu could not be sent just now/);
+  assert.equal(mails.length, 1, 'the one refused attempt; nothing to the maintainer');
+  assert.deepEqual(mails[0].body.to, ['ab1234@wayne.edu']);
+  const waiting = await env3.ACCESS.get('pending:ab1234', 'json');
+  assert.deepEqual([waiting.mailbox, waiting.confirm_mail], ['waiting', 'failed']);
+  assert.equal(env3.ACCESS.ttl.get('pending:ab1234'), 7 * 86400);
   // MAIL_STUDENTS unset or anything but "1": no student e-mail; the maintainer hears at once
   for (const value of [undefined, '0', 'yes']) {
     const e = mailEnv(value === undefined ? {} : { MAIL_STUDENTS: value });
@@ -1687,4 +1747,799 @@ test('mailbox proof: with MAIL_STUDENTS "1" the student confirms from their Wayn
     assert.equal(mails.length, 1, String(value));
     assert.deepEqual(mails[0].body.to, ['maintainer@example.edu'], String(value));
   }
+});
+
+// ---- 2026-09-30 afternoon: links tied to one version, the Move guard, the reviewers' exemption on a
+// localhost portal only, removal clears the checks, mailbox confirmation required, the lifecycle, and the
+// invitation to the private listing's Google Group (ACCESS_CHECK.md and README.md say the same) ----
+
+const GROUP_URL = 'https://groups.google.com/g/beethoven-users/members';
+const doneLinks = (text) => [...text.matchAll(/^Done, invited: (\S+)$/gm)].map((m) => m[1]);
+const hoursAgo = (h) => new Date(Date.now() - h * 3600e3).toISOString();
+const openConfirm = (e, t) => call(e, 'GET', `/confirm?t=${t}`, { origin: null }).then(asPage);
+const pressConfirm = (e, t) => call(e, 'POST', `/confirm?t=${t}`, { origin: null, headers: FORM, body: 'confirm=1' }).then(asPage);
+const pressCvLink = (e, t) => call(e, 'POST', `/cv?t=${t}`, { origin: null, headers: FORM, body: 'confirm=1' });
+// the form action of a page's button, by its label (null when the page has no such button)
+function formAction(html, button) {
+  const m = new RegExp(`<form method="post" action="([^"]+)"><input type="hidden" name="confirm" value="1"><button type="submit">${button}</button></form>`).exec(html);
+  return m ? m[1].replace(/&amp;/g, '&') : null;
+}
+const tokenOfAction = (action) => new URLSearchParams(action.split('?')[1]).get('t');
+// the Worker's cron, as Cloudflare calls it: scheduled(event, env, ctx), the work handed to ctx.waitUntil
+async function runCron(env) {
+  const waits = [];
+  await worker.scheduled({ cron: '0 13 * * *', scheduledTime: Date.now() }, env, { waitUntil: (p) => waits.push(p) });
+  await Promise.all(waits);
+}
+async function backdate(env, id, fields) {
+  const rec = await env.ACCESS.get(`approved:${id}`, 'json');
+  await env.ACCESS.put(`approved:${id}`, JSON.stringify({ ...rec, ...fields }));
+}
+
+test('F1 a: Move refuses with a plain page while the refused installation is another account\'s seat, and works once that is cleared', async () => {
+  const env = mailEnv();
+  await adminPost(env, 'add', { accessId: 'ab1234', name: 'A. Student' });
+  await adminPost(env, 'add', { accessId: 'cd5678', name: 'C. D.' });
+  mails.length = 0;
+  assert.equal((await check(env, { access_id: 'ab1234' })).body.approved, true);
+  assert.equal((await check(env, { access_id: 'cd5678', install_id: IB })).body.approved, true);
+  // ab1234 asks from IB, the installation cd5678 is bound to: refused, and e-mailed with a Move link to IB
+  assert.equal((await check(env, { access_id: 'ab1234', install_id: IB })).body.reason, 'other_installation');
+  const move = tokenOf(linksIn(mails[0].body.text).move);
+  assert.equal(claimOf(move).install_id, IB);
+  const before = snapshot(env);
+  for (const [why, p] of [['opened', await open(env, move)], ['pressed', await press(env, move)]]) {
+    assert.equal(p.status, 409, why);
+    plainPage(p, why);
+    for (const s of ['<h1>This installation is in use by another account</h1>', short(IB), 'cd5678', 'withdraw the approval of cd5678 first', 'node tools/intake/admin.mjs remove cd5678', 'Nothing was changed', ADMIN_PAGE]) assert.ok(p.text.includes(s), `${why}: ${s}`);
+    assert.ok(!p.text.includes('<button'), `${why}: no button to press`);
+  }
+  assert.equal(snapshot(env), before, 'nothing written and the link not spent');
+  // cd5678's approval withdrawn: the same link now moves ab1234 there
+  await adminPost(env, 'remove', { accessId: 'cd5678' });
+  const done = await press(env, move);
+  assert.equal(done.status, 200);
+  assert.ok(done.text.includes('<h1>Moved.</h1>'));
+  assert.equal((await env.ACCESS.get('seat:ab1234', 'json')).install_id, IB);
+  assert.equal((await env.ACCESS.get(`install:${IB}`, 'json')).access_id, 'ab1234');
+  // an index left behind by a seat that moved on blocks nothing
+  const env2 = mailEnv();
+  await adminPost(env2, 'add', { accessId: 'ab1234', name: 'A. Student' });
+  mails.length = 0;
+  await check(env2, { access_id: 'ab1234' });
+  await check(env2, { access_id: 'ab1234', install_id: IC });
+  await env2.ACCESS.put(`install:${IC}`, JSON.stringify({ access_id: 'zz0001', bound_at: '2026-09-01T00:00:00.000Z' }));
+  const moved = await press(env2, tokenOf(linksIn(mails[0].body.text).move));
+  assert.equal(moved.status, 200);
+  assert.equal((await env2.ACCESS.get('seat:ab1234', 'json')).install_id, IC);
+});
+
+test('F1 b: seat-rule any holds on a localhost portal only; on a real portal the account is held to one installation', async () => {
+  const env = makeEnv();
+  await adminPost(env, 'add', { accessId: 'st1234', name: 'Store reviewer (mock portal)' });
+  await adminPost(env, 'seat-rule', { accessId: 'st1234', any: true });
+  for (const portal of ['localhost', 'localhost:8080', 'reviewers.localhost', 'mock.portal.localhost:3000']) {
+    for (const install_id of [IA, IB, undefined]) assert.equal((await check(env, { portal, install_id })).body.approved, true, `${portal} ${install_id}`);
+  }
+  assert.equal(await env.ACCESS.get('seat:st1234'), null, 'nothing bound from a local portal');
+  // a real portal: the first installation binds, any other is refused, a build without an identifier must update
+  assert.equal((await check(env, { install_id: IA })).body.approved, true);
+  assert.equal((await env.ACCESS.get('seat:st1234', 'json')).install_id, IA);
+  for (const portal of ['ondemand.grid.wayne.edu', 'localhost.example.com', 'notlocalhost', 'localhost.evil.edu:443']) {
+    assert.equal((await check(env, { portal, install_id: IB })).body.reason, 'other_installation', portal);
+  }
+  assert.equal((await check(env, { install_id: undefined })).body.reason, 'update_required');
+  // the mock portal is still let through from any installation
+  assert.equal((await check(env, { portal: 'localhost:8080', install_id: IC })).body.approved, true);
+  assert.equal((await env.ACCESS.get('seat:st1234', 'json')).install_id, IA);
+});
+
+test('F1 c: decision and CV links belong to one version of the request; a changed form replaces them, the same form keeps them', async () => {
+  const env = mailEnv();
+  mails.length = 0;
+  await requestV2(env, { cv: cvOf(PDF) });
+  const first = linksIn(mails[0].body.text);
+  const ref1 = (await env.ACCESS.get('pending:ab1234', 'json')).ref;
+  for (const k of ['approve', 'lab', 'deny', 'cv']) assert.equal(claimOf(tokenOf(first[k])).ref, ref1, k);
+  // the same form again (a second press, the CV attached again or not): the same version, no second e-mail
+  await requestV2(env, { cv: cvOf(PDF) });
+  await requestV2(env);
+  assert.equal(mails.length, 1);
+  assert.equal((await env.ACCESS.get('pending:ab1234', 'json')).ref, ref1);
+  assert.equal((await open(env, tokenOf(first.approve))).status, 200, 'the links still work');
+  // sent again with a change: a new version, e-mailed at once; the older links answer "replaced"
+  await requestV2(env, { purpose: 'a different project' });
+  assert.equal(mails.length, 2);
+  const second = linksIn(mails[1].body.text);
+  const ref2 = (await env.ACCESS.get('pending:ab1234', 'json')).ref;
+  assert.notEqual(ref2, ref1);
+  assert.equal(claimOf(tokenOf(second.approve)).ref, ref2);
+  const before = snapshot(env);
+  for (const k of ['approve', 'lab', 'deny']) {
+    for (const p of [await open(env, tokenOf(first[k])), await press(env, tokenOf(first[k]))]) {
+      assert.equal(p.status, 409, k);
+      plainPage(p, k);
+      for (const s of ['<h1>This request was replaced</h1>', 'see the newer e-mail', 'Nothing was changed', ADMIN_PAGE]) assert.ok(p.text.includes(s), `${k}: ${s}`);
+    }
+  }
+  const oldCv = await pressCvLink(env, tokenOf(first.cv)).then(asPage);
+  assert.equal(oldCv.status, 409);
+  plainPage(oldCv, 'old cv link');
+  assert.ok(oldCv.text.includes('This request was replaced'));
+  assert.equal(snapshot(env), before, 'nothing written, no link spent');
+  // a new CV is a new version too
+  await requestV2(env, { purpose: 'a different project', cv: cvOf(DOCX, 'cv.docx') });
+  assert.equal(mails.length, 3);
+  const third = linksIn(mails[2].body.text);
+  assert.equal((await pressCvLink(env, tokenOf(second.cv)).then(asPage)).status, 409);
+  const cvNow = await pressCvLink(env, tokenOf(third.cv));
+  assert.equal(cvNow.status, 200);
+  assert.ok(Buffer.from(await cvNow.arrayBuffer()).equals(DOCX));
+  // the newest e-mail decides; afterwards the older ones still say replaced, and the used one says used
+  const ok = await press(env, tokenOf(third.approve));
+  assert.equal(ok.status, 200);
+  assert.ok(ok.text.includes('<h1>Approved.</h1>'));
+  assert.equal((await env.ACCESS.get('approved:ab1234', 'json')).ref, (await claimOf(tokenOf(third.approve))).ref);
+  assert.equal((await press(env, tokenOf(first.deny))).status, 409);
+  assert.ok((await press(env, tokenOf(second.lab))).text.includes('This request was replaced'));
+  assert.equal((await press(env, tokenOf(third.deny))).status, 410);
+  // decided through the admin page: that e-mail's links say decided already
+  const env2 = mailEnv();
+  mails.length = 0;
+  await requestV2(env2);
+  await adminPost(env2, 'deny', { accessId: 'ab1234', reason: 'not now' });
+  const decided = await open(env2, tokenOf(linksIn(mails[0].body.text).approve));
+  assert.equal(decided.status, 409);
+  assert.ok(decided.text.includes('This request was decided already'));
+  assert.equal(await env2.ACCESS.get('approved:ab1234'), null);
+  // a CV or decision link without a ref (an e-mail sent before this change) is out of date
+  const env3 = mailEnv();
+  mails.length = 0;
+  await requestV2(env3, { cv: cvOf(PDF) });
+  const legacyCv = mint({ v: 1, access_id: 'ab1234', decision: 'cv', nonce: 'c'.repeat(22), exp: Math.floor(Date.now() / 1000) + 600 });
+  const lc = await pressCvLink(env3, legacyCv).then(asPage);
+  assert.equal(lc.status, 410);
+  assert.ok(lc.text.includes('This link is out of date'));
+  assert.ok(lc.text.includes('admin.mjs cv ab1234'));
+});
+
+test('F1 c: Move and Withdraw belong to the refusal e-mail they came in; a newer one replaces them; no ref is out of date', async () => {
+  const env = mailEnv();
+  await adminPost(env, 'add', { accessId: 'ab1234', name: 'A. Student' });
+  mails.length = 0;
+  await check(env, { access_id: 'ab1234' });
+  await check(env, { access_id: 'ab1234', install_id: IB });
+  const first = linksIn(mails[0].body.text);
+  const ref1 = (await env.ACCESS.get('conflict:ab1234', 'json')).ref;
+  assert.match(ref1, /^[A-Za-z0-9_-]{22}$/);
+  // more refusals the same day keep the ref (no new e-mail)
+  await check(env, { access_id: 'ab1234', install_id: IB });
+  assert.equal((await env.ACCESS.get('conflict:ab1234', 'json')).ref, ref1);
+  // the next day another refusal is e-mailed: a new ref, and the first e-mail's links are replaced
+  env.ACCESS.m.delete('conflict_notified:ab1234');
+  await check(env, { access_id: 'ab1234', install_id: IC });
+  assert.equal(mails.length, 2);
+  const second = linksIn(mails[1].body.text);
+  const ref2 = (await env.ACCESS.get('conflict:ab1234', 'json')).ref;
+  assert.notEqual(ref2, ref1);
+  assert.equal(claimOf(tokenOf(second.move)).ref, ref2);
+  const before = snapshot(env);
+  for (const k of ['move', 'withdraw']) {
+    for (const p of [await open(env, tokenOf(first[k])), await press(env, tokenOf(first[k]))]) {
+      assert.equal(p.status, 409, k);
+      plainPage(p, k);
+      for (const s of ['<h1>This e-mail was replaced</h1>', 'see the newer e-mail', 'Nothing was changed']) assert.ok(p.text.includes(s), `${k}: ${s}`);
+    }
+  }
+  assert.equal(snapshot(env), before);
+  const moved = await press(env, tokenOf(second.move));
+  assert.equal(moved.status, 200);
+  assert.equal((await env.ACCESS.get('seat:ab1234', 'json')).install_id, IC);
+  // settled since (moved): a later e-mail's leftover link says so and changes nothing
+  env.ACCESS.m.delete('conflict_notified:ab1234');
+  await check(env, { access_id: 'ab1234', install_id: IA });
+  const third = linksIn(mails[2].body.text);
+  await adminPost(env, 'reset-seat', { accessId: 'ab1234' });
+  const settled = await press(env, tokenOf(third.withdraw));
+  assert.equal(settled.status, 409);
+  assert.ok(settled.text.includes('no longer on record'));
+  assert.ok(await env.ACCESS.get('approved:ab1234'), 'still approved');
+  // links without a ref: out of date, nothing changed
+  for (const decision of ['move', 'withdraw']) {
+    const t = mint({ v: 1, access_id: 'ab1234', decision, nonce: 'l'.repeat(22), exp: Math.floor(Date.now() / 1000) + 600, ...(decision === 'move' ? { install_id: IB } : {}) });
+    const p = await press(env, t);
+    assert.equal(p.status, 410, decision);
+    assert.ok(p.text.includes('This link is out of date'), decision);
+  }
+  assert.ok(await env.ACCESS.get('approved:ab1234'));
+});
+
+test('F1 d: remove and Withdraw delete the person\'s access-check records for every product, and only theirs', async () => {
+  const env = mailEnv();
+  for (const id of ['ab1234', 'cd5678']) await adminPost(env, 'add', { accessId: id, name: id });
+  await check(env, { access_id: 'ab1234' });
+  await check(env, { access_id: 'ab1234', product: 'beethoven' });
+  await check(env, { access_id: 'cd5678', install_id: IB });
+  await check(env, { access_id: 'xab1234', install_id: IC });
+  const seenKeys = () => [...env.ACCESS.m.keys()].filter((k) => k.startsWith('seen:')).sort();
+  assert.deepEqual(seenKeys(), ['seen:beethoven:ab1234', 'seen:bridge:ab1234', 'seen:bridge:cd5678', 'seen:bridge:xab1234']);
+  await adminPost(env, 'remove', { accessId: 'ab1234' });
+  assert.deepEqual(seenKeys(), ['seen:bridge:cd5678', 'seen:bridge:xab1234']);
+  assert.ok(!(await adminList(env)).body.checks.some((c) => c.access_id === 'ab1234'));
+  // Withdraw approval from the e-mail about a second installation does the same
+  mails.length = 0;
+  await check(env, { access_id: 'cd5678', install_id: IC });
+  const p = await press(env, tokenOf(linksIn(mails[0].body.text).withdraw));
+  assert.equal(p.status, 200);
+  assert.deepEqual(seenKeys(), ['seen:bridge:xab1234']);
+});
+
+test('F2: with MAIL_STUDENTS "1" nothing reaches the maintainer unconfirmed; an unconfirmed request lasts 7 days and shows its age', async () => {
+  const env = mailEnv({ MAIL_STUDENTS: '1' });
+  mails.length = 0;
+  let r = await requestV2(env, { cv: cvOf(PDF) });
+  assert.deepEqual(r.body, { status: 'pending', mailbox: 'confirm' });
+  assert.equal(mails.length, 1);
+  assert.deepEqual(mails[0].body.to, ['ab1234@wayne.edu']);
+  let rec = await env.ACCESS.get('pending:ab1234', 'json');
+  assert.equal(rec.mailbox, 'waiting');
+  assert.equal(env.ACCESS.ttl.get('pending:ab1234'), 7 * 86400, 'KV drops it after 7 days');
+  assert.equal(env.ACCESS.ttl.get('cv:ab1234'), 7 * 86400, 'and its CV with it');
+  const left = (Date.parse(rec.expires_at) - Date.now()) / 86400e3;
+  assert.ok(left > 6.99 && left <= 7, `expires_at is 7 days out, not ${left}`);
+  // the admin list: unconfirmed, with its age and when it goes
+  await env.ACCESS.put('pending:ab1234', JSON.stringify({ ...rec, submitted_at: hoursAgo(5.5) }), { expirationTtl: 7 * 86400 });
+  let p = (await adminList(env)).body.pending[0];
+  assert.deepEqual([p.accessId, p.stage, p.mailbox, p.age_hours, p.expires_at], ['ab1234', 'unconfirmed', 'waiting', 5, rec.expires_at]);
+  // after 7 days KV has dropped it: the student sends the form again, as a new request
+  const confirmLink = tokenOf(linksIn(mails[0].body.text).confirm);
+  env.ACCESS.m.delete('pending:ab1234');
+  assert.equal((await pressConfirm(env, confirmLink)).status, 409, 'nothing to confirm any more');
+  r = await requestV2(env, { cv: cvOf(PDF) });
+  assert.deepEqual(r.body, { status: 'pending', mailbox: 'confirm' });
+  assert.equal(mails.length, 2);
+  // confirmed: kept without an end, the CV for 12 months, the maintainer e-mailed now
+  const c = await pressConfirm(env, tokenOf(linksIn(mails[1].body.text).confirm));
+  assert.equal(c.status, 200);
+  rec = await env.ACCESS.get('pending:ab1234', 'json');
+  assert.equal(rec.mailbox, 'confirmed');
+  assert.ok(rec.confirmed_at);
+  assert.equal('expires_at' in rec, false);
+  assert.equal(env.ACCESS.ttl.get('pending:ab1234'), undefined);
+  assert.equal(env.ACCESS.ttl.get('cv:ab1234'), 365 * 86400);
+  assert.equal(mails.length, 3);
+  assert.deepEqual(mails[2].body.to, ['maintainer@example.edu']);
+  assert.match(mails[2].body.text, /^Mailbox: confirmed /m);
+  p = (await adminList(env)).body.pending[0];
+  assert.deepEqual([p.stage, p.mailbox], ['submitted', 'confirmed']);
+  assert.equal('expires_at' in p, false);
+  // the same form sent again after confirming stays confirmed: no new confirmation, no second e-mail today
+  r = await requestV2(env, { cv: cvOf(PDF) });
+  assert.deepEqual(r.body, { status: 'pending', mailbox: 'confirmed' });
+  assert.equal(mails.length, 3);
+  assert.equal((await env.ACCESS.get('pending:ab1234', 'json')).mailbox, 'confirmed');
+  // a changed form needs confirming again
+  r = await requestV2(env, { purpose: 'changed' });
+  assert.deepEqual(r.body, { status: 'pending', mailbox: 'confirm' });
+  assert.equal((await env.ACCESS.get('pending:ab1234', 'json')).mailbox, 'waiting');
+  assert.equal(mails.length, 4);
+  assert.deepEqual(mails[3].body.to, ['ab1234@wayne.edu']);
+  // MAIL_STUDENTS "0" (as deployed): no end, "not verified" in the maintainer's e-mail, as before
+  const off = mailEnv({ MAIL_STUDENTS: '0' });
+  mails.length = 0;
+  r = await requestV2(off);
+  assert.deepEqual(r.body, { status: 'pending', mailbox: 'not_verified' });
+  assert.equal(off.ACCESS.ttl.get('pending:ab1234'), undefined);
+  assert.match(mails[0].body.text, /^Mailbox: not verified/m);
+  assert.equal((await adminList(off)).body.pending[0].stage, 'submitted');
+});
+
+test('F2: the lifecycle (submitted, confirmed, decided, invited, installed) is on the records and one stage in the admin list', async () => {
+  const env = mailEnv({ MAIL_STUDENTS: '1' });
+  mails.length = 0;
+  await requestV2(env);
+  const submitted = (await env.ACCESS.get('pending:ab1234', 'json')).submitted_at;
+  await pressConfirm(env, tokenOf(linksIn(mails[0].body.text).confirm));
+  const confirmedAt = (await env.ACCESS.get('pending:ab1234', 'json')).confirmed_at;
+  const toMaintainer = mails.filter((m) => m.body.to[0] === 'maintainer@example.edu');
+  assert.equal(toMaintainer.length, 1);
+  const page = await press(env, tokenOf(linksIn(toMaintainer[0].body.text).approve));
+  assert.equal(page.status, 200);
+  let rec = await env.ACCESS.get('approved:ab1234', 'json');
+  assert.deepEqual([rec.submitted_at, rec.confirmed_at, rec.mailbox, rec.decision], [submitted, confirmedAt, 'confirmed', 'approve']);
+  assert.ok(rec.decided_at >= confirmedAt);
+  let a = (await adminList(env)).body.approved[0];
+  assert.deepEqual([a.stage, a.seat, a.conflicts], ['approved', { bound: false }, 0]);
+  // invited from the approve page's button
+  const done = await press(env, tokenOfAction(formAction(page.text, 'Done, invited')));
+  assert.equal(done.status, 200);
+  rec = await env.ACCESS.get('approved:ab1234', 'json');
+  assert.equal(rec.invited_by, 'e-mail link');
+  a = (await adminList(env)).body.approved[0];
+  assert.equal(a.stage, 'invited');
+  assert.equal(a.invited_at, rec.invited_at);
+  // installed: set when the first installation binds; the approved record itself is not written by a check
+  const beforeCheck = await env.ACCESS.get('approved:ab1234');
+  assert.equal((await check(env, { access_id: 'ab1234' })).body.approved, true);
+  assert.equal(await env.ACCESS.get('approved:ab1234'), beforeCheck, 'an access check never rewrites the approval');
+  const installed = await env.ACCESS.get('installed:ab1234', 'json');
+  assert.deepEqual(Object.keys(installed), ['at', 'product', 'version']);
+  a = (await adminList(env)).body.approved[0];
+  assert.equal(a.stage, 'installed');
+  assert.equal(a.installed_at, installed.at);
+  assert.deepEqual(Object.keys(a.seat), ['bound', 'first_seen', 'last_seen', 'product', 'version']);
+  assert.equal(a.seat.bound, true);
+  // a refusal is counted; a reset keeps "installed" and the date
+  await check(env, { access_id: 'ab1234', install_id: IB });
+  a = (await adminList(env)).body.approved[0];
+  assert.equal(a.conflicts, 1);
+  assert.ok(a.conflict_last_at);
+  await adminPost(env, 'reset-seat', { accessId: 'ab1234' });
+  a = (await adminList(env)).body.approved[0];
+  assert.deepEqual([a.stage, a.installed_at, a.seat, a.conflicts], ['installed', installed.at, { bound: false }, 0]);
+  await check(env, { access_id: 'ab1234', install_id: IC });
+  assert.equal((await env.ACCESS.get('installed:ab1234', 'json')).at, installed.at, 'set once');
+  // a seat bound before installed was recorded counts as installed from its first check
+  const env2 = makeEnv();
+  await adminPost(env2, 'add', { accessId: 'cd5678', name: 'C. D.' });
+  await env2.ACCESS.put('seat:cd5678', JSON.stringify({ install_id: IA, first_seen: '2026-09-30T08:00:00.000Z', last_seen: '2026-09-30T09:00:00.000Z', product: 'bridge', version: '8.0.0' }));
+  a = (await adminList(env2)).body.approved[0];
+  assert.deepEqual([a.stage, a.installed_at], ['installed', '2026-09-30T08:00:00.000Z']);
+  // lab only and denied carry their decisions; remove deletes installed with the rest
+  const env3 = mailEnv();
+  mails.length = 0;
+  await requestV2(env3);
+  await press(env3, tokenOf(linksIn(mails[0].body.text).lab));
+  const lab = await env3.ACCESS.get('approved:ab1234', 'json');
+  assert.equal(lab.decision, 'lab');
+  assert.equal((await adminList(env3)).body.approved[0].stage, 'lab');
+  await requestV2(env3, { access_id: 'cd5678', email: 'cd5678@wayne.edu' });
+  await press(env3, tokenOf(linksIn(mails[1].body.text).deny));
+  const denied = await env3.ACCESS.get('denied:cd5678', 'json');
+  assert.deepEqual([denied.decision, denied.decided_at, typeof denied.ref], ['deny', denied.denied_at, 'string']);
+  await adminPost(env, 'remove', { accessId: 'ab1234' });
+  assert.equal(await env.ACCESS.get('installed:ab1234'), null);
+});
+
+test('F3: Approve shows the next step: the Google account in a copy box, the group\'s members page, and a Done, invited button that works once', async () => {
+  const env = mailEnv();
+  mails.length = 0;
+  await requestV2(env);
+  const page = await press(env, tokenOf(linksIn(mails[0].body.text).approve));
+  assert.equal(page.status, 200);
+  for (const s of ['<h1>Approved.</h1>', 'Next: add a.student@gmail.com to the Google Group Beethoven-users.', `href="${GROUP_URL}"`, 'value="a.student@gmail.com"', 'readonly', '>Copy</button>', 'They are not told automatically']) assert.ok(page.text.includes(s), s);
+  // one inline script (the copy button), allowed by its hash in the policy and by nothing else
+  const scripts = [...page.text.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1]);
+  assert.equal(scripts.length, 1);
+  assert.equal((page.text.match(/<script/g) || []).length, 1);
+  const csp = page.headers.get('content-security-policy');
+  assert.ok(csp.includes(`script-src 'sha256-${crypto.createHash('sha256').update(scripts[0]).digest('base64')}'`), csp);
+  assert.match(csp, /default-src 'none'/);
+  assert.match(csp, /form-action 'self'/);
+  assert.equal(page.headers.get('referrer-policy'), 'no-referrer');
+  assert.equal(page.headers.get('cache-control'), 'no-store');
+  // the Done, invited button: a signed one-use link for this approval, POSTed
+  const it = tokenOfAction(formAction(page.text, 'Done, invited'));
+  const ic = claimOf(it);
+  const rec = await env.ACCESS.get('approved:ab1234', 'json');
+  assert.deepEqual([ic.decision, ic.access_id, ic.ref], ['invited', 'ab1234', rec.ref]);
+  assert.equal(it.split('.')[1], sign(it.split('.')[0]));
+  const before = snapshot(env);
+  const q = await open(env, it);
+  assert.equal(q.status, 200);
+  plainPage(q, 'invited question');
+  assert.ok(q.text.includes('Mark A. Student (ab1234) as invited to Beethoven-users?'));
+  assert.ok(q.text.includes('<button type="submit">Done, invited</button>'));
+  assert.equal(snapshot(env), before, 'opening writes nothing');
+  let d = await press(env, it);
+  assert.equal(d.status, 200);
+  plainPage(d, 'invited');
+  assert.ok(d.text.includes('<h1>Marked invited.</h1>'));
+  const after = await env.ACCESS.get('approved:ab1234', 'json');
+  assert.equal(after.invited_by, 'e-mail link');
+  assert.ok(Math.abs(Date.parse(after.invited_at) - Date.now()) < 5000);
+  assert.ok(auditsOf(env).some((x) => x.action === 'invited' && x.accessId === 'ab1234' && x.by === 'e-mail link'));
+  d = await press(env, it);
+  assert.equal(d.status, 410);
+  assert.ok(d.text.includes('This link was already used'));
+  // the older form (no Google account): the step asks for one; no copy box, no script
+  const env2 = mailEnv();
+  mails.length = 0;
+  await request(env2);
+  const p2 = await press(env2, tokenOf(linksIn(mails[0].body.text).approve));
+  plainPage(p2, 'approve without a Google account');
+  assert.ok(p2.text.includes('Next: ask A. Student which Google account they use in Chrome, and add it to the Google Group Beethoven-users.'));
+  assert.ok(formAction(p2.text, 'Done, invited'));
+  // Lab membership only: no invitation step
+  const env3 = mailEnv();
+  mails.length = 0;
+  await requestV2(env3);
+  const p3 = await press(env3, tokenOf(linksIn(mails[0].body.text).lab));
+  assert.ok(!p3.text.includes('Beethoven-users') && !p3.text.includes('Done, invited'));
+  // an invited link for someone removed since, or lab only since, changes nothing
+  const env4 = mailEnv();
+  mails.length = 0;
+  await requestV2(env4);
+  const p4 = await press(env4, tokenOf(linksIn(mails[0].body.text).approve));
+  const t4 = tokenOfAction(formAction(p4.text, 'Done, invited'));
+  await adminPost(env4, 'grant', { accessId: 'ab1234', grants: ['lab'] });
+  assert.equal((await press(env4, t4)).status, 409);
+  await adminPost(env4, 'remove', { accessId: 'ab1234' });
+  assert.equal((await press(env4, t4)).status, 409);
+  assert.equal(await env4.ACCESS.get('approved:ab1234'), null);
+});
+
+test('F3: admin invited marks and clears the invitation; admin approve answers the next step', async () => {
+  const env = makeEnv();
+  await requestV2(env);
+  const ap = await adminPost(env, 'approve', { accessId: 'ab1234' });
+  assert.equal(ap.status, 200);
+  assert.deepEqual(ap.body.invite, { group: 'Beethoven-users', members_url: GROUP_URL, google_account: 'a.student@gmail.com', invited: false, mode: 'manual' });
+  let r = await adminPost(env, 'invited', { accessId: 'ab1234' });
+  assert.equal(r.status, 200);
+  assert.deepEqual(Object.keys(r.body), ['status', 'accessId', 'invited_at']);
+  assert.equal(r.body.status, 'invited');
+  const at = r.body.invited_at;
+  assert.equal((await env.ACCESS.get('approved:ab1234', 'json')).invited_by, 'admin');
+  r = await adminPost(env, 'invited', { accessId: 'ab1234' });
+  assert.deepEqual(r.body, { status: 'invited', accessId: 'ab1234', invited_at: at, already: true });
+  r = await adminPost(env, 'invited', { accessId: 'ab1234', clear: true });
+  assert.deepEqual(r.body, { status: 'not-invited', accessId: 'ab1234' });
+  const rec = await env.ACCESS.get('approved:ab1234', 'json');
+  assert.equal('invited_at' in rec || 'invited_by' in rec, false);
+  assert.equal((await adminList(env)).body.approved[0].stage, 'approved');
+  assert.equal((await adminPost(env, 'invited', { accessId: 'zz0000' })).status, 404);
+  assert.equal((await adminPost(env, 'invited', { accessId: 'nope' })).status, 400);
+  await adminPost(env, 'add', { accessId: 'cd5678', name: 'C. D.', grants: ['lab'] });
+  assert.equal((await adminPost(env, 'invited', { accessId: 'cd5678' })).status, 409);
+  assert.equal((await call(env, 'POST', '/admin/invited', { body: { accessId: 'ab1234' } }).then(asJson)).status, 401);
+  // Lab membership only: no invitation to answer
+  await requestV2(env, { access_id: 'ef0001', email: 'ef0001@wayne.edu' });
+  assert.equal((await adminPost(env, 'approve', { accessId: 'ef0001', grants: ['lab'] })).body.invite, null);
+  assert.deepEqual(auditsOf(env).filter((x) => x.action.startsWith('invited')).map((x) => [x.action, x.by]), [['invited', 'admin'], ['invited-clear', 'admin']]);
+});
+
+test('F3: the daily reminder lists approved accounts not invited after an hour, once a day, each with a Done, invited link', async () => {
+  const ORIGIN = 'https://beethoven-access.example.workers.dev';
+  const env = mailEnv({ SERVICE_ORIGIN: ORIGIN });
+  mails.length = 0;
+  await runCron(env);
+  assert.equal(mails.length, 0, 'nobody waiting: no e-mail');
+  // two due (an hour and more), and one each of: too recent, installed, invited, lab only, the reviewers' mock
+  await requestV2(env);
+  await adminPost(env, 'approve', { accessId: 'ab1234' });
+  await backdate(env, 'ab1234', { decided_at: hoursAgo(2) });
+  await adminPost(env, 'add', { accessId: 'cd5678', name: 'C. D.' });
+  await backdate(env, 'cd5678', { approved_at: hoursAgo(30) });
+  await requestV2(env, { access_id: 'ef0001', email: 'ef0001@wayne.edu', google_account: 'e.f@gmail.com' });
+  await adminPost(env, 'approve', { accessId: 'ef0001' });
+  await backdate(env, 'ef0001', { decided_at: hoursAgo(0.5) });
+  await adminPost(env, 'add', { accessId: 'gh0001', name: 'G. H.' });
+  await backdate(env, 'gh0001', { approved_at: hoursAgo(3) });
+  await check(env, { access_id: 'gh0001', install_id: IB });
+  await adminPost(env, 'add', { accessId: 'ij0001', name: 'I. J.' });
+  await backdate(env, 'ij0001', { approved_at: hoursAgo(3) });
+  await adminPost(env, 'invited', { accessId: 'ij0001' });
+  await adminPost(env, 'add', { accessId: 'kl0001', name: 'K. L.', grants: ['lab'] });
+  await backdate(env, 'kl0001', { approved_at: hoursAgo(3) });
+  await adminPost(env, 'add', { accessId: 'st1234', name: 'Store reviewer (mock portal)' });
+  await adminPost(env, 'seat-rule', { accessId: 'st1234', any: true });
+  await backdate(env, 'st1234', { approved_at: hoursAgo(3) });
+  mails.length = 0;
+  await runCron(env);
+  assert.equal(mails.length, 1);
+  const m = mails[0].body;
+  assert.deepEqual(m.to, ['maintainer@example.edu']);
+  assert.equal(m.subject, 'Beethoven: 2 approved accounts not invited to Beethoven-users yet');
+  assert.match(m.text, /^A\. Student \(ab1234\): a\.student@gmail\.com, approved /m);
+  assert.match(m.text, /^C\. D\. \(cd5678\): no Google account on record \(ask them which one they use in Chrome\), approved /m);
+  for (const id of ['ef0001', 'gh0001', 'ij0001', 'kl0001', 'st1234']) assert.ok(!m.text.includes(id), id);
+  assert.ok(m.text.includes(GROUP_URL));
+  assert.ok(m.text.includes(ADMIN_PAGE));
+  const links = doneLinks(m.text);
+  assert.equal(links.length, 2);
+  for (const l of links) {
+    assert.ok(l.startsWith(`${ORIGIN}/decide?t=`), l);
+    assert.ok(m.html.includes(`href="${l}"`));
+    assert.equal(claimOf(tokenOf(l)).decision, 'invited');
+  }
+  assert.deepEqual(links.map((l) => claimOf(tokenOf(l)).access_id), ['ab1234', 'cd5678']);
+  assert.notEqual(claimOf(tokenOf(links[0])).nonce, claimOf(tokenOf(links[1])).nonce, 'each link on its own');
+  const flag = `invite_reminder:${new Date().toISOString().slice(0, 10)}`;
+  assert.ok(env.ACCESS.m.has(flag));
+  assert.equal(env.ACCESS.ttl.get(flag), 2 * 86400);
+  // once a day
+  await runCron(env);
+  assert.equal(mails.length, 1);
+  // a link from it stamps invited; the next day lists only the other
+  const d = await press(env, tokenOf(links[0]));
+  assert.equal(d.status, 200);
+  assert.ok((await env.ACCESS.get('approved:ab1234', 'json')).invited_at);
+  env.ACCESS.m.delete(flag);
+  await runCron(env);
+  assert.equal(mails.length, 2);
+  assert.equal(mails[1].body.subject, 'Beethoven: 1 approved account not invited to Beethoven-users yet');
+  assert.ok(!mails[1].body.text.includes('ab1234') && mails[1].body.text.includes('cd5678'));
+  // a failed send starts no day
+  env.ACCESS.m.delete(flag);
+  try {
+    resend.status = 403;
+    await runCron(env);
+  } finally {
+    resend.status = 200;
+  }
+  assert.equal(env.ACCESS.m.has(flag), false);
+  // only the name REMINDER_FROM names sends it (both Worker names run the cron); no provider: nothing fetched
+  const seed = async (e) => {
+    await adminPost(e, 'add', { accessId: 'cd5678', name: 'C. D.' });
+    await backdate(e, 'cd5678', { approved_at: hoursAgo(3) });
+  };
+  const old = mailEnv({ SERVICE_NAME: 'ashley-service', REMINDER_FROM: 'beethoven-access' });
+  await seed(old);
+  mails.length = 0;
+  await runCron(old);
+  assert.equal(mails.length, 0);
+  const primary = mailEnv({ SERVICE_NAME: 'beethoven-access', REMINDER_FROM: 'beethoven-access' });
+  await seed(primary);
+  await runCron(primary);
+  assert.equal(mails.length, 1);
+  const quiet = mailEnv({ RESEND_API_KEY: undefined });
+  await seed(quiet);
+  fetched.length = 0;
+  await runCron(quiet);
+  assert.deepEqual(fetched, []);
+  // what is deployed: the cron, the sending name and the links' origin, GROUP_MODE off; deploy.sh names each Worker
+  const toml = fs.readFileSync(path.join(HERE, 'wrangler.toml'), 'utf8');
+  assert.match(toml, /^\[triggers\]\ncrons = \["0 13 \* \* \*"\]$/m);
+  assert.match(toml, /^REMINDER_FROM = "beethoven-access"$/m);
+  assert.match(toml, /^SERVICE_ORIGIN = "https:\/\/beethoven-access\.openspineconsortium\.workers\.dev"$/m);
+  assert.match(toml, /^GROUP_MODE = "manual"$/m);
+  assert.match(fs.readFileSync(path.join(HERE, 'deploy.sh'), 'utf8'), /--var "SERVICE_NAME:\$WORKER_NAME"/);
+});
+
+test('F3: with MAIL_STUDENTS "1" the student is told after approval: the invitation, the private listing, how it works', async () => {
+  const env = mailEnv({ MAIL_STUDENTS: '1' });
+  mails.length = 0;
+  await requestV2(env);
+  await pressConfirm(env, tokenOf(linksIn(mails[0].body.text).confirm));
+  const page = await press(env, tokenOf(linksIn(mails[1].body.text).approve));
+  assert.ok(page.text.includes('They are e-mailed that they are approved'));
+  const told = mails.filter((m) => m.body.subject === 'You are approved for Beethoven');
+  assert.equal(told.length, 1);
+  const s = told[0].body;
+  assert.deepEqual(s.to, ['ab1234@wayne.edu']);
+  for (const x of ['You are approved', 'Watch for the Google Groups invitation at a.student@gmail.com', 'install Beethoven from the private Chrome listing (the invitation e-mail has the link)', `How it works: ${SITE}/beethoven/`, 'one installation']) assert.ok(s.text.includes(x), x);
+  assert.ok(s.html.includes(`href="${SITE}/beethoven/"`));
+  assert.ok(!s.text.includes('/decide') && !s.text.includes('/cv'), 'no maintainer link reaches the student');
+  // the admin route tells them the same, once; ONBOARDING_PAGE moves the address
+  const env2 = mailEnv({ MAIL_STUDENTS: '1', ONBOARDING_PAGE: 'https://example.edu/start' });
+  await requestV2(env2);
+  mails.length = 0;
+  await adminPost(env2, 'approve', { accessId: 'ab1234' });
+  await adminPost(env2, 'approve', { accessId: 'ab1234' });
+  assert.equal(mails.filter((m) => m.body.subject === 'You are approved for Beethoven').length, 1, 'only when Beethoven is newly granted');
+  assert.ok(mails[0].body.text.includes('How it works: https://example.edu/start'));
+  // lab only, and MAIL_STUDENTS "0": nobody but the maintainer is e-mailed
+  const env3 = mailEnv({ MAIL_STUDENTS: '1' });
+  await requestV2(env3);
+  mails.length = 0;
+  await adminPost(env3, 'approve', { accessId: 'ab1234', grants: ['lab'] });
+  assert.equal(mails.length, 0);
+  const env4 = mailEnv({ MAIL_STUDENTS: '0' });
+  await requestV2(env4);
+  mails.length = 0;
+  await adminPost(env4, 'approve', { accessId: 'ab1234' });
+  assert.equal(mails.length, 0);
+});
+
+test('F3: GROUP_MODE "workspace": Approve adds the account with a delegated service account; any failure falls back to the manual step', async () => {
+  const { privateKey, publicKey } = crypto.generateKeyPairSync('rsa', { modulusLength: 2048 });
+  const SA = JSON.stringify({ type: 'service_account', client_email: 'beethoven-groups@lab-project.iam.gserviceaccount.com', private_key: privateKey.export({ type: 'pkcs8', format: 'pem' }), token_uri: 'https://oauth2.googleapis.com/token' });
+  const WS = { GROUP_MODE: 'workspace', GROUP_SA_KEY: SA, GROUP_ADMIN_SUBJECT: 'admin@openspineconsortium.com' };
+  const env = mailEnv(WS);
+  google.calls.length = 0;
+  mails.length = 0;
+  logs.length = 0;
+  await requestV2(env);
+  const page = await press(env, tokenOf(linksIn(mails[0].body.text).approve));
+  assert.equal(page.status, 200);
+  assert.equal(google.calls.length, 2);
+  // the token request: a JWT signed RS256 with the key, for the delegated administrator, with the one scope
+  const form = new URLSearchParams(google.calls[0].body);
+  assert.equal(form.get('grant_type'), 'urn:ietf:params:oauth:grant-type:jwt-bearer');
+  const [h, c, s] = form.get('assertion').split('.');
+  assert.deepEqual(JSON.parse(Buffer.from(h, 'base64url')), { alg: 'RS256', typ: 'JWT' });
+  const claims = JSON.parse(Buffer.from(c, 'base64url'));
+  assert.deepEqual([claims.iss, claims.sub, claims.scope, claims.aud], ['beethoven-groups@lab-project.iam.gserviceaccount.com', 'admin@openspineconsortium.com', 'https://www.googleapis.com/auth/admin.directory.group.member', 'https://oauth2.googleapis.com/token']);
+  assert.equal(claims.exp - claims.iat, 600);
+  assert.ok(crypto.verify('sha256', Buffer.from(`${h}.${c}`), publicKey, Buffer.from(s, 'base64url')), 'the signature verifies with the public key');
+  // the insert: members.insert on the group, the account as MEMBER, the access token in the header
+  assert.equal(google.calls[1].url, 'https://admin.googleapis.com/admin/directory/v1/groups/beethoven-users%40openspineconsortium.com/members');
+  assert.deepEqual(google.calls[1].body, { email: 'a.student@gmail.com', role: 'MEMBER' });
+  assert.equal(google.calls[1].headers.authorization, 'Bearer ya29.test-access-token');
+  assert.ok(page.text.includes('Added a.student@gmail.com to the Google Group Beethoven-users (beethoven-users@openspineconsortium.com)'));
+  assert.equal(formAction(page.text, 'Done, invited'), null, 'nothing left to mark');
+  let rec = await env.ACCESS.get('approved:ab1234', 'json');
+  assert.equal(rec.invited_by, 'workspace');
+  assert.ok(rec.invited_at);
+  assert.equal((await adminList(env)).body.group.address, 'beethoven-users@openspineconsortium.com');
+  assert.equal((await adminList(env)).body.group.mode, 'workspace');
+  // already a member (409): recorded as invited as well, through the admin route
+  const env2 = mailEnv(WS);
+  await requestV2(env2);
+  google.insertStatus = 409;
+  let ap;
+  try {
+    ap = await adminPost(env2, 'approve', { accessId: 'ab1234' });
+  } finally {
+    google.insertStatus = 200;
+  }
+  assert.equal(ap.body.invite.invited, true);
+  assert.equal(ap.body.invite.mode, 'workspace');
+  assert.equal((await env2.ACCESS.get('approved:ab1234', 'json')).invited_by, 'workspace');
+  // Google refuses the insert, or the token: the manual step, with the reason; nothing stamped
+  for (const [what, set, reason] of [['insert', () => { google.insertStatus = 403; }, 'HTTP 403'], ['token', () => { google.tokenStatus = 401; }, 'HTTP 401']]) {
+    const e = mailEnv(WS);
+    mails.length = 0;
+    await requestV2(e);
+    set();
+    let p;
+    try {
+      p = await press(e, tokenOf(linksIn(mails[0].body.text).approve));
+    } finally {
+      google.insertStatus = 200;
+      google.tokenStatus = 200;
+    }
+    assert.equal(p.status, 200, what);
+    assert.ok(p.text.includes('could not add a.student@gmail.com to the group itself'), what);
+    assert.ok(p.text.includes(reason), what);
+    assert.ok(p.text.includes('Next: add a.student@gmail.com to the Google Group Beethoven-users.'), what);
+    assert.ok(formAction(p.text, 'Done, invited'), what);
+    assert.equal('invited_at' in (await e.ACCESS.get('approved:ab1234', 'json')), false, what);
+  }
+  // no key or no administrator: the manual step and no call to Google
+  for (const missing of [{ GROUP_SA_KEY: undefined }, { GROUP_SA_KEY: 'not json' }, { GROUP_ADMIN_SUBJECT: undefined }]) {
+    const e = mailEnv({ ...WS, ...missing });
+    await requestV2(e);
+    google.calls.length = 0;
+    const r = await adminPost(e, 'approve', { accessId: 'ab1234' });
+    assert.equal(r.body.invite.invited, false, JSON.stringify(missing));
+    assert.match(r.body.invite.error, /GROUP_SA_KEY|GROUP_ADMIN_SUBJECT/, JSON.stringify(missing));
+    assert.equal(google.calls.length, 0, JSON.stringify(missing));
+  }
+  // GROUP_MODE unset or "manual" (as deployed): Google is never called
+  for (const mode of [undefined, 'manual']) {
+    const e = mailEnv({ ...WS, GROUP_MODE: mode });
+    mails.length = 0;
+    await requestV2(e);
+    google.calls.length = 0;
+    const p = await press(e, tokenOf(linksIn(mails[0].body.text).approve));
+    assert.equal(google.calls.length, 0, String(mode));
+    assert.ok(formAction(p.text, 'Done, invited'), String(mode));
+  }
+  // the key never shows: not on a page, not in a log line
+  rec = JSON.stringify(logs) + page.text;
+  assert.ok(!rec.includes('PRIVATE KEY') && !rec.includes('ya29.'));
+});
+
+test('GET /admin/list answers the admin page\'s contract (ACCESS_CHECK.md, "The admin routes")', async () => {
+  const env = mailEnv();
+  await requestV2(env, { cv: cvOf(PDF) });
+  await requestV2(env, { access_id: 'cd5678', email: 'cd5678@wayne.edu', google_account: 'c.d@gmail.com' });
+  await adminPost(env, 'approve', { accessId: 'cd5678' });
+  await check(env, { access_id: 'cd5678' });
+  const l = (await adminList(env)).body;
+  assert.deepEqual(Object.keys(l), ['now', 'group', 'pending', 'approved', 'denied', 'revoked', 'checks', 'seats', 'conflicts']);
+  assert.ok(Math.abs(Date.parse(l.now) - Date.now()) < 5000);
+  assert.deepEqual(l.group, { name: 'Beethoven-users', members_url: GROUP_URL, mode: 'manual' });
+  const p = l.pending[0];
+  for (const k of ['accessId', 'name', 'email', 'google_account', 'note', 'cv', 'mailbox', 'stage', 'requested_at', 'submitted_at', 'age_hours', 'ref']) assert.ok(k in p, k);
+  assert.deepEqual([p.stage, p.mailbox, p.age_hours], ['submitted', 'not_verified', 0]);
+  assert.equal('expires_at' in p, false);
+  const a = l.approved[0];
+  for (const k of ['accessId', 'name', 'email', 'google_account', 'note', 'grants', 'stage', 'approved_at', 'decided_at', 'decision', 'submitted_at', 'mailbox', 'seat', 'conflicts', 'lids', 'installed_at']) assert.ok(k in a, k);
+  assert.deepEqual([a.accessId, a.stage, a.seat.bound, a.conflicts], ['cd5678', 'installed', true, 0]);
+  const text = JSON.stringify(l);
+  for (const x of [IA, short(IA), '/decide?t=', PDF.toString('base64').slice(0, 40)]) assert.ok(!text.includes(x), x);
+});
+
+// The three edge cases the reviews of the service stream found (2026-09-30), fixed in the integration pass
+test('an old Done, invited link is replaced when its approval was removed and made again, either way round, and stamps nothing', async () => {
+  // made for an approval from a request (it carries a ref); the approval removed, then added (no ref)
+  const env = mailEnv();
+  mails.length = 0;
+  await requestV2(env);
+  const page = await press(env, tokenOf(linksIn(mails[0].body.text).approve));
+  const it = tokenOfAction(formAction(page.text, 'Done, invited'));
+  assert.ok(claimOf(it).ref);
+  await adminPost(env, 'remove', { accessId: 'ab1234' });
+  await adminPost(env, 'add', { accessId: 'ab1234', name: 'A. Student' });
+  let before = snapshot(env);
+  let d = await press(env, it);
+  assert.equal(d.status, 409);
+  plainPage(d, 'replaced: a ref, then none');
+  assert.ok(d.text.includes('<h1>This approval was replaced</h1>'));
+  assert.equal(snapshot(env), before, 'nothing written and the link not spent');
+  // made for an approval with no ref (add, through the daily reminder); removed, then approved from a request
+  const env2 = mailEnv({ SERVICE_ORIGIN: 'https://beethoven-access.example.workers.dev' });
+  await adminPost(env2, 'add', { accessId: 'cd5678', name: 'C. D.' });
+  await backdate(env2, 'cd5678', { approved_at: hoursAgo(2) });
+  mails.length = 0;
+  await runCron(env2);
+  const [old] = doneLinks(mails[0].body.text);
+  assert.equal('ref' in claimOf(tokenOf(old)), false);
+  await adminPost(env2, 'remove', { accessId: 'cd5678' });
+  await requestV2(env2, { access_id: 'cd5678', email: 'cd5678@wayne.edu', google_account: 'c.d@gmail.com' });
+  assert.equal((await adminPost(env2, 'approve', { accessId: 'cd5678' })).status, 200);
+  assert.ok((await env2.ACCESS.get('approved:cd5678', 'json')).ref);
+  before = snapshot(env2);
+  d = await press(env2, tokenOf(old));
+  assert.equal(d.status, 409);
+  assert.ok(d.text.includes('<h1>This approval was replaced</h1>'));
+  assert.equal(snapshot(env2), before);
+  // a link and an approval that both have no ref still work (go2432 and hy9698 were added that way)
+  const env3 = mailEnv({ SERVICE_ORIGIN: 'https://beethoven-access.example.workers.dev' });
+  await adminPost(env3, 'add', { accessId: 'ef0001', name: 'E. F.' });
+  await backdate(env3, 'ef0001', { approved_at: hoursAgo(2) });
+  mails.length = 0;
+  await runCron(env3);
+  d = await press(env3, tokenOf(doneLinks(mails[0].body.text)[0]));
+  assert.equal(d.status, 200);
+  assert.ok(d.text.includes('<h1>Marked invited.</h1>'));
+  assert.ok((await env3.ACCESS.get('approved:ef0001', 'json')).invited_at);
+});
+
+test('a second confirmation link for a version already confirmed answers Already confirmed and e-mails nobody', async () => {
+  const env = mailEnv({ MAIL_STUDENTS: '1' });
+  mails.length = 0;
+  await requestV2(env);
+  await requestV2(env);
+  const toStudent = mails.filter((m) => m.body.to.includes('ab1234@wayne.edu'));
+  assert.equal(toStudent.length, 2, 'the same form sent twice before confirming: two confirmation e-mails');
+  const [first, second] = toStudent.map((m) => tokenOf(linksIn(m.body.text).confirm));
+  assert.equal(claimOf(first).ref, claimOf(second).ref, 'one version');
+  const toMaintainer = () => mails.filter((m) => m.body.to.includes('maintainer@example.edu')).length;
+  assert.equal((await pressConfirm(env, first)).status, 200);
+  assert.equal(toMaintainer(), 1);
+  const before = snapshot(env);
+  for (const p of [await openConfirm(env, second), await pressConfirm(env, second)]) {
+    assert.equal(p.status, 200);
+    plainPage(p, 'already confirmed');
+    assert.ok(p.text.includes('<h1>Already confirmed</h1>'));
+    assert.ok(p.text.includes('nothing was sent again'));
+  }
+  assert.equal(toMaintainer(), 1, 'no second e-mail with a second set of decision links');
+  assert.equal(snapshot(env), before, 'nothing written');
+});
+
+test('GROUP_MODE "workspace" with MAIL_STUDENTS "1": a student the service added is not told to wait for an invitation', async () => {
+  const { privateKey } = crypto.generateKeyPairSync('rsa', { modulusLength: 2048 });
+  const SA = JSON.stringify({ type: 'service_account', client_email: 'beethoven-groups@lab-project.iam.gserviceaccount.com', private_key: privateKey.export({ type: 'pkcs8', format: 'pem' }), token_uri: 'https://oauth2.googleapis.com/token' });
+  const WS = { MAIL_STUDENTS: '1', GROUP_MODE: 'workspace', GROUP_SA_KEY: SA, GROUP_ADMIN_SUBJECT: 'admin@openspineconsortium.com' };
+  const approveOnce = async (env) => {
+    mails.length = 0;
+    await requestV2(env);
+    await pressConfirm(env, tokenOf(linksIn(mails[0].body.text).confirm));
+    const page = await press(env, tokenOf(linksIn(mails[1].body.text).approve));
+    const told = mails.filter((m) => m.body.subject === 'You are approved for Beethoven');
+    assert.equal(told.length, 1);
+    return { page, text: told[0].body.text, html: told[0].body.html };
+  };
+  // Google accepts: the account is in the group, and no invitation e-mail will carry the listing's address
+  const a = await approveOnce(mailEnv(WS));
+  assert.equal(a.page.status, 200);
+  for (const x of ['Added a.student@gmail.com to the Google Group Beethoven-users', 'send it to them yourself', 'that you send them the private listing']) assert.ok(a.page.text.includes(x), x);
+  for (const x of ['Your Google account a.student@gmail.com is now in the Google Group Beethoven-users', 'there is no invitation to accept', 'your lab lead sends you its link', 'If the link has not come within two days']) assert.ok(a.text.includes(x), x);
+  for (const x of ['Watch for the Google Groups invitation', 'the invitation e-mail has the link']) assert.ok(!a.text.includes(x) && !a.html.includes(x), x);
+  // Google refuses: the manual step, and the student is told to watch for the invitation, as in manual mode
+  google.insertStatus = 403;
+  let b;
+  try {
+    b = await approveOnce(mailEnv(WS));
+  } finally {
+    google.insertStatus = 200;
+  }
+  assert.ok(formAction(b.page.text, 'Done, invited'));
+  assert.ok(b.page.text.includes('told to watch for the invitation'));
+  for (const x of ['Watch for the Google Groups invitation at a.student@gmail.com', 'the invitation e-mail has the link', 'If the invitation has not come within two days']) assert.ok(b.text.includes(x), x);
 });

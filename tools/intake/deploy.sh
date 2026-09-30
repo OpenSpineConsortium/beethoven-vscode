@@ -82,10 +82,14 @@ done
 # (a secret cannot be set on a Worker that does not exist), and until its secrets arrive every route that
 # needs one refuses (503 or 401), which is safe. Each secret put deploys a new version with that secret.
 echo "== deploy ($WORKER_NAME)"
-OUT=$(W deploy --name "$WORKER_NAME" 2>&1) || { echo "$OUT" | tail -20; exit 5; }
+# SERVICE_NAME tells each name which one it is: both run the daily cron, and only the one REMINDER_FROM
+# (wrangler.toml) names sends the invitation reminder
+OUT=$(W deploy --name "$WORKER_NAME" --var "SERVICE_NAME:$WORKER_NAME" 2>&1) || { echo "$OUT" | tail -20; exit 5; }
 URL=$(printf '%s' "$OUT" | grep -oE "https://$WORKER_NAME\.[a-z0-9.-]+\.workers\.dev" | head -1)
 [ -n "$URL" ] || { echo "$OUT" | tail -20; echo "no workers.dev address for $WORKER_NAME in the deploy output"; exit 5; }
 echo "  $URL"
+# the cron wrangler attached (the daily invitation reminder), as wrangler reports it
+printf '%s\n' "$OUT" | grep -E "schedule:" | sed -E 's/^[[:space:]]*/  cron /' || echo "  no cron in the deploy output: check [triggers] in wrangler.toml"
 
 echo "== secrets ($WORKER_NAME)"
 BEETHOVEN_VENDOR_DIR="$VENDOR" node "$REPO/tools/license/beethoven-license.mjs" export-key --kid trial | strip | S TRIAL_KEY_PKCS8_B64
@@ -119,6 +123,19 @@ elif [ -s "$VENDOR/resend_api_key" ]; then
   echo "  DECIDE_KEY, NOTIFY_TO, MAIL_FROM, RESEND_API_KEY set: each request is e-mailed to the address in notify_to"
 else
   echo "  DECIDE_KEY, NOTIFY_TO, MAIL_FROM set; no $VENDOR/resend_api_key, so no e-mail is sent (README.md, The request portal)"
+fi
+# GROUP_MODE "workspace" only (README.md, "The private listing"): the service account key file Google gives
+# (JSON, "type": "service_account", with domain-wide delegation for the group-member scope) and the Workspace
+# administrator it acts for. Sent only when both files are there and the key file is such a key; the check
+# reads the file on stdin. Nothing is sent while the lab has no Workspace, and GROUP_MODE "manual" ignores them.
+if [ -s "$VENDOR/google_group_sa.json" ] && [ -s "$VENDOR/google_group_admin" ]; then
+  if node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{const k=JSON.parse(s);process.exit(k.type==="service_account"&&typeof k.client_email==="string"&&/BEGIN PRIVATE KEY/.test(k.private_key||"")?0:1)}catch{process.exit(1)}})' < "$VENDOR/google_group_sa.json"; then
+    node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>process.stdout.write(JSON.stringify(JSON.parse(s))))' < "$VENDOR/google_group_sa.json" | S GROUP_SA_KEY
+    strip < "$VENDOR/google_group_admin" | S GROUP_ADMIN_SUBJECT
+    echo "  GROUP_SA_KEY, GROUP_ADMIN_SUBJECT set (used only while GROUP_MODE is \"workspace\")"
+  else
+    echo "  $VENDOR/google_group_sa.json is not a service account key file; GROUP_SA_KEY was not sent"
+  fi
 fi
 
 sleep 3

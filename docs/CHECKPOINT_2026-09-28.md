@@ -1,6 +1,12 @@
-# CHECKPOINT 2026-09-28 (updated 2026-09-30, pass 28: Beethoven for VS Code 4.0.0 built and signed, not yet on the Marketplace, where Ashley for VS Code 3.0.0 is still the published item) — Beethoven for VS Code (Ashley for VS Code until 3.0.0), the grid + Claude Code extension
+# CHECKPOINT 2026-09-28 (updated 2026-09-30, pass 29: Beethoven 8.0.0 released, the request-to-installation flow, framework 9; pass 28: Beethoven for VS Code 4.0.0 built and signed, not yet on the Marketplace, where Ashley for VS Code 3.0.0 is still the published item) — Beethoven for VS Code (Ashley for VS Code until 3.0.0), the grid + Claude Code extension
 
 ## CURRENT STATE: read this first
+
+**As of pass 29 (2026-09-30, 16:55 UTC).** The newest entry is "What pass 29 changed" below: the
+browser edition's 8.0.0 is released and the site's history purged (both pushed by the maintainer);
+the access service's afternoon work is deployed on both Worker names and framework 9 is published to
+the lab's shared copy, but none of that afternoon work is committed: the maintainer reviews and
+commits the three trees. The pass 28 paragraph that follows is kept as it was.
 
 **As of pass 28 (2026-09-30).** The extension is **Beethoven for VS Code 4.0.0**
 (`openspineconsortium.beethoven`), built and signed in `dist/release/4.0.0/`; it is not on the
@@ -15,6 +21,136 @@ scripts version 4 deployed to go2432 (plus `login_relay.sh`, a maintainer tool);
 (40487596) on asx1, both reporting a valid license and "not signed in" for Claude (expected until
 Greg signs in). Release in `dist/release/3.0.0/` (VSIX, changelog, both agreements, privacy, notices,
 SHA256SUMS signed by k1). Committed and pushed as this checkpoint says below.
+
+### What pass 29 changed (the browser edition's release, the request-to-installation flow, framework 9)
+
+- **Pass 29 (2026-09-30, midday to 16:55 UTC): Beethoven 8.0.0 released; the site's history purged;
+  mailbox confirmation, the invitation to the private listing and each account's stage tracked by the
+  access service; the admin page; framework 9 with the grid's Slurm client inside the worker.** The
+  user's words: "require mailbox authentication, and track it as part of the process to getting
+  private group access, the group is named 'Beethoven-users', can you automate inviting to the group
+  after they verify the mailbox, and I approve them through one click email link? ... Extensions should
+  only install in one chrome exe, on one computer, for one person, one time." Students use claude.ai to
+  reach the grid, issue jobs and get work done.
+  (a) **Released and pushed by the maintainer before this pass's work** (checked read-only today with
+  `git ls-remote`): Beethoven 8.0.0, the browser edition, `OpenSpineConsortium/beethoven` `main` at
+  `c05f595` with tag `v8.0.0` (`release/8.0.0/beethoven-8.0.0-chrome.zip`, SHA-256
+  `3b4a300be1fa593c37fcadcc8df0c78ee270d1ed432c9d4c3b182216deea356a`): Chrome only, for a private
+  Chrome Web Store listing; no grid-side tool inside (the lab's shared copy is the only mode); the
+  approval check carries a random installation identifier kept in `storage.local`, which Chrome Sync
+  never copies, so a synced copy on another computer is a new installation and is refused; agreement
+  v7, privacy statement v8. The access service v2, this repository's `cb6b143` on
+  `OpenSpineConsortium/beethoven-vscode` `main` (seats by installation, the grants `extension` and
+  `lab`, the request portal with the Google account, the purpose and an optional CV, mailbox proof
+  behind `MAIL_STUDENTS`). The site at `3f805f4`, `master` on GitHub and live: no public downloads
+  (`/beethoven/downloads/` answers 404).
+  (b) **The site's history purge.** Every package ever published under `beethoven/downloads/` was taken
+  out of every commit (`git filter-repo` from WSL) and `master` force-pushed. Old tip `648e151`, new tip
+  `3f805f4`: both have the tree `05b2e738e6423e7b2769f299f7127f6885050fb2` and 206 commits, so the
+  current site is byte for byte the same; two commits of the old history touched that folder, none of
+  the new one does (checked today against the backup bundle
+  `site-before-purge-20260930-111343.bundle`, 172 MB, in the session scratchpad; it still holds the
+  packages).
+  (c) **The access service, afternoon** (`tools/intake/`, uncommitted, deployed on both names). Every
+  e-mail link (Approve for Beethoven, Lab membership only, Deny, the CV view, Move, Withdraw, Done,
+  invited) carries the version (`ref`) of the request, refusal e-mail or approval it was sent for; an
+  older link answers "replaced", "decided already" or "out of date" and changes nothing. A Move onto an
+  installation that is another account's seat is refused with a page naming that account and saying to
+  withdraw its approval (or reset its seat) first; the link is not used up. The reviewers' `st1234`
+  exemption (`seat-rule any`) holds only on a portal named `localhost` or `*.localhost`. Remove and
+  Withdraw also delete `seen:<product>:<id>` and `installed:<id>`. Mailbox confirmation: with
+  `MAIL_STUDENTS` `"1"` the maintainer is e-mailed only after the student presses the Confirm link sent
+  to `<AccessID>@wayne.edu`; an unconfirmed request and its CV lapse after 7 days (KV TTL) and the
+  student can send the form again; a confirmation e-mail that cannot be sent is answered 502 and never
+  reaches the maintainer. With `"0"`, deployed today, the maintainer's e-mail says "Mailbox: not
+  verified" as before. The lifecycle is stamped on the records (`submitted_at`, `confirmed_at`,
+  `decided_at` and `decision`, `invited_at` and `invited_by`, and `installed:<id>` when the first seat
+  binds), `GET /admin/list` gives each row its stage, and `admin.mjs list` prints one line per account.
+  The invitation to the Google Group `Beethoven-users`: a group owned by a personal Google account has
+  no programming interface for its members, so the Approve page shows the Google account in a copy
+  box, a link to `https://groups.google.com/g/beethoven-users/members` and a one-use **Done, invited**
+  button; a daily e-mail (13:00 UTC, from `beethoven-access` only, one a day at most) lists approvals
+  for Beethoven not invited after an hour, each with its own Done, invited link; with `MAIL_STUDENTS`
+  `"1"` the student is told after approval to watch for the invitation and install from the private
+  listing. `GROUP_MODE` `"workspace"` (a Directory API `members.insert` with a delegated service
+  account, for when the lab has a Google Workspace) is off, stub-tested and never called live. The
+  contract the admin page reads, and every live proof, are in `ACCESS_CHECK.md`; the rest in
+  `tools/intake/README.md`.
+  (d) **The admin page** (site repository, uncommitted): `/beethoven/admin.html` rewritten on that
+  contract: pending requests as cards (name, AccessID, e-mail, Google account with Copy, purpose, the
+  CV through `POST /admin/cv`, the mailbox state with its lapse date), with Approve for Beethoven, Lab
+  membership only and Deny; the next-step box after Approve; the approved table with grants, stage,
+  dates and the seat summary, and Mark invited, Reset seat and Remove. Only `/admin/` routes, the token
+  in `sessionStorage` for the tab. Wired in Edge against the Worker's own code in a local harness; not
+  run against the live Worker, which needs the admin token and would change real records.
+  (e) **Framework 9** (the browser edition's cluster-side tool, uncommitted, published): with the profile
+  flag `scheduler_in_worker: true` (the Wayne profile only; the default is false) the worker's
+  container gets the host's Slurm client: the host's `/usr/bin` read-only at `/opt/host/bin`,
+  `/usr/lib64/slurm`, the munge library and socket folder, `/etc/slurm`, and user lists with the
+  `slurm` and `munge` users, plus five wrappers (`sbatch`, `squeue`, `sacct`, `scancel`, `sinfo`) first
+  on the container's PATH; `scontrol` is left out (its host binary needs `libreadline.so.6`, which the
+  image lacks). A missing piece starts the worker without the client and says which piece. The
+  workspace guide (`CLAUDE.md`) says jobs can be submitted with `sbatch` and how to hand results back.
+  An account's kept `profile.json` takes this one field from the shared copy's site profile when it
+  lacks it (`FIELDS_FROM_SITE`, new). One check job, 40518457 on `asx1` (`secp/secondary`, under a
+  minute, no worker): `squeue -u go2432`, `sinfo -s`, `sacct -j 40518457 -X`, `sbatch --test-only` and
+  `scancel --version` worked inside the container; `scontrol` failed as above. Published with
+  `tools/deploy_shared.sh`: `current -> v9` at 16:07:05Z; README-only updates at 16:07:29Z and 16:44:10Z.
+  Two wrapper changes made after the check job (no `scontrol`, the host's `LD_LIBRARY_PATH`) have not
+  run on the grid, and no worker's Claude Code has submitted a real job yet.
+  (f) **Integration** (the last step of this pass). Three edge cases the service review found were fixed,
+  each with a test that fails on the earlier code, and both names deployed again (versions `0c6468d1`
+  and `94cd3269`, 16:36 and 16:38 UTC): an old Done, invited link after the approval was removed and
+  made again now answers "replaced" instead of stamping `invited_at`; a second confirmation link for a
+  version already confirmed answers "Already confirmed" instead of e-mailing the maintainer twice; with
+  the workspace adapter, a student the service added is no longer told to wait for an invitation, and
+  the Approve page and the admin page say to send the listing's address. The request form now shows the
+  service's own reason when the three-confirmations-a-day limit refuses it, instead of "too many
+  requests from this connection". `WAYNE_STATE_PILOT.md` lost an obsolete Firefox measurement row
+  (8.0.0 is Chrome only), and the shared copy's `README.md` was brought in line with the local one.
+  (g) **Decisions**, so they are not re-litigated: mailbox confirmation is required once
+  `MAIL_STUDENTS` is `"1"`, with no fallback to an unverified request; the invitation stays a tracked
+  manual step while the group belongs to a personal Google account, and the Workspace adapter waits
+  behind its switch; one installation per person is enforced by the installation identifier alone, no
+  fingerprinting; a link is spent in KV, so "works once" holds only after about a minute (once in the
+  afternoon proof a second press 4 s later went through; a Durable Object would close it and is not
+  built); the Slurm client in the worker is a per-site flag, off unless a profile sets it.
+  (h) **Checked in this pass:** `node --test` in `tools/intake`: 55 of 55; with
+  `tools/license/vendor.test.mjs`, 57 of 57. `HPCW_PYTHON=python bash framework/tests/run.sh` in the
+  browser edition: ALL OK (160 cases, 10 skipped on Windows). `python -X utf8 tools/build_site.py` in
+  the site: 0 problems (43 pages, stamp `?v=202609301649`; `--check-only` also 0). The admin page in
+  Edge through the local harness: 25 of 25 wiring checks, and 8 of 8 in workspace mode; the empty page
+  at 1440 and 390 with no sideways scroll; the request form refused at the fourth changed send with the
+  service's reason, 6 of 6. Over ssh: `~/.hpcworker/bin/hpcworker version` answers `9 (shared copy at
+  /rs/rs_grp_oschome/shared/beethoven/hpcworker/current)`, `current -> v9`, and every published code
+  file matches the local tree. Live: `/health` answers `{"ok":true}` on both names; a v2 request for
+  the made-up `zq0301` (at `beethoven-access`) and `zq0302` (at `ashley-service`) answered 202
+  `{"status":"pending","mailbox":"not_verified"}`; a Done, invited link with a ref that `add`-made
+  `zq0303` lacks answered 409 "This approval was replaced" at both names; all three removed, and a
+  minute later the lists held pending 0 and approved go2432, hy9698, st1234. Both names run
+  `MAIL_STUDENTS` `"0"`, `REQUIRE_INSTALL_ID` `"0"`, `GROUP_MODE` `"manual"`. No user-facing text
+  outside `/ashley/` names Edge, Firefox or Safari or offers a download of the extension, and the
+  banned word is in no changed file.
+  (i) **Still open, for the maintainer:** review and commit the three trees (this repository:
+  `tools/intake/` and this checkpoint; the browser edition: `docs/` and `framework/`; the site:
+  `tools/pages/beethoven/admin/body.html`, `tools/templates/request-form.html`, `assets/css/site.css` and
+  the regenerated pages), then push (`tools/push_org.sh` from WSL in each product repository; `git push`
+  in the site, which publishes the new admin page and request form). Create the Google Group
+  `Beethoven-users` if it is not there yet and confirm its address, upload 8.0.0 to the Chrome Web
+  Store as a private listing with the group as its trusted testers, and put the listing's address in
+  every invitation's message (the student's e-mail says the invitation has the link). Before 13:00 UTC
+  on 2026-10-01, mark go2432 (and hy9698 once she is invited) as invited, or the first reminder lists
+  them. After the Resend domain is verified: `MAIL_STUDENTS = "1"` and deploy both names. After everyone
+  runs 8.0.0: `REQUIRE_INSTALL_ID = "1"` and deploy both names. Decide on a Durable Object for spending
+  links, on `FIELDS_FROM_SITE` (it switches a field on for accounts installed before it, but a later
+  "off" reaches only those), and on binding the host's readline for `scontrol`. Restart your own worker
+  to reach v9, then ask its Claude Code for `squeue -u $USER` and a small `sbatch` job: that measures
+  the two unrun wrapper changes. For framework 10: the `sbatch` wrapper passes `HPCW_NODE_TMP` and
+  `HPCW_BINDS` on to submitted jobs (documented; `arm_chain` unsets both), a write failure in the bind
+  step is reported with the wrong reason, and the guide's "with the person's usual environment" says
+  more than the wrappers do; `docs/DIAGNOSTICS.md` has no node for `hpcw.slurm-in-worker`. Delete
+  `/rs/rs_grp_oschome/go2432/tmp/hpcw9_check` when its output is no longer needed, and decide whether
+  to keep the purge's backup bundle (it holds every package the purge removed).
 
 ### What version 4 changed (pass 28)
 

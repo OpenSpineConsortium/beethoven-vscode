@@ -9,14 +9,21 @@
 //                    hashed IP, stored as pending (KV ACCESS; the CV as bytes under cv:<AccessID>), filed as a
 //                    GitHub issue labelled beethoven-access-request when GITHUB_TOKEN is set, and e-mailed to
 //                    the maintainer (NOTIFY_TO, through Resend with RESEND_API_KEY) with three decision links
-//                    (Approve for Beethoven, Lab membership only, Deny) and a one-use link to the CV, one
-//                    e-mail per AccessID a day at most; answered pending, approved or denied. With MAIL_STUDENTS
-//                    "1" the student is e-mailed first at <AccessID>@wayne.edu and the maintainer only once
-//                    they confirm (/confirm); otherwise the maintainer's e-mail says the mailbox is not verified.
-//   GET|POST /decide the page the decision links open, and the Move and Withdraw links of the e-mail about a
-//                    second installation. A link is a signed capability (DECIDE_KEY, HMAC-SHA256, 14 days,
-//                    one use); GET only asks the question, the page's one button POSTs the decision, which
-//                    goes through the same code as the admin routes.
+//                    (Approve for Beethoven, Lab membership only, Deny) and a one-use link to the CV; answered
+//                    pending, approved or denied. Each send is a version of the request (ref): the same form
+//                    again keeps it, and is e-mailed once a day at most; a changed form is a new version, e-mailed
+//                    at once (three a day at most), and the older e-mail's links then answer "replaced". With
+//                    MAIL_STUDENTS "1" the student is e-mailed first at <AccessID>@wayne.edu, the maintainer
+//                    only once they confirm (/confirm), and an unconfirmed request is dropped after 7 days;
+//                    otherwise the maintainer's e-mail says the mailbox is not verified.
+//   GET|POST /decide the page the decision links open, the Move and Withdraw links of the e-mail about a
+//                    second installation, and the Done, invited links (the Approve page and the daily
+//                    reminder). A link is a signed capability (DECIDE_KEY, HMAC-SHA256, 14 days, one use) tied
+//                    to the version of the request or refusal it was sent for; GET only asks the question, the
+//                    page's one button POSTs the decision, which goes through the same code as the admin routes.
+//   cron (scheduled) once a day: when an account approved for Beethoven has waited more than an hour without
+//                    being marked invited to the Google Group Beethoven-users, one e-mail to the maintainer lists
+//                    them with a Done, invited link each (one a day at most; only the name REMINDER_FROM sends).
 //   GET|POST /confirm the student's "Confirm it is you" link (24 hours, one use); GET asks, POST confirms.
 //   GET|POST /cv     the maintainer's link to a request's CV (14 days, one use); GET shows a page, the
 //                    button POSTs and gets the file: a PDF inline, a Word file as a download, with a fixed
@@ -49,7 +56,8 @@
 //                    background page); the body may be text/plain or JSON. A no names the request page
 //                    (BEETHOVEN_REQUEST_PAGE for "bridge" and "beethoven", REQUEST_PAGE for any other).
 //   /admin/*         the maintainer's page (/beethoven/admin.html) and admin.mjs: list, approve, deny, add,
-//                    remove, grant, seat, reset-seat, seat-rule, cv, revoke-lid, notify-test. Behind a bearer
+//                    remove, invited, grant, seat, reset-seat, seat-rule, cv, revoke-lid, notify-test
+//                    (ACCESS_CHECK.md, "The admin routes", is the page's contract). Behind a bearer
 //                    token (secret ADMIN_TOKEN); put Cloudflare Access in front of it as a second wall. Every
 //                    write leaves an audit line (KV ACCESS audit:<time>:<4 hex>).
 // Everything a student sends is treated as hostile input: sizes are capped, strings are cleaned,
@@ -99,7 +107,26 @@ const NOTIFY_EVERY_SECONDS = 86400;
 const DECIDE_DAYS = 14;
 const CONFIRM_HOURS = 24;
 const CONFIRM_MAILS_PER_DAY = 3;
+// the maintainer's e-mails about new versions of one AccessID's request, a day
+const NOTIFY_VERSIONS_PER_DAY = 3;
+// MAIL_STUDENTS "1": a request not confirmed from the mailbox is dropped by KV after 7 days (its CV with it)
+const UNCONFIRMED_KEEP_SECONDS = 7 * 86400;
+// the daily reminder lists an approval once it has waited this long without being marked invited
+const INVITE_REMINDER_AFTER_MS = 3600 * 1000;
 const DECIDE_NONCE_TTL = 30 * 86400;
+// The private listing's Google Group. It is a consumer group today (groups.google.com under the
+// maintainer's own account), which has no API for its members: the maintainer invites by hand and marks it
+// done (GROUP_MODE unset or "manual"). GROUP_MODE "workspace" is for when the lab has a Google Workspace:
+// the service then adds the account itself with the Directory API (members.insert on GROUP_ADDRESS), as a
+// service account with domain-wide delegation (secret GROUP_SA_KEY, the key file's JSON) acting for a
+// Workspace administrator (secret GROUP_ADMIN_SUBJECT). Any failure there falls back to the manual step.
+const GROUP_NAME = 'Beethoven-users';
+const GROUP_MEMBERS_URL = 'https://groups.google.com/g/beethoven-users/members';
+const DEFAULT_GROUP_ADDRESS = 'beethoven-users@openspineconsortium.com';
+const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
+const DIRECTORY_SCOPE = 'https://www.googleapis.com/auth/admin.directory.group.member';
+const groupMode = (env) => (String(env.GROUP_MODE ?? '').trim().toLowerCase() === 'workspace' ? 'workspace' : 'manual');
+const groupAddress = (env) => String(env.GROUP_ADDRESS || DEFAULT_GROUP_ADDRESS).trim().toLowerCase();
 const DECIDE_TOKEN = /^([A-Za-z0-9_-]{16,2048})\.([A-Za-z0-9_-]{43})$/;
 const NONCE = /^[A-Za-z0-9_-]{16,64}$/;
 // what the e-mail calls the product a request names. The browser edition's builds send "bridge" (its
@@ -160,9 +187,19 @@ const beethovenRequestPage = (env) => env.BEETHOVEN_REQUEST_PAGE || `${siteOrigi
 // the request page for the product that asked: BEETHOVEN_REQUEST_PAGE for bridge and beethoven, REQUEST_PAGE otherwise
 const requestPageFor = (env, product) => (BEETHOVEN_PRODUCTS.has(product) ? beethovenRequestPage(env) : requestPage(env));
 const adminPage = (env) => env.ADMIN_PAGE || `${siteOrigin(env)}/beethoven/admin.html`;
+// "how it works", named in the student's e-mail after approval
+const onboardingPage = (env) => env.ONBOARDING_PAGE || `${siteOrigin(env)}/beethoven/`;
+// The store reviewers' mock portal runs on the reviewer's own machine: a portal named localhost, or a
+// name under .localhost, with or without a port. Only there does an approval's any_installation apply.
+const isLocalPortal = (portal) => {
+  const host = String(portal || '').replace(/:[0-9]{1,5}$/, '');
+  return host === 'localhost' || host.endsWith('.localhost');
+};
 const fromB64u = (s) => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - (s.length % 4)) % 4)), (c) => c.charCodeAt(0));
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const oneLine = (s) => String(s ?? '').replace(/\s+/g, ' ').trim();
+// a phrase that ends a sentence: a full stop added unless it ends with one already
+const sentence = (s) => (/[.!?]$/.test(s) ? s : `${s}.`);
 
 // plain base64 to bytes: the runtime's own decoder when it has one (Uint8Array.fromBase64), else atob and
 // a loop. Both throw on a character that is not base64. A 5 MB file costs tens of milliseconds of CPU on
@@ -202,6 +239,7 @@ function clean(s, max = 400) {
 async function sha256(text) {
   return new Uint8Array(await crypto.subtle.digest('SHA-256', ascii(text)));
 }
+const sha256Hex = async (bytes) => hex(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)));
 
 // both sides are hashed first, so the comparison runs over the same 32 bytes whatever the lengths
 async function sameSecret(given, expected) {
@@ -363,9 +401,10 @@ async function sendMail(env, { subject, text, html, to: toGiven }) {
 }
 
 // The links in the e-mails. token = base64url(JSON {v, access_id, decision, nonce, exp} plus install_id for
-// a Move, ref for a confirmation) + "." + base64url(HMAC-SHA256 of that first part, key DECIDE_KEY). exp is
-// in seconds. The links of one e-mail that decide share a nonce, so once one is used all are spent; the CV
-// link and the confirmation link have their own.
+// a Move, and ref: the version of the request (a decision, the CV, a confirmation), of the refusal e-mail (Move,
+// Withdraw) or of the approval (Done, invited) it was sent for) + "." + base64url(HMAC-SHA256 of that first
+// part, key DECIDE_KEY). exp is in seconds. The links of one e-mail that decide share a nonce, so once one is
+// used all are spent; the CV link, the confirmation link and each Done, invited link have their own.
 const decideKey = (env) => crypto.subtle.importKey('raw', ascii(env.DECIDE_KEY), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign', 'verify']);
 
 async function decideToken(env, claim) {
@@ -375,9 +414,12 @@ async function decideToken(env, claim) {
 
 // what each route takes: /decide the decisions, /cv the CV link, /confirm the student's link. A link of
 // one kind opened at another route is "not valid".
-const DECIDE_DECISIONS = new Set(['approve', 'lab', 'deny', 'move', 'withdraw']);
+const DECIDE_DECISIONS = new Set(['approve', 'lab', 'deny', 'move', 'withdraw', 'invited']);
 const CV_DECISIONS = new Set(['cv']);
 const CONFIRM_DECISIONS = new Set(['confirm']);
+// the links that act only on the version they were sent for; one without a ref (an e-mail sent before
+// 2026-09-30 afternoon) is out of date
+const REF_BOUND = new Set(['approve', 'lab', 'deny', 'move', 'withdraw', 'cv']);
 
 // { ok: true, claim } for a good link; { ok: false, why: 'invalid' | 'expired' } otherwise. The signature
 // is checked before anything in the token is read.
@@ -400,6 +442,7 @@ async function readDecideToken(env, t, allowed) {
   if (!c || c.v !== 1 || !ACCESS_ID.test(String(c.access_id)) || typeof c.decision !== 'string' || !allowed.has(c.decision) || !NONCE.test(String(c.nonce)) || !Number.isFinite(c.exp)) return { ok: false, why: 'invalid' };
   if (c.decision === 'move' && !INSTALL_ID.test(String(c.install_id))) return { ok: false, why: 'invalid' };
   if (c.decision === 'confirm' && !NONCE.test(String(c.ref))) return { ok: false, why: 'invalid' };
+  if (c.ref !== undefined && !NONCE.test(String(c.ref))) return { ok: false, why: 'invalid' };
   if (c.exp * 1000 <= Date.now()) return { ok: false, why: 'expired', claim: c };
   return { ok: true, claim: c };
 }
@@ -418,13 +461,13 @@ async function linkForm(request, url) {
 }
 
 const mailboxLine = (accessId, rec) =>
-  rec.mailbox === 'confirmed' && rec.verified_at
-    ? `confirmed ${readableTime(rec.verified_at)} (the link sent to ${accessId}@wayne.edu was used)`
+  rec.mailbox === 'confirmed' && (rec.confirmed_at || rec.verified_at)
+    ? `confirmed ${readableTime(rec.confirmed_at || rec.verified_at)} (the link sent to ${accessId}@wayne.edu was used)`
     : 'not verified. Anyone can type an AccessID; check with the person before approving';
 
 // the maintainer's e-mail about one request, in plain text and the same in simple HTML. member is the
-// approved record of a lab member who now asks for Beethoven.
-async function requestMail(env, base, accessId, rec, { askedAgain, member } = {}) {
+// approved record of a lab member who now asks for Beethoven; changed: this version replaces an earlier one.
+async function requestMail(env, base, accessId, rec, { askedAgain, member, changed } = {}) {
   const name = oneLine(rec.name);
   const product = oneLine(rec.asked_from);
   // the subject always says Beethoven, since one approval serves both editions; the headline names the
@@ -441,25 +484,26 @@ async function requestMail(env, base, accessId, rec, { askedAgain, member } = {}
     ['Mailbox', mailboxLine(accessId, rec)],
     ...(member ? [['Already', `a lab member since ${readableTime(member.approved_at)}; this asks for Beethoven as well`]] : []),
     ['Asked', readableTime(rec.requested_at)],
-    ...(askedAgain ? [['Asked again', readableTime(askedAgain)]] : []),
+    ...(askedAgain ? [['Asked again', `${readableTime(askedAgain)}${changed ? `, with changes: links in an earlier e-mail about ${accessId} no longer work` : ''}`]] : []),
     ...(product ? [['Asked from', product]] : []),
   ];
   let links = null;
   if (env.DECIDE_KEY) {
     const exp = Math.floor(Date.now() / 1000) + DECIDE_DAYS * 86400;
     const nonce = newNonce();
-    const link = async (decision) => `${base}/decide?t=${await decideToken(env, { access_id: accessId, decision, nonce, exp })}`;
+    // every link names this version of the request: a changed form makes them answer "replaced"
+    const link = async (decision) => `${base}/decide?t=${await decideToken(env, { access_id: accessId, decision, nonce, exp, ref: rec.ref })}`;
     links = { approve: await link('approve'), lab: await link('lab'), deny: await link('deny'), until: new Date(exp * 1000).toISOString().slice(0, 10) };
-    if (rec.cv) links.cv = `${base}/cv?t=${await decideToken(env, { access_id: accessId, decision: 'cv', nonce: newNonce(), exp })}`;
+    if (rec.cv) links.cv = `${base}/cv?t=${await decideToken(env, { access_id: accessId, decision: 'cv', nonce: newNonce(), exp, ref: rec.ref })}`;
   }
   const how = links
-    ? `Each decision link opens a page with one button; nothing is decided until you press it. Use one of the three, once: after that all three stop working. They work until ${links.until}.${links.cv ? ` The CV link works the same way, once, until then; after that, node tools/intake/admin.mjs cv ${accessId} saves the file.` : ''}`
+    ? `Each decision link opens a page with one button; nothing is decided until you press it. Use one of the three, once: after that all three stop working. They work until ${links.until}, for this version of the request: if the form is sent again with changes, they answer "replaced" and a newer e-mail comes.${links.cv ? ` The CV link works the same way, once; after that, node tools/intake/admin.mjs cv ${accessId} saves the file.` : ''}`
     : 'The links are off because the service has no DECIDE_KEY; decide on the admin page.';
   const group = google
-    ? `After Approve for Beethoven, add ${google} to the Google Group of the private listing, so the invitation to install Beethoven reaches them.`
-    : 'After Approve for Beethoven, ask them which Google account they use in Chrome and add it to the Google Group of the private listing (the older form did not ask for it).';
+    ? `After Approve for Beethoven, the page that opens shows the next step: add ${google} to the Google Group ${GROUP_NAME}, so the invitation to install Beethoven from the private listing reaches them.`
+    : `After Approve for Beethoven, ask them which Google account they use in Chrome and add it to the Google Group ${GROUP_NAME} (the older form did not ask for it).`;
   const typed = `The name${google ? ', the Google account' : ''} and the note were typed by the person asking${rec.cv ? ', and the CV is their file: open it with care' : ''}.`;
-  const footer = 'Sent by the Beethoven access service because someone filled in the request form. You get one e-mail per person a day at most. The person is not told when you decide; let them know.';
+  const footer = `Sent by the Beethoven access service because someone filled in the request form. You get one e-mail a day at most about the same request, and one for each changed version (three a day at most). ${mailStudents(env) ? 'The person is e-mailed when you approve them for Beethoven; not for Lab membership only or Deny.' : 'The person is not told when you decide; let them know.'}`;
   const text = [
     `${name} asked for access to ${asked}.`,
     '',
@@ -490,17 +534,22 @@ async function requestMail(env, base, accessId, rec, { askedAgain, member } = {}
   return { subject: `Beethoven access request: ${accessId} (${name})`, text, html };
 }
 
-// after a request is stored (or confirmed): one e-mail, unless this AccessID already had a pending request
-// and was e-mailed about in the last 24 hours. Only a sent e-mail starts the 24 hours. force: a confirmed
-// request is always sent.
-async function notifyRequest(env, base, accessId, rec, { repeat, member, force }) {
+// after a request is stored (or confirmed). The same version sent again is e-mailed once a day at most (only
+// a sent e-mail starts the 24 hours); a new version (a changed form, or a confirmation) is e-mailed at once,
+// because its links replace the earlier e-mail's, three a day an AccessID at most; past that it is on the
+// admin page only. repeat: this AccessID had a pending request before.
+async function notifyRequest(env, base, accessId, rec, { repeat, member, newVersion }) {
   if (!env.RESEND_API_KEY) {
     console.log('mail: no provider configured');
     return;
   }
   const flag = `notified:${accessId}`;
-  if (repeat && !force && (await env.ACCESS.get(flag))) return;
-  const r = await sendMail(env, await requestMail(env, base, accessId, rec, { askedAgain: repeat ? new Date().toISOString() : null, member }));
+  if (!newVersion && repeat && (await env.ACCESS.get(flag))) return;
+  if (newVersion && (await countToday(env.ACCESS, `notify_versions:${accessId}:${today()}`, NOTIFY_VERSIONS_PER_DAY))) {
+    console.log('mail: three e-mails about this AccessID today already; the newest request is on the admin page');
+    return;
+  }
+  const r = await sendMail(env, await requestMail(env, base, accessId, rec, { askedAgain: repeat ? new Date().toISOString() : null, member, changed: !!(repeat && newVersion) }));
   if (r.sent) await env.ACCESS.put(flag, new Date().toISOString(), { expirationTtl: NOTIFY_EVERY_SECONDS });
 }
 
@@ -526,6 +575,135 @@ async function confirmMail(env, base, accessId, rec) {
     '</div>',
   ].join('\n');
   return { to: [`${accessId}@wayne.edu`], subject: 'Confirm your Beethoven access request', text, html };
+}
+
+// the student's e-mail when they are approved for Beethoven (MAIL_STUDENTS "1" only): the invitation to
+// watch for, the private listing, and the page that says how it works. No link of the maintainer's.
+function approvalMail(env, accessId, rec, { added = false } = {}) {
+  const google = oneLine(rec.google_account);
+  const how = onboardingPage(env);
+  const lead = 'You are approved for Beethoven, the lab\'s software for the Wayne State grid.';
+  // added: GROUP_MODE "workspace" put the account in the group itself, and Google sends no invitation then
+  const steps = added ? [
+    `1. Your Google account ${google} is now in the Google Group ${GROUP_NAME}: the lab added it, so there is no invitation to accept.`,
+    `2. Install Beethoven from the private Chrome listing (your lab lead sends you its link), in the Chrome you sign in to with ${google}, on your own computer. Beethoven works on one installation per person, so install it once; if you change computers, ask your lab lead to move it.`,
+    `3. How it works: ${how}`,
+  ] : [
+    google
+      ? `1. Watch for the Google Groups invitation at ${google}, to the group ${GROUP_NAME}, and accept it.`
+      : `1. Watch for the Google Groups invitation to the group ${GROUP_NAME} at the Google account you use in Chrome (your lab lead will ask which one, since the form you used did not).`,
+    `2. Then install Beethoven from the private Chrome listing (the invitation e-mail has the link), in the Chrome you sign in to with ${google || 'that account'}, on your own computer. Beethoven works on one installation per person, so install it once; if you change computers, ask your lab lead to move it.`,
+    `3. How it works: ${how}`,
+  ];
+  const footer = `Sent by the Beethoven access service because your request was approved. If the ${added ? 'link' : 'invitation'} has not come within two days, tell your lab lead.`;
+  const text = [lead, '', ...steps, '', footer].join('\n');
+  const html = [
+    '<div style="font-family:system-ui,Segoe UI,Helvetica,Arial,sans-serif;font-size:15px;line-height:1.5">',
+    `<p>${esc(lead)}</p>`,
+    `<p>${esc(steps[0])}</p>`,
+    `<p>${esc(steps[1])}</p>`,
+    `<p>3. How it works: <a href="${esc(how)}">${esc(how)}</a></p>`,
+    `<p style="color:#555">${esc(footer)}</p>`,
+    '</div>',
+  ].join('\n');
+  return { to: [`${accessId}@wayne.edu`], subject: 'You are approved for Beethoven', text, html };
+}
+
+// the daily reminder: every approval for Beethoven not marked invited after an hour, with a Done, invited
+// link each (its own nonce, 14 days); base is the Worker the links point at (SERVICE_ORIGIN)
+async function reminderMail(env, base, due) {
+  const n = due.length;
+  const exp = Math.floor(Date.now() / 1000) + DECIDE_DAYS * 86400;
+  const rows = [];
+  for (const r of due) {
+    const name = oneLine(r.name) || r.accessId;
+    const google = oneLine(r.google_account);
+    const when = readableTime(r.decided_at || r.approved_at);
+    const line = `${name} (${r.accessId}): ${google || 'no Google account on record (ask them which one they use in Chrome)'}, approved ${when}`;
+    const link = env.DECIDE_KEY && base ? `${base}/decide?t=${await decideToken(env, { access_id: r.accessId, decision: 'invited', nonce: newNonce(), exp, ...(r.ref ? { ref: r.ref } : {}) })}` : null;
+    rows.push({ line, link });
+  }
+  const lead = `${n === 1 ? 'This account is' : 'These accounts are'} approved for Beethoven but not marked invited to the Google Group ${GROUP_NAME} yet:`;
+  const how = rows.some((r) => r.link)
+    ? `Invite them at ${GROUP_MEMBERS_URL} (paste the private listing's address into the invitation's message), then press Done, invited for each: the link opens a page with one button, and works once, for ${DECIDE_DAYS} days.`
+    : `Invite them at ${GROUP_MEMBERS_URL}, then press Mark invited for each on the admin page.`;
+  const footer = 'Sent by the Beethoven access service once a day at most, while an approved account has waited more than an hour for its invitation.';
+  const text = [lead, '', ...rows.flatMap((r) => [r.line, ...(r.link ? [`Done, invited: ${r.link}`] : []), '']), how, '', `The admin page has a Mark invited button for each as well: ${adminPage(env)}`, '', footer].join('\n');
+  const a = (href, label) => `<a href="${esc(href)}">${esc(label)}</a>`;
+  const html = [
+    '<div style="font-family:system-ui,Segoe UI,Helvetica,Arial,sans-serif;font-size:15px;line-height:1.5">',
+    `<p>${esc(lead)}</p>`,
+    ...rows.map((r) => `<p>${esc(r.line)}${r.link ? `<br>${a(r.link, 'Done, invited')}` : ''}</p>`),
+    `<p>${esc(how).replace(esc(GROUP_MEMBERS_URL), a(GROUP_MEMBERS_URL, GROUP_MEMBERS_URL))}</p>`,
+    `<p>The admin page has a Mark invited button for each as well: ${a(adminPage(env), adminPage(env))}</p>`,
+    `<p style="color:#555">${esc(footer)}</p>`,
+    '</div>',
+  ].join('\n');
+  return { subject: `Beethoven: ${n} approved account${n === 1 ? '' : 's'} not invited to ${GROUP_NAME} yet`, text, html };
+}
+
+// the cron's work: one reminder a UTC day at most, only from the Worker name REMINDER_FROM (both names run
+// the same cron), only when an approval for Beethoven has waited more than an hour without being marked
+// invited. Not listed: a lab member only, an account whose installation has checked in (it installed from
+// the listing), and an account with any_installation (the store reviewers' mock).
+async function inviteReminder(env) {
+  if (env.SERVICE_NAME && env.REMINDER_FROM && env.SERVICE_NAME !== env.REMINDER_FROM) return { sent: false, why: 'another name sends it' };
+  if (!env.RESEND_API_KEY) {
+    console.log('mail: no provider configured');
+    return { sent: false, why: 'no provider' };
+  }
+  const flag = `invite_reminder:${today()}`;
+  if (await env.ACCESS.get(flag)) return { sent: false, why: 'sent today' };
+  const [approved, seats, installed] = await Promise.all([records(env, 'approved'), listKeys(env.ACCESS, 'seat:'), listKeys(env.ACCESS, 'installed:')]);
+  const inst = new Set([...seats.map((k) => k.slice('seat:'.length)), ...installed.map((k) => k.slice('installed:'.length))]);
+  const cutoff = Date.now() - INVITE_REMINDER_AFTER_MS;
+  const due = approved.filter((r) => hasExtension(r) && !r.invited_at && r.any_installation !== true && !inst.has(r.accessId) && Date.parse(r.decided_at || r.approved_at) <= cutoff);
+  if (!due.length) return { sent: false, why: 'nobody waiting' };
+  const base = env.SERVICE_ORIGIN ? String(env.SERVICE_ORIGIN).replace(/\/$/, '') : '';
+  const m = await sendMail(env, await reminderMail(env, base, due));
+  if (m.sent) await env.ACCESS.put(flag, new Date().toISOString(), { expirationTtl: 2 * 86400 });
+  return { sent: m.sent, count: due.length };
+}
+
+// GROUP_MODE "workspace": add one Google account to the group with the Directory API (members.insert),
+// signed in as the service account with domain-wide delegation acting for GROUP_ADMIN_SUBJECT. The answer
+// is { ok: true } (a member already counts) or { ok: false, error: <a plain sentence> }; nothing is logged,
+// and neither the key nor the token leaves this function.
+function pemBytes(pem) {
+  return fromBase64(String(pem).replace(/-----[A-Z ]+-----/g, '').replace(/\s+/g, ''));
+}
+async function workspaceAddMember(env, email) {
+  let key = null;
+  try {
+    key = JSON.parse(String(env.GROUP_SA_KEY || ''));
+  } catch {
+    key = null;
+  }
+  if (!key || typeof key.client_email !== 'string' || typeof key.private_key !== 'string') return { ok: false, error: 'the service has no service account key for the group (secret GROUP_SA_KEY)' };
+  const subject = String(env.GROUP_ADMIN_SUBJECT || '').trim();
+  if (!subject) return { ok: false, error: 'the service has no Workspace administrator to act for (secret GROUP_ADMIN_SUBJECT)' };
+  let signer;
+  try {
+    signer = await crypto.subtle.importKey('pkcs8', pemBytes(key.private_key), { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['sign']);
+  } catch {
+    return { ok: false, error: 'the service account key in GROUP_SA_KEY could not be read' };
+  }
+  try {
+    const now = Math.floor(Date.now() / 1000);
+    const head = b64u(ascii(JSON.stringify({ alg: 'RS256', typ: 'JWT' })));
+    const claims = b64u(ascii(JSON.stringify({ iss: key.client_email, sub: subject, scope: DIRECTORY_SCOPE, aud: GOOGLE_TOKEN_URL, iat: now, exp: now + 600 })));
+    const sig = b64u(await crypto.subtle.sign('RSASSA-PKCS1-v1_5', signer, ascii(`${head}.${claims}`)));
+    const t = await fetch(GOOGLE_TOKEN_URL, { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded', 'user-agent': USER_AGENT }, body: new URLSearchParams({ grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer', assertion: `${head}.${claims}.${sig}` }).toString(), signal: AbortSignal.timeout(10000) });
+    const tj = await t.json().catch(() => ({}));
+    if (!t.ok || !tj.access_token) return { ok: false, error: `Google did not sign the service account in (HTTP ${t.status}${tj.error ? `, ${oneLine(tj.error).slice(0, 60)}` : ''})` };
+    const res = await fetch(`https://admin.googleapis.com/admin/directory/v1/groups/${encodeURIComponent(groupAddress(env))}/members`, { method: 'POST', headers: { authorization: `Bearer ${tj.access_token}`, 'content-type': 'application/json', 'user-agent': USER_AGENT }, body: JSON.stringify({ email, role: 'MEMBER' }), signal: AbortSignal.timeout(10000) });
+    if (res.ok) return { ok: true };
+    if (res.status === 409) return { ok: true, already: true };
+    const j = await res.json().catch(() => ({}));
+    return { ok: false, error: `Google did not add the member (HTTP ${res.status}${j && j.error && j.error.message ? `: ${oneLine(j.error.message).slice(0, 160)}` : ''})` };
+  } catch (e) {
+    return { ok: false, error: `Google could not be reached (${(e && e.name) || 'error'})` };
+  }
 }
 
 // the CV of a v2 request: { none } when there is none, { bytes, kind, name } for a good one, { error }
@@ -595,20 +773,28 @@ async function accessRequest(request, env, ctx) {
   const approved = await env.ACCESS.get(`approved:${accessId}`, 'json');
   if (approved && hasExtension(approved)) return reply(200, { status: 'approved' });
   if (await env.ACCESS.get(`denied:${accessId}`)) return reply(200, { status: 'denied' });
-  // the student confirms first when MAIL_STUDENTS is "1" and the service can send and sign; three
-  // confirmation e-mails an AccessID a day, so the form cannot be used to flood someone's mailbox
+  // the student confirms first when MAIL_STUDENTS is "1" and the service can send and sign
   const studentMail = mailStudents(env) && !!env.RESEND_API_KEY && !!env.DECIDE_KEY;
-  if (studentMail && (await countToday(env.ACCESS, `confirm_mail:${accessId}:${today()}`, CONFIRM_MAILS_PER_DAY))) {
-    return reply(429, { error: `three confirmation e-mails went to ${accessId}@wayne.edu today; use the link in the newest one, or send this form again tomorrow` });
-  }
   const prior = await env.ACCESS.get(`pending:${accessId}`, 'json');
   const now = new Date().toISOString();
   // the form may say which product sent the person (product: "bridge" from Beethoven's page); it is only
   // shown in the e-mail. Own keys only: a plain lookup would turn "constructor" into Object's source text
   const askedRaw = String(b.product ?? '').trim().toLowerCase();
   const product = PRODUCT_NAME.test(askedRaw) ? (Object.hasOwn(PRODUCTS, askedRaw) ? PRODUCTS[askedRaw] : askedRaw) : '';
-  // ref names this version of the request: a confirmation link carries it and matches only while the
-  // request is unchanged, so a request sent again in someone's name cannot ride on their confirmation
+  // The version of the request (ref). The confirmation link and every link in the maintainer's e-mail carry
+  // it and act only while it is the one on record, so what is approved is what the e-mail showed, and a
+  // request sent again in someone's name cannot ride on their confirmation. The same form sent again (a
+  // second press; the same CV, or none, attached) keeps the version, its mailbox state and its links; any
+  // change, or a change of MAIL_STUDENTS, is a new version.
+  const cvSha = cv ? await sha256Hex(cv.bytes) : (prior && prior.cv_sha256) || '';
+  const fields = { name, email, note, google_account: google, asked_from: product, v: v2 ? 2 : '', cv_sha256: cvSha };
+  const sameRegime = !!prior && (studentMail ? prior.mailbox === 'waiting' || prior.mailbox === 'confirmed' : !prior.mailbox || prior.mailbox === 'not_verified');
+  const same = !!prior && !!prior.ref && sameRegime && Object.entries(fields).every(([k, v]) => String(prior[k] ?? '') === String(v));
+  // three confirmation e-mails an AccessID a day, so the form cannot be used to flood someone's mailbox
+  const needsConfirmMail = studentMail && !(same && prior.mailbox === 'confirmed');
+  if (needsConfirmMail && (await countToday(env.ACCESS, `confirm_mail:${accessId}:${today()}`, CONFIRM_MAILS_PER_DAY))) {
+    return reply(429, { error: `three confirmation e-mails went to ${accessId}@wayne.edu today; use the link in the newest one, or send this form again tomorrow` });
+  }
   const rec = {
     name,
     email,
@@ -616,49 +802,70 @@ async function accessRequest(request, env, ctx) {
     ...(google ? { google_account: google } : {}),
     ...(product ? { asked_from: product } : {}),
     requested_at: prior ? prior.requested_at : now,
+    submitted_at: same ? prior.submitted_at || prior.requested_at : now,
     ...(v2 ? { v: 2 } : {}),
-    ref: newNonce(),
-    mailbox: studentMail ? 'waiting' : 'not_verified',
+    ref: same ? prior.ref : newNonce(),
+    mailbox: same ? prior.mailbox || 'not_verified' : studentMail ? 'waiting' : 'not_verified',
+    ...(same && prior.confirmed_at ? { confirmed_at: prior.confirmed_at } : {}),
   };
+  // an unconfirmed request, and its CV, are dropped by KV after 7 days; the student can send the form again
+  const waiting = rec.mailbox === 'waiting';
+  if (waiting) rec.expires_at = new Date(Date.now() + UNCONFIRMED_KEEP_SECONDS * 1000).toISOString();
+  const keep = waiting ? { expirationTtl: UNCONFIRMED_KEEP_SECONDS } : {};
   if (cv) {
-    await env.ACCESS.put(`cv:${accessId}`, cv.bytes, { expirationTtl: CV_KEEP_SECONDS, metadata: { name: cv.name, kind: cv.kind, size: cv.bytes.length, uploaded_at: now } });
+    await env.ACCESS.put(`cv:${accessId}`, cv.bytes, { expirationTtl: waiting ? UNCONFIRMED_KEEP_SECONDS : CV_KEEP_SECONDS, metadata: { name: cv.name, kind: cv.kind, size: cv.bytes.length, uploaded_at: now } });
     rec.cv = { name: cv.name, kind: cv.kind, size: cv.bytes.length };
+    rec.cv_sha256 = cvSha;
   } else if (prior && prior.cv) {
     rec.cv = prior.cv;
+    if (prior.cv_sha256) rec.cv_sha256 = prior.cv_sha256;
+    if (waiting) await keepCv(env, accessId, null, UNCONFIRMED_KEEP_SECONDS);
   }
-  await env.ACCESS.put(`pending:${accessId}`, JSON.stringify(rec));
+  await env.ACCESS.put(`pending:${accessId}`, JSON.stringify(rec), keep);
   // one issue per request, not per retry; a failure to file is not the student's problem (the admin page lists it anyway)
   if (!prior && env.GITHUB_TOKEN && env.GITHUB_REPO) await fileRequestIssue(env, accessId, name, note).catch(() => {});
   const base = new URL(request.url).origin;
   const answer = (mailbox) => reply(202, v2 ? { status: 'pending', mailbox } : { status: 'pending' });
+  const tellMaintainer = async (opts) => {
+    const mail = notifyRequest(env, base, accessId, rec, { repeat: !!prior, member: approved, ...opts }).catch((e) => console.error(`mail: not sent (${(e && e.name) || 'error'})`));
+    if (ctx && typeof ctx.waitUntil === 'function') ctx.waitUntil(mail);
+    else await mail;
+  };
   if (studentMail) {
+    // the same request, confirmed already: nothing to confirm again; a reminder to the maintainer at most once a day
+    if (rec.mailbox === 'confirmed') {
+      await tellMaintainer({ newVersion: false });
+      return answer('confirmed');
+    }
     const m = await sendMail(env, await confirmMail(env, base, accessId, rec));
     if (m.sent) return answer('confirm');
-    // Resend refused the student's address (the domain not verified yet) or could not be reached: the
-    // request goes to the maintainer at once, marked not verified, rather than waiting on a link never sent
-    rec.mailbox = 'not_verified';
-    await env.ACCESS.put(`pending:${accessId}`, JSON.stringify(rec));
-    console.log('mail: the confirmation e-mail was not sent; the request goes to the maintainer unconfirmed');
+    // Resend refused the student's address (the domain not verified yet) or could not be reached. The
+    // maintainer hears only about confirmed requests, so this one waits, unconfirmed, and says so on the
+    // admin page; the student is told it did not go
+    rec.confirm_mail = 'failed';
+    await env.ACCESS.put(`pending:${accessId}`, JSON.stringify(rec), keep);
+    console.log('mail: the confirmation e-mail was not sent; the request waits unconfirmed');
+    return reply(502, { error: `the confirmation e-mail to ${accessId}@wayne.edu could not be sent just now; send the form again in a few minutes, and tell your lab lead if it keeps failing` });
   }
   // the maintainer's e-mail, best effort: it never changes the answer
-  const mail = notifyRequest(env, base, accessId, rec, { repeat: !!prior, member: approved }).catch((e) => console.error(`mail: not sent (${(e && e.name) || 'error'})`));
-  if (ctx && typeof ctx.waitUntil === 'function') ctx.waitUntil(mail);
-  else await mail;
+  await tellMaintainer({ newVersion: !same });
   return answer('not_verified');
 }
 
-// A refusal on record: conflict:<AccessID> {kind, count, first_at, last_at, other_install_short}, kept a
-// year from the last one. The installation that asked is kept only as its fingerprint.
+// A refusal on record: conflict:<AccessID> {kind, count, first_at, last_at, other_install_short, ref}, kept
+// a year from the last one. The installation that asked is kept only as its fingerprint. ref is the version
+// of the last e-mail about it (written once that e-mail went): its Move and Withdraw links act only while
+// it is the one on record.
 async function recordConflict(env, accessId, kind, installId, now) {
   const key = `conflict:${accessId}`;
   const prior = (await env.ACCESS.get(key, 'json')) || {};
-  const rec = { kind, count: (Number(prior.count) || 0) + 1, first_at: prior.first_at || now, last_at: now, other_install_short: await installShort(installId) };
+  const rec = { kind, count: (Number(prior.count) || 0) + 1, first_at: prior.first_at || now, last_at: now, other_install_short: await installShort(installId), ...(prior.ref ? { ref: prior.ref } : {}) };
   await env.ACCESS.put(key, JSON.stringify(rec), { expirationTtl: CONFLICT_KEEP_SECONDS });
   return rec;
 }
 
-// the maintainer's e-mail about a second installation, with a Move and a Withdraw link
-async function conflictMail(env, base, accessId, rec, seat, refused) {
+// the maintainer's e-mail about a second installation, with a Move and a Withdraw link for this e-mail's ref
+async function conflictMail(env, base, accessId, rec, seat, refused, ref) {
   const name = oneLine(rec.name);
   const label = name ? `${name} (${accessId})` : accessId;
   const facts = [
@@ -672,14 +879,14 @@ async function conflictMail(env, base, accessId, rec, seat, refused) {
     const exp = Math.floor(Date.now() / 1000) + DECIDE_DAYS * 86400;
     const nonce = newNonce();
     links = {
-      move: `${base}/decide?t=${await decideToken(env, { access_id: accessId, decision: 'move', nonce, exp, install_id: refused.installId })}`,
-      withdraw: `${base}/decide?t=${await decideToken(env, { access_id: accessId, decision: 'withdraw', nonce, exp })}`,
+      move: `${base}/decide?t=${await decideToken(env, { access_id: accessId, decision: 'move', nonce, exp, install_id: refused.installId, ref })}`,
+      withdraw: `${base}/decide?t=${await decideToken(env, { access_id: accessId, decision: 'withdraw', nonce, exp, ref })}`,
       until: new Date(exp * 1000).toISOString().slice(0, 10),
     };
   }
   const advice = 'If they reinstalled Beethoven or changed computers, move the approval: the new installation works from its next check and the old one is refused. If the account is being shared, withdraw the approval. The account name in a check is not proved, so anyone who knows the AccessID can cause this e-mail: ask the person before you withdraw. Doing nothing keeps Beethoven working on the first installation only.';
   const how = links
-    ? `Each link opens a page with one button; nothing changes until you press it. Use one of the two, once. They work until ${links.until}.`
+    ? `Each link opens a page with one button; nothing changes until you press it. Use one of the two, once. They work until ${links.until}, until a newer e-mail about this account replaces them, or until the refusal is settled another way.`
     : `The links are off because the service has no DECIDE_KEY; use node tools/intake/admin.mjs reset-seat ${accessId} (the next installation to check then gets it) or remove ${accessId}.`;
   const footer = `Sent by the Beethoven access service when an approved account is checked from a second installation; one e-mail per account a day at most. An installation is shown by its fingerprint (the first 8 characters of a SHA-256 of its random identifier); node tools/intake/admin.mjs seat ${accessId} shows the same.`;
   const text = [
@@ -711,15 +918,20 @@ async function conflictMail(env, base, accessId, rec, seat, refused) {
   return { subject: `Beethoven: ${accessId} asked from a second installation`, text, html };
 }
 
-async function notifyConflict(env, base, accessId, rec, seat, refused) {
+async function notifyConflict(env, base, accessId, rec, seat, refused, conflict) {
   if (!env.RESEND_API_KEY) {
     console.log('mail: no provider configured');
     return;
   }
   const flag = `conflict_notified:${accessId}`;
   if (await env.ACCESS.get(flag)) return;
-  const r = await sendMail(env, await conflictMail(env, base, accessId, rec, seat, refused));
-  if (r.sent) await env.ACCESS.put(flag, new Date().toISOString(), { expirationTtl: NOTIFY_EVERY_SECONDS });
+  // a new version for this e-mail: once it has gone, the conflict record names it, and the links of any
+  // earlier e-mail about this account answer "replaced"
+  const ref = newNonce();
+  const r = await sendMail(env, await conflictMail(env, base, accessId, rec, seat, refused, ref));
+  if (!r.sent) return;
+  await env.ACCESS.put(flag, new Date().toISOString(), { expirationTtl: NOTIFY_EVERY_SECONDS });
+  await env.ACCESS.put(`conflict:${accessId}`, JSON.stringify({ ...conflict, ref }), { expirationTtl: CONFLICT_KEEP_SECONDS });
 }
 
 // One approved account, one installation; one installation, one account. null lets the check through;
@@ -739,7 +951,7 @@ async function installationRule(env, ctx, base, { accessId, installId, product, 
   }
   if (seat) {
     const conflict = await recordConflict(env, accessId, 'other_installation', installId, now);
-    const mail = notifyConflict(env, base, accessId, rec, seat, { installId, product, version, portal, at: now, count: conflict.count }).catch((e) => console.error(`mail: not sent (${(e && e.name) || 'error'})`));
+    const mail = notifyConflict(env, base, accessId, rec, seat, { installId, product, version, portal, at: now, count: conflict.count }, conflict).catch((e) => console.error(`mail: not sent (${(e && e.name) || 'error'})`));
     if (ctx && typeof ctx.waitUntil === 'function') ctx.waitUntil(mail);
     else await mail;
     return 'other_installation';
@@ -756,6 +968,9 @@ async function installationRule(env, ctx, base, { accessId, installId, product, 
   }
   await env.ACCESS.put(seatKey, JSON.stringify({ install_id: installId, first_seen: now, last_seen: now, product, version }));
   await env.ACCESS.put(indexKey, JSON.stringify({ access_id: accessId, bound_at: now }));
+  // the lifecycle's "installed", once: in its own record, because a check never writes the approval itself
+  // (a check that raced a removal could otherwise bring the approval back)
+  if (!(await env.ACCESS.get(`installed:${accessId}`))) await env.ACCESS.put(`installed:${accessId}`, JSON.stringify({ at: now, product, version }));
   return null;
 }
 
@@ -764,7 +979,8 @@ async function installationRule(env, ctx, base, { accessId, installId, product, 
 // answer, the refusals included, carries access-control-allow-origin: * and cache-control: no-store, and
 // never allow-credentials. The decision: approved:<access_id> exists, carries the grant "extension" (a
 // record without grants counts), its `until` (ISO date), if any, has not passed, and the installation rule
-// above lets it through (an approved record with any_installation: true skips that rule). What is kept:
+// above lets it through (an approved record with any_installation: true skips that rule, but only when the
+// portal is localhost or a name under .localhost: the store reviewers' mock portal). What is kept:
 // seen:<product>:<access_id>, one record per product and account with the last check (portal, version,
 // time, the salted hash of the address, the decision and its reason, when the decision last changed), the
 // seat and the installation index, a conflict record for a refusal, and the day's counters per account and
@@ -803,7 +1019,9 @@ async function accessCheck(request, env, ctx) {
   const until = rec && typeof rec.until === 'string' && !Number.isNaN(Date.parse(rec.until)) ? rec.until : null;
   const now = new Date().toISOString();
   const listed = !!rec && (until === null || Date.parse(until) > Date.now()) && hasExtension(rec);
-  const reason = listed && rec.any_installation !== true ? await installationRule(env, ctx, new URL(request.url).origin, { accessId, installId, product, version, portal, now, rec }) : null;
+  // the reviewers' exemption holds on their mock portal only; on a real portal the account is like any other
+  const exempt = rec && rec.any_installation === true && isLocalPortal(portal);
+  const reason = listed && !exempt ? await installationRule(env, ctx, new URL(request.url).origin, { accessId, installId, product, version, portal, now, rec }) : null;
   const approved = listed && !reason;
   const seenKey = `seen:${product}:${accessId}`;
   const prior = (await env.ACCESS.get(seenKey, 'json')) || {};
@@ -854,11 +1072,12 @@ async function personRecords(env, accessId) {
   return { pending, approved, denied };
 }
 
-// a decision restarts the CV's twelve months (KV sets a lifetime only when a value is written)
-async function keepCv(env, accessId, decidedAt) {
+// a decision, or a confirmation, restarts the CV's twelve months; an unconfirmed request sent again sets its 7
+// days (KV sets a lifetime only when a value is written)
+async function keepCv(env, accessId, decidedAt, ttl = CV_KEEP_SECONDS) {
   const got = await env.ACCESS.getWithMetadata(`cv:${accessId}`, 'arrayBuffer');
   if (!got || got.value === null || got.value === undefined) return;
-  await env.ACCESS.put(`cv:${accessId}`, got.value, { expirationTtl: CV_KEEP_SECONDS, metadata: { ...(got.metadata || {}), decided_at: decidedAt } });
+  await env.ACCESS.put(`cv:${accessId}`, got.value, { expirationTtl: ttl, metadata: { ...(got.metadata || {}), ...(decidedAt ? { decided_at: decidedAt } : {}) } });
 }
 
 // the index entry of an installation, only while it names this account
@@ -881,14 +1100,22 @@ async function applyApprove(env, accessId, { note, by, grants = GRANTS }) {
   if (!from && !approved) return { status: 404, body: { error: `no request from ${accessId}; use add` } };
   const rec = approved ? { ...approved } : { name: from.name || '', email: from.email || `${accessId}@wayne.edu`, note: from.note || '', approved_at: now, by, lids: [] };
   if (from && from.google_account) rec.google_account = from.google_account;
+  // the lifecycle of the request decided (F2): when it was sent, its mailbox, and its version, then the decision
+  if (from) {
+    for (const k of ['submitted_at', 'confirmed_at', 'mailbox', 'ref']) if (from[k]) rec[k] = from[k];
+    if (!from.submitted_at && from.requested_at) rec.submitted_at = from.requested_at;
+  }
   const had = approved ? grantsOf(approved) : [];
   rec.grants = GRANTS.filter((g) => had.includes(g) || grants.includes(g));
+  rec.decided_at = now;
+  rec.decision = rec.grants.includes('extension') ? 'approve' : 'lab';
   if (note !== undefined) rec.note = clean(note, 500).trim();
   await env.ACCESS.put(`approved:${accessId}`, JSON.stringify(rec));
   await Promise.all([env.ACCESS.delete(`pending:${accessId}`), env.ACCESS.delete(`denied:${accessId}`)]);
   await keepCv(env, accessId, now);
   await audit(env, 'approve', accessId, { by, grants: rec.grants });
-  return { status: 200, body: { status: 'approved', accessId, record: rec } };
+  // newly: Beethoven is granted by this approval (the student's e-mail goes then, and only then)
+  return { status: 200, body: { status: 'approved', accessId, record: rec }, newly: !had.includes('extension') && rec.grants.includes('extension') };
 }
 
 // Deny. Someone approved for Beethoven cannot be denied (use remove); a lab member's request for Beethoven
@@ -897,32 +1124,123 @@ async function applyDeny(env, accessId, { reason, by }) {
   const { pending, approved, denied } = await personRecords(env, accessId);
   if (approved && hasExtension(approved)) return { status: 409, body: { error: `${accessId} is approved; use remove` } };
   const from = pending || denied || approved || {};
-  const rec = { name: from.name || '', email: from.email || `${accessId}@wayne.edu`, note: from.note || '', requested_at: from.requested_at, ...(from.google_account ? { google_account: from.google_account } : {}), denied_at: new Date().toISOString(), by, reason: clean(reason, 200).trim() };
+  const now = new Date().toISOString();
+  const rec = {
+    name: from.name || '',
+    email: from.email || `${accessId}@wayne.edu`,
+    note: from.note || '',
+    requested_at: from.requested_at,
+    ...(from.google_account ? { google_account: from.google_account } : {}),
+    ...(from.submitted_at ? { submitted_at: from.submitted_at } : {}),
+    ...(from.confirmed_at ? { confirmed_at: from.confirmed_at } : {}),
+    ...(from.mailbox ? { mailbox: from.mailbox } : {}),
+    ...(from.ref ? { ref: from.ref } : {}),
+    denied_at: now,
+    decided_at: now,
+    decision: 'deny',
+    by,
+    reason: clean(reason, 200).trim(),
+  };
   await env.ACCESS.put(`denied:${accessId}`, JSON.stringify(rec));
   await Promise.all([env.ACCESS.delete(`pending:${accessId}`), env.ACCESS.delete(`cv:${accessId}`)]);
   await audit(env, 'deny', accessId, { by });
   return { status: 200, body: { status: 'denied', accessId, ...(approved ? { lab_member: true } : {}) } };
 }
 
+// the access-check records of one account, for every product: seen:<product>:<AccessID>
+async function seenKeysOf(env, accessId) {
+  return (await listKeys(env.ACCESS, 'seen:')).filter((k) => {
+    const rest = k.slice('seen:'.length);
+    const i = rest.indexOf(':');
+    return i > 0 && rest.slice(i + 1) === accessId;
+  });
+}
+
 // Remove (admin) and Withdraw approval (the e-mail link): the person leaves every list, every key issued
-// to them goes on the revocation list, and their seat, conflicts and CV are deleted. requireApproved: the
-// e-mail link changes nothing for someone who is not approved any more (404).
+// to them goes on the revocation list, and their seat, installation record, conflicts, CV and access-check
+// records are deleted. requireApproved: the e-mail link changes nothing for someone who is not approved
+// any more (404).
 async function applyRemove(env, accessId, by, { requireApproved = false } = {}) {
   const [approved, seat] = await Promise.all([env.ACCESS.get(`approved:${accessId}`, 'json'), env.ACCESS.get(`seat:${accessId}`, 'json')]);
   if (requireApproved && !approved) return { status: 404, body: { error: `${accessId} is not approved` } };
   const lids = approved && Array.isArray(approved.lids) ? approved.lids : [];
-  await Promise.all(['approved', 'pending', 'denied', 'seat', 'conflict', 'cv'].map((k) => env.ACCESS.delete(`${k}:${accessId}`)));
+  const seen = await seenKeysOf(env, accessId);
+  await Promise.all([...['approved', 'pending', 'denied', 'seat', 'conflict', 'cv', 'installed'].map((k) => `${k}:${accessId}`), ...seen].map((k) => env.ACCESS.delete(k)));
   await dropIndex(env, accessId, seat && seat.install_id);
   if (lids.length) await revoke(env, lids);
   await audit(env, 'remove', accessId, { lids, by });
   return { status: 200, body: { status: 'removed', accessId, revoked: lids } };
 }
 
+// the account another installation is bound to, when that installation is the seat of an account other
+// than this one (its seat still names it); null otherwise. One installation serves one account, so a Move
+// there is refused until that other approval is withdrawn or its seat reset.
+async function seatHolder(env, accessId, installId) {
+  const index = await env.ACCESS.get(`install:${installId}`, 'json');
+  if (!index || !index.access_id || index.access_id === accessId) return null;
+  const other = await env.ACCESS.get(`seat:${index.access_id}`, 'json');
+  return other && other.install_id === installId ? index.access_id : null;
+}
+
+// Mark invited to the Google Group (the Done, invited links, admin invited, the workspace adapter): once;
+// clear takes the mark away (admin only). Lab members only have nothing to install.
+async function applyInvited(env, accessId, by, { clear = false } = {}) {
+  const approved = await env.ACCESS.get(`approved:${accessId}`, 'json');
+  if (!approved) return { status: 404, body: { error: `${accessId} is not approved` } };
+  if (!hasExtension(approved)) return { status: 409, body: { error: `${accessId} is a lab member only; there is nothing for them to install` } };
+  if (clear) {
+    const rec = { ...approved };
+    delete rec.invited_at;
+    delete rec.invited_by;
+    await env.ACCESS.put(`approved:${accessId}`, JSON.stringify(rec));
+    await audit(env, 'invited-clear', accessId, { by });
+    return { status: 200, body: { status: 'not-invited', accessId } };
+  }
+  if (approved.invited_at) return { status: 200, body: { status: 'invited', accessId, invited_at: approved.invited_at, already: true } };
+  const now = new Date().toISOString();
+  await env.ACCESS.put(`approved:${accessId}`, JSON.stringify({ ...approved, invited_at: now, invited_by: by }));
+  await audit(env, 'invited', accessId, { by });
+  return { status: 200, body: { status: 'invited', accessId, invited_at: now } };
+}
+
+// After an approval for Beethoven (the Approve link and admin approve): the invitation step, and the
+// student's e-mail when MAIL_STUDENTS is "1" and Beethoven is newly granted. The answer is what the
+// page and the admin route show: null for Lab membership only, else { group, members_url, google_account,
+// invited, mode, address?, invited_at?, error? }. GROUP_MODE "workspace" adds the account itself and marks it
+// invited; any failure leaves the manual step, with the reason.
+async function afterApprove(env, ctx, accessId, result) {
+  const rec = result.body.record;
+  if (!hasExtension(rec)) return null;
+  const mode = groupMode(env);
+  const invite = { group: GROUP_NAME, members_url: GROUP_MEMBERS_URL, google_account: rec.google_account || null, invited: !!rec.invited_at, mode, ...(mode === 'workspace' ? { address: groupAddress(env) } : {}) };
+  if (!rec.invited_at && mode === 'workspace') {
+    const w = rec.google_account ? await workspaceAddMember(env, rec.google_account) : { ok: false, error: 'there is no Google account on record for them' };
+    if (w.ok) {
+      const s = await applyInvited(env, accessId, 'workspace');
+      if (s.status === 200) {
+        invite.invited = true;
+        invite.invited_at = s.body.invited_at;
+      }
+    } else {
+      invite.error = w.error;
+    }
+  }
+  if (result.newly && mailStudents(env) && env.RESEND_API_KEY) {
+    const mail = sendMail(env, approvalMail(env, accessId, rec, { added: mode === 'workspace' && invite.invited })).catch((e) => console.error(`mail: not sent (${(e && e.name) || 'error'})`));
+    if (ctx && typeof ctx.waitUntil === 'function') ctx.waitUntil(mail);
+    else await mail;
+  }
+  return invite;
+}
+
 // Move the approval to another installation (the Move link): the seat names it from now on, the old
-// installation's index entry goes, and the conflict record is cleared.
+// installation's index entry goes, and the conflict record is cleared. Refused (409) while that
+// installation is the seat of another account.
 async function applyMoveSeat(env, accessId, installId, by) {
   const [approved, prior] = await Promise.all([env.ACCESS.get(`approved:${accessId}`, 'json'), env.ACCESS.get(`seat:${accessId}`, 'json')]);
   if (!approved) return { status: 404, body: { error: `${accessId} is not approved` } };
+  const holder = await seatHolder(env, accessId, installId);
+  if (holder) return { status: 409, body: { error: 'other_account', holder } };
   const now = new Date().toISOString();
   if (!prior || prior.install_id !== installId) {
     await env.ACCESS.put(`seat:${accessId}`, JSON.stringify({ install_id: installId, first_seen: now, last_seen: now, product: (prior && prior.product) || '', version: (prior && prior.version) || '', moved_at: now, by }));
@@ -934,9 +1252,11 @@ async function applyMoveSeat(env, accessId, installId, by) {
   return { status: 200, body: { status: 'moved', accessId } };
 }
 
-// Reset the seat (admin): the next installation to check binds the account.
+// Reset the seat (admin): the next installation to check binds the account. "installed" stays: a seat bound
+// before it was recorded leaves its first check as the date.
 async function applyResetSeat(env, accessId) {
   const seat = await env.ACCESS.get(`seat:${accessId}`, 'json');
+  if (seat && seat.first_seen && !(await env.ACCESS.get(`installed:${accessId}`))) await env.ACCESS.put(`installed:${accessId}`, JSON.stringify({ at: seat.first_seen, product: seat.product || '', version: seat.version || '' }));
   await Promise.all([env.ACCESS.delete(`seat:${accessId}`), env.ACCESS.delete(`conflict:${accessId}`)]);
   await dropIndex(env, accessId, seat && seat.install_id);
   await audit(env, 'reset-seat', accessId);
@@ -954,8 +1274,30 @@ const PAGE_HEADERS = {
   'x-robots-tag': 'noindex',
 };
 
-// title and paragraphs are plain text (escaped here); form, when given, is the one button
+// The copy button of the Approve page's copy box: the page's only script, allowed by its hash and by
+// nothing else (script-src 'sha256-...'). Without it the box is still a read-only field to select and copy.
+const COPY_SCRIPT = "for(const b of document.querySelectorAll('button[data-copy]'))b.addEventListener('click',()=>{const f=document.getElementById(b.dataset.copy);f.select();const ok=()=>{b.textContent='Copied'};(navigator.clipboard?navigator.clipboard.writeText(f.value):Promise.reject()).then(ok,()=>{try{document.execCommand('copy');ok()}catch(e){}})});";
+const COPY_SCRIPT_HASH = 'sha256-INwhXZoqo4hQAUAlfL90O8Q8ccXrCOPJAg3xWtat2UE=';
+
+// title and paragraphs are plain text (escaped here). A paragraph is a string, { muted, href?, link? } (grey,
+// with a link after it), { text, href, link } (a line with a link that opens in a new tab), { copy, label }
+// (a read-only box with a Copy button), or { form: { action, button } } (a button of its own). form, when
+// given, is the page's last button. A page with a copy box carries the copy script and its hash; every other
+// page has no script at all.
 function decidePage(status, title, paragraphs, form) {
+  const button = (f) => `<form method="post" action="${esc(f.action)}"><input type="hidden" name="confirm" value="1"><button type="submit">${esc(f.button)}</button></form>`;
+  let copies = 0;
+  const para = (p) => {
+    if (typeof p === 'string') return `<p>${esc(p)}</p>`;
+    if (p.form) return button(p.form);
+    if (p.copy !== undefined) {
+      copies += 1;
+      return `<p class="copy"><input id="copy${copies}" type="text" readonly value="${esc(p.copy)}" aria-label="${esc(p.label || 'Text to copy')}"> <button type="button" class="quiet" data-copy="copy${copies}">Copy</button></p>`;
+    }
+    if (p.text !== undefined) return `<p>${esc(p.text)} <a href="${esc(p.href)}" target="_blank" rel="noopener noreferrer">${esc(p.link || p.href)}</a></p>`;
+    return `<p class="muted">${esc(p.muted)}${p.href ? ` <a href="${esc(p.href)}">${esc(p.link || p.href)}</a>.` : ''}</p>`;
+  };
+  const body = paragraphs.map(para).join('\n');
   const html = `<!doctype html>
 <html lang="en">
 <head>
@@ -969,16 +1311,21 @@ function decidePage(status, title, paragraphs, form) {
   body { margin: 0 auto; padding: 32px 16px 48px; max-width: 640px; background: var(--bg); color: var(--ink); font: 16px/1.5 system-ui, "Segoe UI", Helvetica, Arial, sans-serif; }
   h1 { font-size: 1.5em; margin: 0 0 12px; } a { color: var(--accent); } p.muted { color: var(--muted); }
   button { margin-top: 8px; padding: 10px 22px; font: inherit; font-weight: 600; color: var(--bg); background: var(--accent); border: 0; border-radius: 6px; cursor: pointer; }
+  p.copy { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  p.copy input { flex: 1 1 11em; min-width: 0; box-sizing: border-box; padding: 9px 10px; font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; }
+  button.quiet { margin-top: 0; color: var(--accent); background: transparent; border: 1px solid var(--accent); }
 </style>
 </head>
 <body>
 <h1>${esc(title)}</h1>
-${paragraphs.map((p) => (typeof p === 'string' ? `<p>${esc(p)}</p>` : `<p class="muted">${esc(p.muted)}${p.href ? ` <a href="${esc(p.href)}">${esc(p.link || p.href)}</a>.` : ''}</p>`)).join('\n')}
-${form ? `<form method="post" action="${esc(form.action)}"><input type="hidden" name="confirm" value="1"><button type="submit">${esc(form.button)}</button></form>` : ''}
+${body}
+${form ? button(form) : ''}
+${copies ? `<script>${COPY_SCRIPT}</script>` : ''}
 </body>
 </html>
 `;
-  return new Response(html, { status, headers: PAGE_HEADERS });
+  const headers = copies ? { ...PAGE_HEADERS, 'content-security-policy': `default-src 'none'; style-src 'unsafe-inline'; script-src '${COPY_SCRIPT_HASH}'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'` } : PAGE_HEADERS;
+  return new Response(html, { status, headers });
 }
 
 // a CV as a response: the type chosen from its bytes, a PDF shown inline (where the button asked for it)
@@ -1010,6 +1357,7 @@ const DECISIONS = {
   deny: { ask: (l) => `Deny access for ${l}?`, button: 'Deny', done: (id) => `${id} was denied` },
   move: { ask: (l) => `Move the approval of ${l} to the new installation?`, button: 'Move the approval', done: (id) => `the approval of ${id} was moved to the new installation` },
   withdraw: { ask: (l) => `Withdraw the approval of ${l}?`, button: 'Withdraw approval', done: (id) => `the approval of ${id} was withdrawn` },
+  invited: { ask: (l) => `Mark ${l} as invited to ${GROUP_NAME}?`, button: 'Done, invited', done: (id) => `${id} was marked invited` },
 };
 
 // where a request stands, in one paragraph, for the question pages
@@ -1017,7 +1365,7 @@ function requestStanding(id, { pending, approved, denied }) {
   if (approved && hasExtension(approved)) return `${id} is approved for Beethoven already.`;
   const parts = [];
   if (approved) parts.push(`${id} is a lab member since ${readableTime(approved.approved_at)}.`);
-  if (pending) parts.push(`Asked ${readableTime(pending.requested_at)}.${pending.note ? ` What for: ${oneLine(pending.note)}` : ''}${pending.google_account ? ` Google account: ${oneLine(pending.google_account)}.` : ''} Mailbox: ${pending.mailbox === 'confirmed' ? 'confirmed' : 'not verified'}.`);
+  if (pending) parts.push(`Asked ${readableTime(pending.requested_at)}.${pending.note ? ` What for: ${sentence(oneLine(pending.note))}` : ''}${pending.google_account ? ` Google account: ${oneLine(pending.google_account)}.` : ''} Mailbox: ${pending.mailbox === 'confirmed' ? 'confirmed' : pending.mailbox === 'waiting' ? 'not confirmed yet' : 'not verified'}.`);
   else if (denied) parts.push(`${id} was denied before.`);
   return parts.length ? parts.join(' ') : `There is no request from ${id} on record any more.`;
 }
@@ -1029,6 +1377,14 @@ async function decideQuestion(env, c, recs) {
   if (c.decision === 'lab') return [requestStanding(id, recs), 'Pressing the button records them as a lab member only: Beethoven and Beethoven for VS Code stay closed to them until you approve them for Beethoven.'];
   if (c.decision === 'deny') return [requestStanding(id, recs), approved ? 'Pressing the button marks the request for Beethoven not approved; they stay a lab member, and the request page will say not approved.' : 'Pressing the button marks the request not approved; they are not told the reason, and the request page will say not approved.'];
   if (!approved) return [`${id} is not on the approved list any more.`];
+  if (c.decision === 'invited') {
+    const g = oneLine(approved.google_account);
+    return [
+      g ? `Google account: ${g}.` : 'There is no Google account on record for them; ask them which one they use in Chrome.',
+      { text: `Press the button once the invitation to ${GROUP_NAME} has gone out from`, href: GROUP_MEMBERS_URL, link: 'the group\'s members page' },
+      'It records the date on their approval, and the daily reminder stops listing them.',
+    ];
+  }
   if (c.decision === 'move') {
     const seat = await env.ACCESS.get(`seat:${id}`, 'json');
     const now = seat ? `Beethoven works for ${id} on one installation, ${await installShort(seat.install_id)}, set up ${readableTime(seat.first_seen)}, last check ${readableTime(seat.last_seen)}.` : `${id} has no installation on record now.`;
@@ -1040,9 +1396,82 @@ async function decideQuestion(env, c, recs) {
   ];
 }
 
+// The Approve page's next step (F3): the Google account in a copy box, the group's members page, and a
+// Done, invited button (a signed one-use link of its own, POSTed); or, when GROUP_MODE "workspace" added
+// the account, what was done.
+async function invitationStep(env, accessId, rec, invite, who) {
+  if (!invite) return [];
+  const g = oneLine(rec.google_account);
+  if (invite.invited) {
+    return invite.mode === 'workspace' && invite.invited_at
+      ? [`Added ${g} to the Google Group ${GROUP_NAME} (${invite.address}), so the private listing is open to them; they are recorded as invited.`, 'Google sends them no invitation when the service adds them, so no e-mail carries the private listing\'s address: send it to them yourself.']
+      : [`${g || 'Their Google account'} was marked invited to the Google Group ${GROUP_NAME} on ${readableTime(rec.invited_at)}.`];
+  }
+  const out = [];
+  if (invite.error) out.push(`The service could not add ${g || 'them'} to the group itself: ${invite.error}. Add them by hand, as below.`);
+  out.push(g ? `Next: add ${g} to the Google Group ${GROUP_NAME}.` : `Next: ask ${who || accessId} which Google account they use in Chrome, and add it to the Google Group ${GROUP_NAME}.`);
+  if (g) out.push({ copy: g, label: 'Google account' });
+  out.push({ text: 'Invite them on', href: GROUP_MEMBERS_URL, link: 'the group\'s members page' });
+  out.push('Put the private listing\'s address in the invitation\'s message: the student is told the invitation e-mail has the link.');
+  if (env.DECIDE_KEY) {
+    const exp = Math.floor(Date.now() / 1000) + DECIDE_DAYS * 86400;
+    const t = await decideToken(env, { access_id: accessId, decision: 'invited', nonce: newNonce(), exp, ...(rec.ref ? { ref: rec.ref } : {}) });
+    out.push({ form: { action: `/decide?t=${t}`, button: 'Done, invited' } });
+    out.push({ muted: 'Press Done, invited once the invitation has gone: it records the date on their approval, and the daily reminder stops listing them. It works once.' });
+  }
+  return out;
+}
+
+// A link that no longer matches what is on record answers with a page here, before anything else: out of
+// date (no ref), replaced (a newer version of the request or of the refusal e-mail), decided already, or
+// settled another way. null when the link is current. Nothing is written and no link is spent.
+async function stalePage(env, c, recs, label, toAdmin) {
+  const { pending, approved, denied } = recs;
+  const id = c.access_id;
+  if (REF_BOUND.has(c.decision) && !c.ref) return decidePage(410, 'This link is out of date', ['It came in an e-mail sent before each link was tied to one version of a request, so it no longer decides anything. Nothing was changed.', toAdmin('Decide on')]);
+  const replaced = () => decidePage(409, 'This request was replaced', ['The request form was sent again after this e-mail, with changes, so this link no longer matches the request on record: see the newer e-mail (when students confirm their mailbox first, it comes once they confirm). Nothing was changed.', toAdmin('Every request is on')]);
+  if (c.decision === 'approve' || c.decision === 'lab' || c.decision === 'deny') {
+    if (pending) return pending.ref === c.ref ? null : replaced();
+    const decided = [approved, denied].find((r) => r && r.ref === c.ref);
+    if (decided) {
+      const now = decided === denied ? `${id} was denied ${readableTime(denied.decided_at || denied.denied_at)}.` : hasExtension(approved) ? `${id} is approved for Beethoven since ${readableTime(approved.decided_at || approved.approved_at)}.` : `${id} is a lab member (Lab membership only) since ${readableTime(approved.decided_at || approved.approved_at)}.`;
+      return decidePage(409, 'Nothing changed', [`This request was decided already: ${now}`, toAdmin('To change the decision, use')]);
+    }
+    if ([approved, denied].some((r) => r && r.ref)) return replaced();
+    return decidePage(409, 'Nothing changed', [`There is no request from ${id} on record any more; it may have been cleared on the admin page.`, toAdmin('To approve them anyway, use Add on')]);
+  }
+  if (c.decision === 'move' || c.decision === 'withdraw') {
+    if (!approved) return decidePage(409, 'Nothing changed', [`${label} is not on the approved list any more, so there is no approval to ${c.decision === 'move' ? 'move' : 'withdraw'}.`, toAdmin('Every approval is on')]);
+    const conflict = await env.ACCESS.get(`conflict:${id}`, 'json');
+    if (!conflict || !conflict.ref) return decidePage(409, 'Nothing changed', ['The refusal this e-mail is about is no longer on record: since it was sent, the approval was moved, the seat reset, or the approval removed. Nothing was changed.', toAdmin('Every approval is on')]);
+    if (conflict.ref !== c.ref) return decidePage(409, 'This e-mail was replaced', [`Beethoven was refused for ${label} again after this e-mail, and a newer e-mail about it went out: see the newer e-mail and use its links. Nothing was changed.`, toAdmin('Every approval is on')]);
+    if (c.decision === 'move') {
+      const holder = await seatHolder(env, id, c.install_id);
+      if (holder) return holderPage(label, holder, c.install_id, toAdmin);
+    }
+    return null;
+  }
+  // invited
+  if (!approved) return decidePage(409, 'Nothing changed', [`${label} is not on the approved list any more.`, toAdmin('Every approval is on')]);
+  if (!hasExtension(approved)) return decidePage(409, 'Nothing changed', [`${label} is a lab member only now; there is nothing for them to install.`, toAdmin('Every approval is on')]);
+  if ((c.ref || '') !== (approved.ref || '')) return decidePage(409, 'This approval was replaced', [`${label} was approved again after this link was made (from a newer request, or removed and added again); mark the invitation from the newer page, the daily reminder, or the admin page. Nothing was changed.`, toAdmin('Every approval is on')]);
+  if (approved.invited_at) return decidePage(200, 'Already marked invited', [`${label} was marked invited to ${GROUP_NAME} on ${readableTime(approved.invited_at)}. Nothing changed.`, toAdmin('Every approval is on')]);
+  return null;
+}
+
+// the Move link's refusal while the installation is another account's seat (F1 a)
+async function holderPage(label, holder, installId, toAdmin) {
+  return decidePage(409, 'This installation is in use by another account', [
+    `The installation ${await installShort(installId)}, which ${label} asked from, is the one ${holder} uses: one installation serves one account, so the approval cannot move there while ${holder} holds it.`,
+    `To go on, withdraw the approval of ${holder} first (Remove on the admin page, or node tools/intake/admin.mjs remove ${holder}); or, if ${holder} no longer uses that installation, reset its seat (node tools/intake/admin.mjs reset-seat ${holder}). Then open this link again: it was not used up.`,
+    'Nothing was changed.',
+    toAdmin('Every approval is on'),
+  ]);
+}
+
 // GET /decide?t=<token> asks; POST /decide?t=<token> with confirm=1 decides. A GET never writes
 // anything, so a mail client or a link scanner that fetches the link decides nothing.
-async function decide(request, env, url) {
+async function decide(request, env, url, ctx) {
   const toAdmin = (text) => ({ muted: text, href: adminPage(env), link: 'the admin page' });
   if (request.method !== 'GET' && request.method !== 'POST') return decidePage(405, 'Open the link from the e-mail', [toAdmin('This address answers the links in the access e-mails. Decide on')]);
   if (!env.DECIDE_KEY) return decidePage(503, 'E-mail links are off', ['The access service has no DECIDE_KEY, so it cannot check this link.', toAdmin('Decide on')]);
@@ -1058,6 +1487,9 @@ async function decide(request, env, url) {
   const recs = await personRecords(env, c.access_id);
   const who = oneLine((recs.pending || recs.denied || recs.approved || {}).name);
   const label = who ? `${who} (${c.access_id})` : c.access_id;
+  // a link for an older version, or for something settled since, answers so on GET and POST alike
+  const stale = await stalePage(env, c, recs, label, toAdmin);
+  if (stale) return stale;
   if (!confirmed) return decidePage(200, kind.ask(label), [...(await decideQuestion(env, c, recs)), { muted: 'Nothing has changed yet. Closing this page does nothing.' }], { action: `/decide?t=${t}`, button: kind.button });
   // the nonce is spent before the decision is applied, so a second press (or another link) is refused
   await env.ACCESS.put(usedKey, JSON.stringify({ access_id: c.access_id, decision: c.decision, used_at: new Date().toISOString() }), { expirationTtl: DECIDE_NONCE_TTL });
@@ -1065,20 +1497,29 @@ async function decide(request, env, url) {
   if (c.decision === 'approve' || c.decision === 'lab') r = await applyApprove(env, c.access_id, { by: 'e-mail link', grants: c.decision === 'lab' ? ['lab'] : GRANTS });
   else if (c.decision === 'deny') r = await applyDeny(env, c.access_id, { reason: '', by: 'e-mail link' });
   else if (c.decision === 'move') r = await applyMoveSeat(env, c.access_id, c.install_id, 'e-mail link');
+  else if (c.decision === 'invited') r = await applyInvited(env, c.access_id, 'e-mail link');
   else r = await applyRemove(env, c.access_id, 'e-mail link', { requireApproved: true });
-  if (r.status === 404 && (c.decision === 'move' || c.decision === 'withdraw')) return decidePage(409, 'Nothing changed', [`${label} is not on the approved list any more, so there is no approval to ${c.decision === 'move' ? 'move' : 'withdraw'}.`, toAdmin('Every approval is on')]);
+  if (c.decision === 'move' && r.status === 409 && r.body.holder) {
+    // bound elsewhere between the question and the press: the link is given back, unspent
+    await env.ACCESS.delete(usedKey);
+    return holderPage(label, r.body.holder, c.install_id, toAdmin);
+  }
+  if (r.status === 404 && (c.decision === 'move' || c.decision === 'withdraw' || c.decision === 'invited')) return decidePage(409, 'Nothing changed', [`${label} is not on the approved list any more, so there is nothing to ${c.decision === 'move' ? 'move' : c.decision === 'withdraw' ? 'withdraw' : 'mark'}.`, toAdmin('Every approval is on')]);
   if (r.status === 404) return decidePage(409, 'Nothing changed', [`There is no request from ${c.access_id} on record any more; it may have been cleared on the admin page.`, toAdmin('To approve them anyway, use Add on')]);
+  if (r.status === 409 && c.decision === 'invited') return decidePage(409, 'Nothing changed', [`${label} is a lab member only now; there is nothing for them to install.`, toAdmin('Every approval is on')]);
   if (r.status === 409) return decidePage(409, 'Nothing changed', [`${label} is approved already, so the request cannot be denied.`, toAdmin('To take the approval away, use Remove on')]);
   if (r.status !== 200) return decidePage(500, 'Nothing changed', [`The service answered ${r.status}.`, toAdmin('Decide on')]);
   if (c.decision === 'approve') {
-    const g = oneLine(r.body.record.google_account);
+    const invite = await afterApprove(env, ctx, c.access_id, r);
+    const told = r.newly && mailStudents(env) && env.RESEND_API_KEY;
     return decidePage(200, 'Approved.', [
       `${who || c.access_id} can click the Beethoven icon now; the extension re-checks within ten minutes.`,
-      'Beethoven for VS Code lets them through at the Wayne State sign-in step. They are not told automatically; let them know.',
-      g ? `Add ${g} to the Google Group of the private listing, so the invitation to install Beethoven reaches them.` : 'Add their Google account to the Google Group of the private listing, so the invitation to install Beethoven reaches them.',
+      `Beethoven for VS Code lets them through at the Wayne State sign-in step. ${told ? (invite && invite.mode === 'workspace' && invite.invited ? 'They are e-mailed that they are approved, and that you send them the private listing\'s address.' : 'They are e-mailed that they are approved, and told to watch for the invitation.') : 'They are not told automatically; let them know.'}`,
+      ...(await invitationStep(env, c.access_id, r.body.record, invite, who)),
       toAdmin('Every request and approval is on'),
     ]);
   }
+  if (c.decision === 'invited') return decidePage(200, 'Marked invited.', [`${label} is recorded as invited to the Google Group ${GROUP_NAME} (${readableTime(r.body.invited_at)}). The daily reminder no longer lists them.`, toAdmin('Every approval is on')]);
   if (c.decision === 'lab') return decidePage(200, 'Approved for lab membership.', [`${label} is recorded as a lab member. Beethoven stays closed to them until you approve them for it: with the Approve for Beethoven link of a later request, or node tools/intake/admin.mjs grant ${c.access_id} extension,lab.`, 'They are not told automatically; let them know.', toAdmin('Every request and approval is on')]);
   if (c.decision === 'deny') return decidePage(200, 'Denied.', [r.body.lab_member ? `${label} is not approved for Beethoven and stays a lab member. They are not told automatically.` : `${label} is not approved. They are not told automatically, and the request page will say not approved if they ask again.`, toAdmin('To change this, use')]);
   if (c.decision === 'move') return decidePage(200, 'Moved.', [`Beethoven works for ${label} on the installation ${await installShort(c.install_id)} from its next check; the one used before is refused from its next check.`, toAdmin('Every approval is on')]);
@@ -1102,6 +1543,7 @@ async function confirmRoute(request, env, url, ctx) {
   const { pending, approved } = await personRecords(env, c.access_id);
   if (!pending) return decidePage(409, 'Nothing to confirm', [`There is no open request for ${c.access_id} any more; it may have been decided already. Nothing was sent.`]);
   if (pending.ref !== c.ref) return decidePage(409, 'This request has changed', ['The request form was sent again after this e-mail, so this link no longer matches the request on record. Use the link in the newest e-mail. Nothing was sent.']);
+  if (pending.mailbox === 'confirmed') return decidePage(200, 'Already confirmed', [`This request was confirmed on ${readableTime(pending.confirmed_at)} and went to the lab lead then. Nothing else is needed, and nothing was sent again.`]);
   if (!confirmed) {
     return decidePage(200, 'Confirm your request for Beethoven?', [
       `The request asks for access to Beethoven for ${c.access_id}, with:`,
@@ -1114,10 +1556,15 @@ async function confirmRoute(request, env, url, ctx) {
   }
   const now = new Date().toISOString();
   await env.ACCESS.put(usedKey, JSON.stringify({ access_id: c.access_id, decision: 'confirm', used_at: now }), { expirationTtl: DECIDE_NONCE_TTL });
-  const rec = { ...pending, mailbox: 'confirmed', verified_at: now };
+  // confirmed: kept until decided (no end any more), its CV for 12 months, and the maintainer e-mailed now
+  const rec = { ...pending, mailbox: 'confirmed', confirmed_at: now };
+  delete rec.expires_at;
+  delete rec.confirm_mail;
+  delete rec.verified_at;
   await env.ACCESS.put(`pending:${c.access_id}`, JSON.stringify(rec));
+  if (rec.cv) await keepCv(env, c.access_id, null);
   await audit(env, 'confirm', c.access_id, { by: 'student' });
-  const mail = notifyRequest(env, url.origin, c.access_id, rec, { force: true, member: approved && !hasExtension(approved) ? approved : null }).catch((e) => console.error(`mail: not sent (${(e && e.name) || 'error'})`));
+  const mail = notifyRequest(env, url.origin, c.access_id, rec, { newVersion: true, repeat: !!rec.submitted_at && rec.submitted_at !== rec.requested_at, member: approved && !hasExtension(approved) ? approved : null }).catch((e) => console.error(`mail: not sent (${(e && e.name) || 'error'})`));
   if (ctx && typeof ctx.waitUntil === 'function') ctx.waitUntil(mail);
   else await mail;
   return decidePage(200, 'Confirmed.', ["Your request went to the lab lead; you hear from them. Once it is approved, an invitation to install Beethoven from the lab's private listing comes to the Google account you gave."]);
@@ -1138,9 +1585,13 @@ async function cvRoute(request, env, url) {
   const usedKey = `decide:${c.nonce}`;
   const used = await env.ACCESS.get(usedKey, 'json');
   if (used) return decidePage(410, 'This link was already used', [`It opened the CV on ${readableTime(used.used_at)}; a CV link works once.`, again(c.access_id)]);
+  if (!c.ref) return decidePage(410, 'This link is out of date', ['It came in an e-mail sent before each link was tied to one version of a request. Nothing was sent.', again(c.access_id)]);
   const recs = await personRecords(env, c.access_id);
   const who = oneLine((recs.pending || recs.approved || recs.denied || {}).name);
   const label = who ? `${who} (${c.access_id})` : c.access_id;
+  // the CV of the version this link was sent for: a changed request (a new CV, or any other change) replaces it
+  const current = recs.pending ? recs.pending.ref === c.ref : [recs.approved, recs.denied].some((r) => r && r.ref === c.ref) || ![recs.approved, recs.denied].some((r) => r && r.ref);
+  if (!current) return decidePage(409, 'This request was replaced', ['The request form was sent again after this e-mail, with changes, so this link no longer matches the request on record: see the newer e-mail. Nothing was sent.', again(c.access_id)]);
   const got = await env.ACCESS.getWithMetadata(`cv:${c.access_id}`, 'arrayBuffer');
   if (!got || got.value === null || got.value === undefined) return decidePage(404, 'No CV on record', [`There is no CV on record for ${label} any more: it is deleted when a request is denied or an approval removed, and 12 months after the decision.`]);
   const bytes = new Uint8Array(got.value);
@@ -1158,7 +1609,16 @@ async function cvRoute(request, env, url) {
   return cvFile(bytes, kind, c.access_id, true);
 }
 
-async function admin(request, env, url) {
+// where an approval stands, as the admin page shows it: "lab" (lab member only), "installed" (its first
+// installation has checked in), "invited" (marked invited to the group), or "approved" (neither yet)
+function approvalStage(rec, installedAt) {
+  if (!hasExtension(rec)) return 'lab';
+  if (installedAt) return 'installed';
+  if (rec.invited_at) return 'invited';
+  return 'approved';
+}
+
+async function admin(request, env, url, ctx) {
   const cors = siteCors(request, env);
   if (!cors) return json(403, { error: 'origin not allowed' });
   if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
@@ -1167,11 +1627,35 @@ async function admin(request, env, url) {
   if (!(await sameSecret(given, env.ADMIN_TOKEN))) return reply(401, { error: 'admin token missing or wrong' });
   const route = url.pathname.slice('/admin/'.length);
   if (request.method === 'GET' && route === 'list') {
-    const [pending, approved, denied, revoked, checks, seats, conflicts] = await Promise.all([records(env, 'pending'), records(env, 'approved'), records(env, 'denied'), env.ACCESS.get('revoked', 'json'), checkRecords(env), records(env, 'seat'), records(env, 'conflict')]);
-    // seats and conflicts as counts and dates: no installation identifier, not even a fingerprint (admin seat shows that)
+    const [pending, approved, denied, revoked, checks, seats, conflicts, installed] = await Promise.all([records(env, 'pending'), records(env, 'approved'), records(env, 'denied'), env.ACCESS.get('revoked', 'json'), checkRecords(env), records(env, 'seat'), records(env, 'conflict'), records(env, 'installed')]);
+    const nowMs = Date.now();
+    const seatOf = new Map(seats.map((s) => [s.accessId, s]));
+    const conflictOf = new Map(conflicts.map((x) => [x.accessId, x]));
+    const installedOf = new Map(installed.map((x) => [x.accessId, x]));
+    // The admin page's contract (ACCESS_CHECK.md, "The admin routes"). Seats and conflicts as counts and
+    // dates: no installation identifier, not even a fingerprint (admin seat shows that), and no link.
     return reply(200, {
-      pending,
-      approved: approved.map((a) => ({ ...a, grants: grantsOf(a) })),
+      now: new Date(nowMs).toISOString(),
+      group: { name: GROUP_NAME, members_url: GROUP_MEMBERS_URL, mode: groupMode(env), ...(groupMode(env) === 'workspace' ? { address: groupAddress(env) } : {}) },
+      pending: pending.map((p) => {
+        const since = Date.parse(p.submitted_at || p.requested_at);
+        return { ...p, stage: p.mailbox === 'waiting' ? 'unconfirmed' : 'submitted', age_hours: Number.isNaN(since) ? null : Math.max(0, Math.floor((nowMs - since) / 3600000)) };
+      }),
+      approved: approved.map((a) => {
+        const s = seatOf.get(a.accessId);
+        const x = conflictOf.get(a.accessId);
+        const i = installedOf.get(a.accessId);
+        const installedAt = (i && i.at) || (s && s.first_seen) || null;
+        return {
+          ...a,
+          grants: grantsOf(a),
+          stage: approvalStage(a, installedAt),
+          ...(installedAt ? { installed_at: installedAt } : {}),
+          seat: s ? { bound: true, first_seen: s.first_seen, last_seen: s.last_seen, product: s.product, version: s.version, ...(s.moved_at ? { moved_at: s.moved_at } : {}) } : { bound: false },
+          conflicts: x ? Number(x.count) || 0 : 0,
+          ...(x ? { conflict_last_at: x.last_at } : {}),
+        };
+      }),
       denied,
       revoked: revoked || [],
       checks,
@@ -1213,6 +1697,15 @@ async function admin(request, env, url) {
     const grants = body.grants === undefined ? GRANTS : normalGrants(body.grants);
     if (!grants) return reply(400, { error: 'grants is a list of "extension" and "lab"' });
     const r2 = await applyApprove(env, accessId, { note: body.note, by: 'admin', grants });
+    if (r2.status !== 200) return reply(r2.status, r2.body);
+    // the next step for the page: invite (or, in workspace mode, what was done); null for lab membership only
+    const invite = await afterApprove(env, ctx, accessId, r2);
+    const record = invite && invite.invited_at ? { ...r2.body.record, invited_at: invite.invited_at, invited_by: 'workspace' } : r2.body.record;
+    return reply(200, { ...r2.body, record, invite });
+  }
+  if (route === 'invited') {
+    // Mark invited (the admin page's button); clear: true takes the mark away
+    const r2 = await applyInvited(env, accessId, 'admin', { clear: body.clear === true });
     return reply(r2.status, r2.body);
   }
   if (route === 'deny') {
@@ -1352,12 +1845,18 @@ export default {
     if (request.method === 'GET' && p === '/revoked') return new Response((await env.ACCESS.get('revoked_signed')) || '', { headers: { 'content-type': 'text/plain', 'cache-control': 'max-age=300' } });
     if (p === '/request') return accessRequest(request, env, ctx);
     if (p === '/access_check') return accessCheck(request, env, ctx);
-    if (p === '/decide') return decide(request, env, url);
+    if (p === '/decide') return decide(request, env, url, ctx);
     if (p === '/confirm') return confirmRoute(request, env, url, ctx);
     if (p === '/cv') return cvRoute(request, env, url);
-    if (p.startsWith('/admin/')) return admin(request, env, url);
+    if (p.startsWith('/admin/')) return admin(request, env, url, ctx);
     if (request.method === 'POST' && p === '/trial') return trial(request, env);
     if (request.method === 'POST' && p === '/report') return report(request, env);
     return json(404, { error: 'not found' });
+  },
+  // the cron ([triggers] in wrangler.toml, once a day): the invitation reminder
+  async scheduled(event, env, ctx) {
+    const work = inviteReminder(env).catch((e) => console.error(`mail: the invitation reminder failed (${(e && e.name) || 'error'})`));
+    if (ctx && typeof ctx.waitUntil === 'function') ctx.waitUntil(work);
+    else await work;
   },
 };
