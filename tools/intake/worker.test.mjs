@@ -1142,11 +1142,11 @@ test('POST /access_check: without install_id an approved account is refused upda
     assert.equal((await check(e, { install_id: IB })).body.reason, 'other_installation', value);
     assert.equal((await check(e, { install_id: undefined })).body.approved, true, `${value}: an old build is let through`);
   }
-  // wrangler.toml deploys with the rule off until Beethoven 8.0.0 is on the private listing, and with the
-  // student e-mail off until the domain is verified at Resend
+  // wrangler.toml deploys with the rule off until Beethoven 8.0.0 is on the private listing. The student
+  // e-mail is on since 2026-10-01, when Resend verified openspineconsortium.com (it was pinned off until then)
   const toml = fs.readFileSync(path.join(HERE, 'wrangler.toml'), 'utf8');
   assert.match(toml, /^REQUIRE_INSTALL_ID = "0"$/m);
-  assert.match(toml, /^MAIL_STUDENTS = "0"$/m);
+  assert.match(toml, /^MAIL_STUDENTS = "1"$/m);
 });
 
 test('grants: the check, /allowlist and /trial need "extension"; a record without grants counts as both', async () => {

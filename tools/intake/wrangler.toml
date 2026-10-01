@@ -34,9 +34,11 @@ REQUIRE_INSTALL_ID = "0"
 # dropped after 7 days; the student is e-mailed when approved for Beethoven. Only after
 # openspineconsortium.com is verified at Resend and mail_from names it (README.md, "The request portal"):
 # until then Resend refuses every address but the account owner's, and with "1" every request would be
-# answered "could not be sent" and wait unconfirmed. "0" (today): the maintainer is e-mailed at once, the
+# answered "could not be sent" and wait unconfirmed. "0" (until 2026-10-01): the maintainer is e-mailed at once, the
 # e-mail says "Mailbox: not verified", and nobody else is e-mailed.
-MAIL_STUDENTS = "0"
+# "1" since 2026-10-01: Resend verified openspineconsortium.com (a test from access@openspineconsortium.com
+# was accepted with HTTP 200) and mail_from in the vendor folder names that address.
+MAIL_STUDENTS = "1"
 # the Google Group of the private listing, Beethoven-users: "manual" (today; a consumer group has no API
 # for its members, so the Approve page shows the address to invite and a Done, invited button), or
 # "workspace" when the lab has a Google Workspace: the service then adds the account itself with the
