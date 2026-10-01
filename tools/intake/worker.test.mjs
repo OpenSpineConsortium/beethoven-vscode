@@ -1654,6 +1654,7 @@ test('mailbox proof: with MAIL_STUDENTS "1" the student confirms from their Wayn
   let m = mails[0].body;
   assert.deepEqual(m.to, ['ab1234@wayne.edu']);
   assert.equal(m.subject, 'Confirm your Beethoven access request');
+  assert.ok(Array.isArray(m.reply_to) && m.reply_to.length >= 1 && !m.reply_to.includes('ab1234@wayne.edu'), 'a reply from the student goes to the maintainer');
   for (const s of ['A. Student', 'a.student@gmail.com', 'spine segmentation project', 'If it was not you, ignore this e-mail']) assert.ok(m.text.includes(s), s);
   assert.ok(!m.text.includes('/decide') && !m.text.includes('/cv'), 'no decision and no CV link goes to the student');
   const { confirm } = linksIn(m.text);

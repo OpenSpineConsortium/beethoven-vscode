@@ -376,7 +376,10 @@ async function sendMail(env, { subject, text, html, to: toGiven }) {
     console.log('mail: no provider configured');
     return { sent: false, status: null, detail: 'no provider configured' };
   }
-  const to = Array.isArray(toGiven) && toGiven.length ? toGiven : String(env.NOTIFY_TO || '').split(',').map((x) => x.trim()).filter(Boolean);
+  const maintainers = String(env.NOTIFY_TO || '').split(',').map((x) => x.trim()).filter(Boolean);
+  const toStudent = Array.isArray(toGiven) && toGiven.length > 0;
+  const to = toStudent ? toGiven : maintainers;
+  const replyTo = toStudent ? maintainers : [];
   if (!to.length) {
     console.log('mail: no recipient configured');
     return { sent: false, status: null, detail: 'no recipient configured' };
@@ -385,7 +388,8 @@ async function sendMail(env, { subject, text, html, to: toGiven }) {
     const res = await fetch(RESEND_URL, {
       method: 'POST',
       headers: { authorization: `Bearer ${env.RESEND_API_KEY}`, 'content-type': 'application/json', 'user-agent': USER_AGENT },
-      body: JSON.stringify({ from: env.MAIL_FROM || DEFAULT_MAIL_FROM, to, subject, text, html }),
+      // a student who answers a mail from the service reaches the maintainer, not an unattended address
+      body: JSON.stringify({ from: env.MAIL_FROM || DEFAULT_MAIL_FROM, to, ...(replyTo.length ? { reply_to: replyTo } : {}), subject, text, html }),
       signal: AbortSignal.timeout(10000),
     });
     const answer = await res.json().catch(() => ({}));
