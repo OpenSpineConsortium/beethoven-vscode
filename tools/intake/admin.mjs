@@ -18,8 +18,9 @@
 //                                                                                 (by fingerprint) and its refusals
 //   node tools/intake/admin.mjs reset-seat <accessId>                             clears the binding: the next installation
 //                                                                                 to check gets the account
-//   node tools/intake/admin.mjs seat-rule <accessId> any|one                      any: every installation may use it (the
-//                                                                                 store reviewers' mock account); one: the rule
+//   node tools/intake/admin.mjs seat-rule <accessId> any|one                      any: the store reviewers' mock account,
+//                                                                                 approved on a localhost portal only (from
+//                                                                                 any installation) and nowhere else; one: the rule
 //   node tools/intake/admin.mjs cv <accessId> [<file>]                            saves the CV sent with the request
 //   node tools/intake/admin.mjs notify-test                                       sends the maintainer a test e-mail; prints the provider's answer
 // The service address: service.mjs (BEETHOVEN_SERVICE_URL, the site's beethoven/services.json, or the
@@ -56,7 +57,7 @@ function requestLine(p) {
 function approvalLine(a) {
   const life = `submitted ${at(a.submitted_at)} · confirmed ${at(a.confirmed_at)} · decided ${a.decision || 'approve'} ${at(a.decided_at || a.approved_at)} · invited ${at(a.invited_at)} · installed ${at(a.installed_at)}`;
   const seat = a.seat && a.seat.bound ? `seat bound (last check ${at(a.seat.last_seen)})` : 'no seat';
-  return `${a.accessId}  ${a.name || ''}  <${a.google_account || 'no Google account'}>  [${(a.grants || []).join(',')}]  stage ${a.stage}  ${life}  ${seat}, ${a.conflicts || 0} refusal(s)${a.any_installation ? ', any installation on a localhost portal' : ''}`;
+  return `${a.accessId}  ${a.name || ''}  <${a.google_account || 'no Google account'}>  [${(a.grants || []).join(',')}]  stage ${a.stage}  ${life}  ${seat}, ${a.conflicts || 0} refusal(s)${a.any_installation ? ', the store reviewers\' mock account: approved on a localhost portal only (any installation), not approved anywhere else, not on the approved list, no key' : ''}`;
 }
 switch (cmd) {
   case 'list': {

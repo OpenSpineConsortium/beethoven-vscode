@@ -1,8 +1,11 @@
 // Beethoven's access, licence and report service: a Cloudflare Worker (no server to keep). It serves both
 // editions, Beethoven (the browser extension) and Beethoven for VS Code. Routes:
-//   GET  /allowlist  the AccessIDs approved to use Beethoven (grant "extension"), in the shape of
-//                    extension/media/allowlist.json. The VS Code edition fetches it; the bundled copy is the
-//                    fallback when no service is set.
+//   GET  /allowlist  an empty list, in the shape of extension/media/allowlist.json. Until 2026-10-01 it gave
+//                    every approved AccessID to anyone; the browser edition's privacy statement (version 8)
+//                    says the service answers yes or no about one account and nothing about anyone else, so
+//                    the list is no longer published, and services.json no longer names this address (the
+//                    VS Code builds then leave the decision to /trial). The maintainer reads the list at
+//                    GET /admin/allowlist.
 //   POST /request    a student asks for access from the website (/beethoven/request.html). Two bodies: v2
 //                    (access_id, name, email, google_account, purpose, an optional CV of 5 MB at most, product)
 //                    and the older form's (accessId, name, email, note, product). Validated, rate-limited per
@@ -50,10 +53,13 @@
 //                    works on one installation (seat:<AccessID>), and one installation for one account; a
 //                    second installation is refused and e-mailed to the maintainer once a day with a Move
 //                    and a Withdraw link. A check without install_id is refused update_required unless
-//                    REQUIRE_INSTALL_ID is "0". The decision is the same approved record the admin routes
-//                    manage, so one approval serves both editions; one id is looked up and the list itself
-//                    is never returned here. Answers carry an open CORS header (the caller is an extension's
-//                    background page); the body may be text/plain or JSON. A no names the request page
+//                    REQUIRE_INSTALL_ID is "0". The store reviewers' mock account (any_installation) is
+//                    approved only when the portal is localhost or under .localhost, there from any
+//                    installation; from any other portal it is answered as an unknown account. The decision
+//                    is the same approved record the admin routes manage, so one approval serves both
+//                    editions; one id is looked up and the list itself is never returned here. Answers
+//                    carry an open CORS header (the caller is an extension's background page); the body
+//                    may be text/plain or JSON. A no names the request page
 //                    (BEETHOVEN_REQUEST_PAGE for "bridge" and "beethoven", REQUEST_PAGE for any other).
 //   /admin/*         the maintainer's page (/beethoven/admin.html) and admin.mjs: list, approve, deny, add,
 //                    remove, invited, grant, seat, reset-seat, seat-rule, cv, revoke-lid, notify-test
@@ -190,11 +196,24 @@ const adminPage = (env) => env.ADMIN_PAGE || `${siteOrigin(env)}/beethoven/admin
 // "how it works", named in the student's e-mail after approval
 const onboardingPage = (env) => env.ONBOARDING_PAGE || `${siteOrigin(env)}/beethoven/`;
 // The store reviewers' mock portal runs on the reviewer's own machine: a portal named localhost, or a
-// name under .localhost, with or without a port. Only there does an approval's any_installation apply.
-const isLocalPortal = (portal) => {
-  const host = String(portal || '').replace(/:[0-9]{1,5}$/, '');
-  return host === 'localhost' || host.endsWith('.localhost');
-};
+// name under .localhost, with or without a port. Anything else is not local, and so is no portal at all
+// (a route that has none, or a check that names none): the answer defaults to no.
+const LOCAL_PORTAL = /^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)*localhost(:[0-9]{1,5})?$/;
+const isLocalPortal = (portal) => typeof portal === 'string' && LOCAL_PORTAL.test(portal.trim().toLowerCase());
+// The store reviewers' mock account: an approved record with any_installation: true (admin.mjs seat-rule
+// <id> any; today st1234, the name the mock portal signs in as). That name has the shape of a real Wayne
+// State AccessID, and a real person may hold it, so the record is an approval on the reviewers' own
+// machine and nowhere else.
+const isReviewerMock = (rec) => !!rec && rec.any_installation === true;
+// Is this record an approval for Beethoven here? The one test every route that honours an approval asks
+// (POST /access_check, GET /admin/allowlist, POST /trial, the daily reminder): the grant "extension", and, for
+// the reviewers' mock record, a local portal. portal is the hostname an access check names; the other
+// routes have none, and none is never local, so the mock record is approved only in an access check
+// from a local portal (there from any installation, binding none). Anywhere else it is no approval: a
+// check from a real portal gets the plain no an unknown account gets (no seat written, no conflict, no
+// e-mail), the approved list leaves it out and /trial issues it no key. The admin routes still list it, with
+// any_installation, so the maintainer sees what it is.
+const approvedFor = (rec, portal = null) => hasExtension(rec) && (!isReviewerMock(rec) || isLocalPortal(portal));
 const fromB64u = (s) => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - (s.length % 4)) % 4)), (c) => c.charCodeAt(0));
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const oneLine = (s) => String(s ?? '').replace(/\s+/g, ' ').trim();
@@ -349,10 +368,22 @@ async function revoke(env, lids) {
   return all;
 }
 
-// the approved AccessIDs that may use Beethoven (grant "extension"); a lab member only is not on it
-async function allowlist(env) {
+// the approved AccessIDs that may use Beethoven (grant "extension"); a lab member only is not on it, and
+// neither is the store reviewers' mock account (approvedFor: an approval on a local portal only). Read by
+// the maintainer only (GET /admin/allowlist).
+async function approvedIds(env) {
   const rows = await records(env, 'approved');
-  return json(200, { about: 'AccessIDs approved to use Beethoven', accessIds: rows.filter(hasExtension).map((r) => r.accessId).sort() }, { 'access-control-allow-origin': '*', 'cache-control': 'max-age=60' });
+  return rows.filter((r) => approvedFor(r)).map((r) => r.accessId).sort();
+}
+
+// GET /allowlist, public: no AccessID, to anyone (2026-10-01). It used to give the whole approved list,
+// which the browser edition's privacy statement (version 8: the service "answers yes or no, and nothing
+// else about you or anyone else") does not allow. The route stays, with the shape it had, for a VS Code
+// build that still has its address cached or set by hand: that build reads an empty list, refuses its
+// sign-in step for an account without a key, and is told so; services.json no longer names it, and with
+// no address both VS Code builds (Ashley 3.0.0, Beethoven 4.0.0) skip the list and let /trial decide.
+async function allowlist() {
+  return json(200, { about: 'The list of approved AccessIDs is not published; the access service answers about one account at a time', accessIds: [] }, { 'access-control-allow-origin': '*', 'cache-control': 'max-age=60' });
 }
 
 async function fileRequestIssue(env, accessId, name, note) {
@@ -649,7 +680,7 @@ async function reminderMail(env, base, due) {
 // the cron's work: one reminder a UTC day at most, only from the Worker name REMINDER_FROM (both names run
 // the same cron), only when an approval for Beethoven has waited more than an hour without being marked
 // invited. Not listed: a lab member only, an account whose installation has checked in (it installed from
-// the listing), and an account with any_installation (the store reviewers' mock).
+// the listing), and the store reviewers' mock account (approvedFor leaves it out: it is never invited).
 async function inviteReminder(env) {
   if (env.SERVICE_NAME && env.REMINDER_FROM && env.SERVICE_NAME !== env.REMINDER_FROM) return { sent: false, why: 'another name sends it' };
   if (!env.RESEND_API_KEY) {
@@ -661,7 +692,7 @@ async function inviteReminder(env) {
   const [approved, seats, installed] = await Promise.all([records(env, 'approved'), listKeys(env.ACCESS, 'seat:'), listKeys(env.ACCESS, 'installed:')]);
   const inst = new Set([...seats.map((k) => k.slice('seat:'.length)), ...installed.map((k) => k.slice('installed:'.length))]);
   const cutoff = Date.now() - INVITE_REMINDER_AFTER_MS;
-  const due = approved.filter((r) => hasExtension(r) && !r.invited_at && r.any_installation !== true && !inst.has(r.accessId) && Date.parse(r.decided_at || r.approved_at) <= cutoff);
+  const due = approved.filter((r) => approvedFor(r) && !r.invited_at && !inst.has(r.accessId) && Date.parse(r.decided_at || r.approved_at) <= cutoff);
   if (!due.length) return { sent: false, why: 'nobody waiting' };
   const base = env.SERVICE_ORIGIN ? String(env.SERVICE_ORIGIN).replace(/\/$/, '') : '';
   const m = await sendMail(env, await reminderMail(env, base, due));
@@ -983,8 +1014,9 @@ async function installationRule(env, ctx, base, { accessId, installId, product, 
 // answer, the refusals included, carries access-control-allow-origin: * and cache-control: no-store, and
 // never allow-credentials. The decision: approved:<access_id> exists, carries the grant "extension" (a
 // record without grants counts), its `until` (ISO date), if any, has not passed, and the installation rule
-// above lets it through (an approved record with any_installation: true skips that rule, but only when the
-// portal is localhost or a name under .localhost: the store reviewers' mock portal). What is kept:
+// above lets it through. The store reviewers' mock record (any_installation: true) is an approval only when
+// the portal is localhost or a name under .localhost (approvedFor), and there it skips that rule; from any
+// other portal it is answered as an unknown account is, and nothing is bound or e-mailed. What is kept:
 // seen:<product>:<access_id>, one record per product and account with the last check (portal, version,
 // time, the salted hash of the address, the decision and its reason, when the decision last changed), the
 // seat and the installation index, a conflict record for a refusal, and the day's counters per account and
@@ -1022,9 +1054,11 @@ async function accessCheck(request, env, ctx) {
   const rec = await env.ACCESS.get(`approved:${accessId}`, 'json');
   const until = rec && typeof rec.until === 'string' && !Number.isNaN(Date.parse(rec.until)) ? rec.until : null;
   const now = new Date().toISOString();
-  const listed = !!rec && (until === null || Date.parse(until) > Date.now()) && hasExtension(rec);
-  // the reviewers' exemption holds on their mock portal only; on a real portal the account is like any other
-  const exempt = rec && rec.any_installation === true && isLocalPortal(portal);
+  // the reviewers' mock record is listed on a local portal only (approvedFor); from any other portal it is
+  // not listed, so the answer is the plain no and installationRule never runs (no seat, no conflict, no e-mail)
+  const listed = !!rec && (until === null || Date.parse(until) > Date.now()) && approvedFor(rec, portal);
+  // listed and the mock: a local portal, where every installation may use it and none is bound
+  const exempt = listed && isReviewerMock(rec);
   const reason = listed && !exempt ? await installationRule(env, ctx, new URL(request.url).origin, { accessId, installId, product, version, portal, now, rec }) : null;
   const approved = listed && !reason;
   const seenKey = `seen:${product}:${accessId}`;
@@ -1058,8 +1092,9 @@ async function trial(request, env) {
   const accessId = ACCESS_ID.test(local) ? local : ACCESS_ID.test(sam) ? sam : null;
   if (!accessId) return json(422, { error: `could not read an AccessID from ${email}; ask your lead for a key` });
   const approved = await env.ACCESS.get(`approved:${accessId}`, 'json');
-  // a lab member only (no "extension" grant) gets no key either
-  if (!approved || !hasExtension(approved)) return json(403, { error: 'not approved', detail: `${accessId} is not on the approved list yet. Ask for access at ${requestPage(env)}; the key is issued here once you are approved.`, request_page: requestPage(env) });
+  // a lab member only (no "extension" grant) gets no key either, nor does the store reviewers' mock account
+  // (approvedFor: an approval on a local portal only, and a key is not one)
+  if (!approved || !approvedFor(approved)) return json(403, { error: 'not approved', detail: `${accessId} is not on the approved list yet. Ask for access at ${requestPage(env)}; the key is issued here once you are approved.`, request_page: requestPage(env) });
   const issueKey = `issue:${accessId}:${today()}`;
   const n = Number((await env.TRIALS.get(issueKey)) || 0);
   if (n >= ISSUES_PER_PERSON_PER_DAY) return json(429, { error: 'enough for today', detail: `${ISSUES_PER_PERSON_PER_DAY} keys were already issued to ${accessId} today; try again tomorrow or ask your lead` });
@@ -1667,6 +1702,8 @@ async function admin(request, env, url, ctx) {
       conflicts: conflicts.map((x) => ({ accessId: x.accessId, kind: x.kind, count: x.count, first_at: x.first_at, last_at: x.last_at })),
     });
   }
+  // the approved list as /allowlist gave it to anyone until 2026-10-01, for the maintainer only
+  if (request.method === 'GET' && route === 'allowlist') return reply(200, { about: 'AccessIDs approved to use Beethoven', accessIds: await approvedIds(env) });
   if (request.method !== 'POST') return reply(404, { error: 'not found' });
   const r = await readJson(request);
   if (r.error) return reply(r.status, { error: r.error });
@@ -1726,7 +1763,7 @@ async function admin(request, env, url, ctx) {
     const [seat, conflict, rec] = await Promise.all([env.ACCESS.get(`seat:${accessId}`, 'json'), env.ACCESS.get(`conflict:${accessId}`, 'json'), env.ACCESS.get(`approved:${accessId}`, 'json')]);
     return reply(200, {
       accessId,
-      any_installation: !!(rec && rec.any_installation === true),
+      any_installation: isReviewerMock(rec),
       seat: seat ? { install_short: await installShort(seat.install_id), first_seen: seat.first_seen, last_seen: seat.last_seen, product: seat.product, version: seat.version, ...(seat.moved_at ? { moved_at: seat.moved_at, by: seat.by } : {}) } : null,
       conflict: conflict ? { kind: conflict.kind, count: conflict.count, first_at: conflict.first_at, last_at: conflict.last_at, other_install_short: conflict.other_install_short } : null,
     });
@@ -1764,7 +1801,9 @@ async function admin(request, env, url, ctx) {
       return reply(200, { status: 'granted', accessId, grants });
     }
     case 'seat-rule': {
-      // any: true lets every installation use this account and binds none (the store reviewers' mock account)
+      // any: true makes this the store reviewers' mock account: approved only in an access check from a local
+      // portal, there from every installation, binding none; refused from any other portal, off the approved list,
+      // no key from /trial (approvedFor). any: false makes it an ordinary approval again
       if (!approved) return reply(404, { error: `${accessId} is not approved; use add` });
       if (typeof body.any !== 'boolean') return reply(400, { error: 'any is true (every installation) or false (one installation)' });
       const rec = { ...approved };
@@ -1845,7 +1884,7 @@ export default {
     const url = new URL(request.url);
     const p = url.pathname;
     if (request.method === 'GET' && p === '/health') return json(200, { ok: true });
-    if (request.method === 'GET' && p === '/allowlist') return allowlist(env);
+    if (request.method === 'GET' && p === '/allowlist') return allowlist();
     if (request.method === 'GET' && p === '/revoked') return new Response((await env.ACCESS.get('revoked_signed')) || '', { headers: { 'content-type': 'text/plain', 'cache-control': 'max-age=300' } });
     if (p === '/request') return accessRequest(request, env, ctx);
     if (p === '/access_check') return accessCheck(request, env, ctx);

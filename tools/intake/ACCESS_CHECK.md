@@ -54,7 +54,7 @@ no-store` and `content-type: application/json`; none carries `access-control-all
 |---|---|---|
 | 204 | none, with `access-control-allow-methods: POST, OPTIONS`, `access-control-allow-headers: content-type`, `access-control-max-age: 600` | `OPTIONS` (a preflight, should a browser send one) |
 | 200 | `{"approved":true,"access_id":"st1234","checked":"<ISO time>","until":null}` | the account is on the approved list with the grant `extension` and the installation rule lets it through; `until` is the approval's end date when the record has one (none does today) |
-| 200 | `{"approved":false,"access_id":"st1234","requestPage":"https://openspineconsortium.com/beethoven/request.html"}` | the account is not on the list (never approved, pending, denied or removed), is a lab member only (grants `["lab"]`), or the name is not one the list can hold. `requestPage` is `BEETHOVEN_REQUEST_PAGE` in `wrangler.toml` for product `bridge` or `beethoven`, and `REQUEST_PAGE` for any other; both are `https://openspineconsortium.com/beethoven/request.html` since 2026-09-30, the one request page of both editions (before, `REQUEST_PAGE` was `/ashley/request.html`, which now redirects there) |
+| 200 | `{"approved":false,"access_id":"st1234","requestPage":"https://openspineconsortium.com/beethoven/request.html"}` | the account is not on the list (never approved, pending, denied or removed), is a lab member only (grants `["lab"]`), is the store reviewers' mock account checked from a portal that is not local (The decision, step 2), or the name is not one the list can hold. `requestPage` is `BEETHOVEN_REQUEST_PAGE` in `wrangler.toml` for product `bridge` or `beethoven`, and `REQUEST_PAGE` for any other; both are `https://openspineconsortium.com/beethoven/request.html` since 2026-09-30, the one request page of both editions (before, `REQUEST_PAGE` was `/ashley/request.html`, which now redirects there) |
 | 200 | `{"approved":false,"access_id":"st1234","reason":"other_installation","requestPage":"..."}` | approved, but bound to another installation. What the extension says: "This account is already set up on another computer. Ask your lab lead to move it here." (no button) |
 | 200 | `{"approved":false,"access_id":"st1234","reason":"other_account","requestPage":"..."}` | approved, but this installation is bound to another approved account (one installation serves one account) |
 | 200 | `{"approved":false,"access_id":"st1234","reason":"update_required","requestPage":"..."}` | approved, but the check carries no `install_id` (a build before 8.0.0) and `REQUIRE_INSTALL_ID` is not `"0"`. What the extension says: "Install the current Beethoven from the lab's private listing." |
@@ -80,18 +80,28 @@ In order:
    counts as `["extension","lab"]`; a lab member only (`["lab"]`) gets a plain no, and nothing is
    bound. That record is written by the admin routes (`add`, `approve`, `grant`, `seat-rule`) and the
    e-mail links, and deleted by `remove` and Withdraw approval; nothing on this route writes it.
-2. A record with `any_installation: true` (set with `admin.mjs seat-rule <id> any`; the store
-   reviewers' mock account `st1234`) is approved from any installation, with or without `install_id`,
-   and binds none, **but only when `portal` is `localhost` or a name ending in `.localhost`** (a port
-   is allowed): the reviewers' mock portal runs on their own machine. From any other portal (since
-   2026-09-30 afternoon) the account is held to the installation rule like any other, so the exemption
-   cannot be used to share `st1234` on a real portal.
+2. A record with `any_installation: true` is the store reviewers' mock account (set with
+   `admin.mjs seat-rule <id> any`; today `st1234`, the name the mock portal signs in as). It is an
+   approval **only when `portal` is `localhost` or a name ending in `.localhost`** (a port is allowed):
+   the reviewers' mock portal runs on their own machine. There it is approved from any installation,
+   with or without `install_id`, and binds none. From any other portal it is not approved at all: the
+   answer is the plain no an unknown account gets (no `reason`), no seat is written or changed, no
+   refusal is recorded and nobody is e-mailed; only the `seen` record of the check is kept, as for any
+   check. A check that names no portal is refused as malformed (400) and is never taken for a local
+   one. The reason: `st1234` has the shape of a real Wayne State AccessID, so a real person may hold it,
+   and the mock must grant that person nothing. (Changed 2026-10-01. From 2026-09-30 afternoon until
+   then, a check from another portal was treated as an ordinary approval held to one installation, so
+   the mock account could approve a first installation at the real portal.) The same test leaves the
+   mock account off the approved list (`GET /admin/allowlist`), refuses it a key at `/trial` and leaves
+   it out of the daily reminder (`approvedFor` in `worker.js`).
 3. Otherwise the installation rule decides ([Installations](#installations)).
 
-The list itself is never returned on this route: one id in, yes or no out. (`GET /allowlist` still
-returns the list to anyone, because Beethoven for VS Code reads it, as Ashley for VS Code 3.0.0 on the
-Marketplace does; since 2026-09-30 it lists only the accounts with the grant `extension`, and `/trial`
-issues keys only to them.)
+The list itself is never returned on this route: one id in, yes or no out. Since 2026-10-01 it is not
+returned anywhere else either: `GET /allowlist` answers an empty list to anyone (it gave every approved
+AccessID to anyone until then, which the browser edition's privacy statement, version 8, does not
+allow: "The service answers yes or no, and nothing else about you or anyone else"), and the services
+files no longer name it. The maintainer reads the list at `GET /admin/allowlist`. It lists only the
+accounts with the grant `extension` (since 2026-09-30), and never the store reviewers' mock account.
 
 Cloudflare KV is eventually consistent: an approval or a removal can take up to about a minute to
 reach every edge, so a check right after a click on the admin page may still see the old answer.
@@ -195,9 +205,25 @@ cannot reach the service.
 
 ## The VS Code edition
 
-`/trial`, `/allowlist`, `/revoked` and `/report` behave as before, with one change since 2026-09-30:
-a lab member only (grants `["lab"]`) is not on `/allowlist` and gets no key from `/trial`. Every
-record written before grants existed counts as both, so nobody approved before then is affected.
+`/trial`, `/revoked` and `/report` behave as before, with two changes. Since 2026-09-30 a lab member
+only (grants `["lab"]`) gets no key from `/trial`; every record written before grants existed counts
+as both, so nobody approved before then is affected. Since 2026-10-01 the store reviewers' mock
+account (`any_installation: true`, today `st1234`) gets no key from `/trial` either: it is an approval
+on a local mock portal only.
+
+`/allowlist` changed on 2026-10-01: it names nobody, to anyone. Ashley for VS Code 3.0.0 and Beethoven
+for VS Code 4.0.0 read it only when their services file (`/ashley/services.json`,
+`/beethoven/services.json`) names it, and neither does since that day. With no list address and a
+`license_service` address, both builds skip the list at the Wayne State sign-in step (`allowlist()`
+answers null, "the service decides"), and `/trial` refuses a person who is not approved, with the
+request page, which both builds show. A build that still holds the old address in its one-hour cache
+reads the empty list and refuses the sign-in step to anyone without a key until it fetches the file
+again; so the site goes out first and the Worker an hour or more later. A person who set
+`beethoven.allowlistUrl` or `ashley.allowlistUrl` by hand (empty by default) is refused at that step,
+unless they hold a key in their own name, until they clear it. The VS Code edition's privacy statement
+(version 5) still says it fetches the list of approved AccessIDs daily; that is broader than what it
+now does, and its next version should say so.
+
 Ashley for VS Code 3.0.0 on the Marketplace and Beethoven for VS Code 4.0.0 keep their own key flow; the
 keys are still signed `ASHLEY1.` (README.md, "The key prefixes"). The VS Code edition does not call
 `/access_check`, so the installation rule does not apply to it.
@@ -266,8 +292,12 @@ An **approval** (`approved`):
 | `installed_at` | when the first installation bound the account (set once; a move or a reset keeps it) |
 | `seat` | `{ "bound": true, "first_seen", "last_seen", "product", "version", "moved_at"? }` or `{ "bound": false }` |
 | `conflicts` | the number of refusals on record (0 when none); `conflict_last_at` the last one |
-| `any_installation` | `true` only for the store reviewers' mock account (it applies on a localhost portal only) |
+| `any_installation` | `true` only for the store reviewers' mock account: approved in an access check from a localhost portal only (from any installation, binding none), refused from any other portal, not on the approved list, no key from `/trial`, never in the daily reminder. Absent on every other approval. The page's Installation column says "Any installation: binds none: the store reviewers' mock account, on a localhost portal only", and its stage reads "Store reviewers" while the stage is `approved` |
 | `lids` | the licence ids issued to them by `/trial` |
+
+**`GET /admin/allowlist`** answers 200 with `{"about":"AccessIDs approved to use Beethoven","accessIds":[...]}`:
+the AccessIDs with the grant `extension`, sorted, without the store reviewers' mock account; the list
+the public `GET /allowlist` gave to anyone until 2026-10-01. The page does not use it.
 
 A **denial** (`denied`): `accessId`, `name`, `email`, `google_account`, `note`, `requested_at`,
 `submitted_at`, `confirmed_at`, `mailbox`, `ref`, `denied_at`, `decided_at` (the same time), `decision: "deny"`,

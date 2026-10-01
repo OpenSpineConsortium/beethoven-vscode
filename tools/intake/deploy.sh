@@ -149,12 +149,15 @@ elif [ "${SKIP_SITE:-0}" = 1 ]; then
 elif [ ! -f "$SITE_REPO/beethoven/services.json" ]; then
   echo "== services.json: no $SITE_REPO/beethoven/services.json; set BEETHOVEN_SITE_REPO to the site repository and run again"
 else
-  # the six service addresses, for both editions, on this host; every other key (the request and support
-  # pages) is the site's and is kept as it is. Written only when something differs
+  # the five service addresses, for both editions, on this host; every other key (the request and support
+  # pages) is the site's and is kept as it is. No allowlist key: the approved list is not published since
+  # 2026-10-01 (worker.js, GET /allowlist), and one left from before is removed. Written only when
+  # something differs
   echo "== services.json ($SITE_REPO/beethoven/services.json)"
   node -e '
     const fs=require("fs");const [f,u]=process.argv.slice(1);const before=fs.readFileSync(f,"utf8");const j=JSON.parse(before);
-    for (const [k,r] of [["access_check","access_check"],["request","request"],["revocation","revoked"],["allowlist","allowlist"],["license_service","trial"],["report","report"]]) j[k]=u+"/"+r;
+    for (const [k,r] of [["access_check","access_check"],["request","request"],["revocation","revoked"],["license_service","trial"],["report","report"]]) j[k]=u+"/"+r;
+    delete j.allowlist;
     const after=JSON.stringify(j,null,2)+"\n";
     if (after===before) console.log("  unchanged: it already names "+u+" for every route");
     else { fs.writeFileSync(f,after); console.log("  written: commit and push the site repository to publish it"); }' "$SITE_REPO/beethoven/services.json" "$URL"

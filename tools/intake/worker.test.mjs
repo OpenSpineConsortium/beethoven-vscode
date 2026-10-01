@@ -142,18 +142,37 @@ const request = (env, over = {}, opts = {}) => call(env, 'POST', '/request', { b
 const trial = (env, token) => call(env, 'POST', '/trial', { headers: token ? { authorization: `Bearer ${token}` } : {}, body: { product: 'ashley' } }).then(asJson);
 const adminPost = (env, route, body) => call(env, 'POST', `/admin/${route}`, { headers: ADMIN, body }).then(asJson);
 const adminList = (env) => call(env, 'GET', '/admin/list', { headers: ADMIN }).then(asJson);
+// the approved list, as GET /allowlist gave it to anyone until 2026-10-01 (D5); the maintainer's route now
+const approvedList = (env) => call(env, 'GET', '/admin/allowlist', { headers: ADMIN }).then(asJson);
 
-test('GET /allowlist has the bundled shape, open CORS and a one-minute cache', async () => {
+// D5 (2026-10-01): GET /allowlist gave every approved AccessID to anyone. It keeps its shape, open CORS and
+// one-minute cache for a VS Code build that still has the address, and names nobody; the maintainer reads
+// the list at GET /admin/allowlist, behind the admin token like every admin route.
+test('D5: GET /allowlist publishes no AccessID; the approved list is the maintainer\'s, at /admin/allowlist', async () => {
   const env = makeEnv();
-  let r = await call(env, 'GET', '/allowlist', { origin: null }).then(asJson);
+  const pub = () => call(env, 'GET', '/allowlist', { origin: null }).then(asJson);
+  const EMPTY = { about: 'The list of approved AccessIDs is not published; the access service answers about one account at a time', accessIds: [] };
+  let r = await pub();
   assert.equal(r.status, 200);
-  assert.deepEqual(r.body, { about: 'AccessIDs approved to use Beethoven', accessIds: [] });
+  assert.deepEqual(r.body, EMPTY);
   assert.equal(r.headers.get('access-control-allow-origin'), '*');
   assert.equal(r.headers.get('cache-control'), 'max-age=60');
   for (const id of ['zz9999', 'ab1234', 'cd5678', 'ef0001', 'gh0002']) assert.equal((await adminPost(env, 'add', { accessId: id, name: 'Someone' })).status, 200);
-  r = await call(env, 'GET', '/allowlist', { origin: null }).then(asJson);
-  assert.deepEqual(r.body.accessIds, ['ab1234', 'cd5678', 'ef0001', 'gh0002', 'zz9999']);
-  assert.deepEqual(Object.keys(r.body), ['about', 'accessIds']);
+  // five approved, and the public route still names nobody, from a browser page or without an origin
+  r = await pub();
+  assert.deepEqual(r.body, EMPTY);
+  assert.deepEqual((await call(env, 'GET', '/allowlist', { origin: 'https://evil.example' }).then(asJson)).body, EMPTY);
+  assert.deepEqual((await call(env, 'GET', '/allowlist?access_id=ab1234', { origin: null }).then(asJson)).body, EMPTY);
+  // a stray admin token on the public route changes nothing either
+  assert.deepEqual((await call(env, 'GET', '/allowlist', { origin: null, headers: ADMIN }).then(asJson)).body, EMPTY);
+  r = await approvedList(env);
+  assert.equal(r.status, 200);
+  assert.deepEqual(r.body, { about: 'AccessIDs approved to use Beethoven', accessIds: ['ab1234', 'cd5678', 'ef0001', 'gh0002', 'zz9999'] });
+  assert.equal(r.headers.get('cache-control'), 'no-store');
+  // the maintainer's route needs the token, and a page of another site gets nothing
+  assert.equal((await call(env, 'GET', '/admin/allowlist').then(asJson)).status, 401);
+  assert.equal((await call(env, 'GET', '/admin/allowlist', { headers: { authorization: 'Bearer wrong' } }).then(asJson)).status, 401);
+  assert.equal((await call(env, 'GET', '/admin/allowlist', { headers: ADMIN, origin: 'https://evil.example' }).then(asJson)).status, 403);
 });
 
 test('POST /request validates, stores a pending record and files one issue', async () => {
@@ -330,7 +349,7 @@ test('remove takes the person off the list and revokes every key they were issue
   const rm = await adminPost(env, 'remove', { accessId: 'ab1234' });
   assert.equal(rm.status, 200);
   assert.deepEqual(rm.body.revoked, lids);
-  assert.deepEqual((await call(env, 'GET', '/allowlist', { origin: null }).then(asJson)).body.accessIds, []);
+  assert.deepEqual((await approvedList(env)).body.accessIds, []);
   assert.equal((await trial(env, 'tok-ab1234')).status, 403);
   const text = await call(env, 'GET', '/revoked', { origin: null }).then((r) => r.text());
   assert.ok(text.startsWith('ASHLEYREV1.'));
@@ -460,10 +479,11 @@ test('POST /access_check: open CORS on every answer, one account looked up, the 
   await adminPost(env, 'remove', { accessId: 'st1234' });
   r = await check(env);
   assert.deepEqual(r.body, { approved: false, access_id: 'st1234', requestPage: `${SITE}/beethoven/request.html` });
-  // the public allowlist route is what it was
+  // the public allowlist route names nobody, and the maintainer's list no longer has st1234
   const al = await call(env, 'GET', '/allowlist', { origin: null }).then(asJson);
-  assert.deepEqual(al.body, { about: 'AccessIDs approved to use Beethoven', accessIds: [] });
+  assert.deepEqual(al.body, { about: 'The list of approved AccessIDs is not published; the access service answers about one account at a time', accessIds: [] });
   assert.equal(al.headers.get('cache-control'), 'max-age=60');
+  assert.deepEqual((await approvedList(env)).body, { about: 'AccessIDs approved to use Beethoven', accessIds: [] });
 });
 
 test('POST /access_check refuses a malformed body with 400 and other methods with 405, CORS on each', async () => {
@@ -688,7 +708,8 @@ test('/request e-mails the maintainer once, with three decision links that verif
   assert.ok(!m.body.text.includes('Asked from'), 'the form did not say which product');
   assert.ok(!m.body.text.includes('Asked again'), 'a first request');
   assert.ok(!m.body.text.includes('Google account:'), 'the old form sends none');
-  assert.ok(!m.body.text.includes('CV'), 'no CV, no CV line');
+  // a line, not the letters: the signed links are random base64url and hold "CV" about one run in twenty
+  assert.ok(!/(^|\n)(CV|View the CV): /.test(m.body.text), 'no CV, no CV line');
   assert.ok(!JSON.stringify(m.body).includes(MAIL.RESEND_API_KEY), 'the key is only in the header');
   const links = linksIn(m.body.text);
   for (const k of ['approve', 'lab', 'deny']) {
@@ -903,7 +924,7 @@ test('the button applies the decision once, through the admin code, and spends b
   assert.equal(env.ACCESS.ttl.get(`decide:${nonce}`), 30 * 86400);
   // both editions see the approval
   assert.equal((await check(env, { access_id: 'ab1234' })).body.approved, true);
-  assert.ok((await call(env, 'GET', '/allowlist', { origin: null }).then(asJson)).body.accessIds.includes('ab1234'));
+  assert.ok((await approvedList(env)).body.accessIds.includes('ab1234'));
   // a second press, the other link, or opening either again: already used, and nothing changes
   const after = snapshot(env);
   for (const [why, p] of [['pressed again', await press(env, ta)], ['the deny link', await press(env, tokenOf(deny))], ['opened again', await open(env, ta)]]) {
@@ -1166,7 +1187,7 @@ test('grants: the check, /allowlist and /trial need "extension"; a record withou
   const r = await check(env, { access_id: 'ab1234' });
   assert.deepEqual(r.body, { approved: false, access_id: 'ab1234', requestPage: PAGE });
   assert.equal(await env.ACCESS.get('seat:ab1234'), null);
-  assert.deepEqual((await call(env, 'GET', '/allowlist', { origin: null }).then(asJson)).body.accessIds, ['cd5678']);
+  assert.deepEqual((await approvedList(env)).body.accessIds, ['cd5678']);
   const t = await trial(env, 'tok-ab1234');
   assert.equal(t.status, 403);
   assert.equal(t.body.error, 'not approved');
@@ -1815,24 +1836,143 @@ test('F1 a: Move refuses with a plain page while the refused installation is ano
   assert.equal((await env2.ACCESS.get('seat:ab1234', 'json')).install_id, IC);
 });
 
-test('F1 b: seat-rule any holds on a localhost portal only; on a real portal the account is held to one installation', async () => {
+test('F1 b: seat-rule any is an approval on a localhost portal only; from any other portal the account is not approved at all', async () => {
   const env = makeEnv();
+  const PAGE = `${SITE}/beethoven/request.html`;
   await adminPost(env, 'add', { accessId: 'st1234', name: 'Store reviewer (mock portal)' });
   await adminPost(env, 'seat-rule', { accessId: 'st1234', any: true });
-  for (const portal of ['localhost', 'localhost:8080', 'reviewers.localhost', 'mock.portal.localhost:3000']) {
+  for (const portal of ['localhost', 'localhost:8080', 'reviewers.localhost', 'mock.portal.localhost:3000', 'ondemand.wayne.localhost:8443', 'LOCALHOST:8443']) {
     for (const install_id of [IA, IB, undefined]) assert.equal((await check(env, { portal, install_id })).body.approved, true, `${portal} ${install_id}`);
   }
   assert.equal(await env.ACCESS.get('seat:st1234'), null, 'nothing bound from a local portal');
-  // a real portal: the first installation binds, any other is refused, a build without an identifier must update
-  assert.equal((await check(env, { install_id: IA })).body.approved, true);
-  assert.equal((await env.ACCESS.get('seat:st1234', 'json')).install_id, IA);
-  for (const portal of ['ondemand.grid.wayne.edu', 'localhost.example.com', 'notlocalhost', 'localhost.evil.edu:443']) {
-    assert.equal((await check(env, { portal, install_id: IB })).body.reason, 'other_installation', portal);
+  // any other portal (a name that merely contains localhost, and an address, included): the plain no an
+  // unknown account gets, from every installation and from a build without an identifier, and nothing bound
+  for (const portal of ['ondemand.grid.wayne.edu', 'localhost.example.com', 'notlocalhost', 'xlocalhost:8443', 'localhost.evil.edu:443', '127.0.0.1:8443']) {
+    for (const install_id of [IA, IB, undefined]) assert.deepEqual((await check(env, { portal, install_id })).body, { approved: false, access_id: 'st1234', requestPage: PAGE }, `${portal} ${install_id}`);
   }
-  assert.equal((await check(env, { install_id: undefined })).body.reason, 'update_required');
+  for (const k of ['seat:st1234', 'conflict:st1234', 'installed:st1234', `install:${IA}`, `install:${IB}`]) assert.equal(await env.ACCESS.get(k), null, k);
+  // a check that names no portal is never taken for a local one: it is refused as malformed, and approves nothing
+  for (const portal of [undefined, null, '']) {
+    const r = await check(env, { portal });
+    assert.equal(r.status, 400, String(portal));
+    assert.equal(r.body.approved, undefined, String(portal));
+  }
   // the mock portal is still let through from any installation
   assert.equal((await check(env, { portal: 'localhost:8080', install_id: IC })).body.approved, true);
-  assert.equal((await env.ACCESS.get('seat:st1234', 'json')).install_id, IA);
+  assert.equal(await env.ACCESS.get('seat:st1234'), null);
+});
+
+// 10.0.0 (D4): the store reviewers' mock account (any_installation) is approved on a local mock portal and
+// nowhere else. Its name has the shape of a real AccessID; if a real person holds it, the mock must not
+// approve their installation at the real portal, list them on /allowlist or issue them a key.
+test('D4: the reviewers\' mock account exists only on a local portal; an ordinary approval is unaffected everywhere', async () => {
+  const env = mailEnv();
+  const PAGE = `${SITE}/beethoven/request.html`;
+  const LOCAL = 'localhost:8443';
+  const REAL = 'ondemand.grid.wayne.edu';
+  people['tok-st1234'] = { id: '9', userPrincipalName: 'st1234@wayne.edu', mail: 'st1234@wayne.edu', displayName: 'S. T.' };
+  try {
+    await adminPost(env, 'add', { accessId: 'st1234', name: 'Store reviewer (mock portal)', note: 'store-reviewer mock username' });
+    await adminPost(env, 'add', { accessId: 'ab1234', name: 'A. Student' });
+    // before the rule, st1234 is an ordinary approval: on the list like anyone
+    assert.deepEqual((await approvedList(env)).body.accessIds, ['ab1234', 'st1234']);
+    assert.equal((await adminPost(env, 'seat-rule', { accessId: 'st1234', any: true })).status, 200);
+    mails.length = 0;
+
+    // approved at localhost, from two installations, and from a build without an identifier; nothing bound
+    for (const install_id of [IA, IB, undefined]) {
+      const r = await check(env, { portal: LOCAL, install_id });
+      assert.equal(r.status, 200);
+      assert.equal(r.body.approved, true, String(install_id));
+      assert.deepEqual(Object.keys(r.body), ['approved', 'access_id', 'checked', 'until']);
+    }
+    for (const k of ['seat:st1234', 'installed:st1234', `install:${IA}`, `install:${IB}`]) assert.equal(await env.ACCESS.get(k), null, k);
+
+    // refused at the real portal, in the very shape an unknown account gets; no seat, no conflict, no e-mail
+    const unknown = await check(env, { access_id: 'zz9999', portal: REAL, install_id: IC });
+    assert.deepEqual(unknown.body, { approved: false, access_id: 'zz9999', requestPage: PAGE });
+    const kept = (e) => JSON.stringify([...e.ACCESS.m.entries()].filter(([k]) => !/^(seen|chk|chkip):/.test(k)).sort());
+    const before = kept(env);
+    for (const install_id of [IA, IB, IC, undefined]) {
+      const r = await check(env, { portal: REAL, install_id });
+      assert.equal(r.status, 200);
+      assert.deepEqual(r.body, { approved: false, access_id: 'st1234', requestPage: PAGE }, String(install_id));
+      assert.deepEqual(Object.keys(r.body), Object.keys(unknown.body));
+    }
+    assert.equal(kept(env), before, 'only the check records changed: no seat, installation index, conflict, lifecycle or approval write');
+    for (const k of ['seat:st1234', 'conflict:st1234', 'conflict_notified:st1234', 'installed:st1234', `install:${IA}`, `install:${IB}`, `install:${IC}`]) assert.equal(await env.ACCESS.get(k), null, k);
+    assert.equal(mails.length, 0, 'no second-installation e-mail');
+    const seen = await env.ACCESS.get('seen:bridge:st1234', 'json');
+    assert.deepEqual([seen.portal, seen.approved, 'reason' in seen], [REAL, false, false]);
+    // and the mock portal still answers yes afterwards
+    assert.equal((await check(env, { portal: LOCAL, install_id: IC })).body.approved, true);
+
+    // absent from the approved list
+    const al = await approvedList(env);
+    assert.deepEqual(al.body, { about: 'AccessIDs approved to use Beethoven', accessIds: ['ab1234'] });
+
+    // refused by /trial, as someone not approved is: no key, no licence id recorded, no issue counted
+    const t = await trial(env, 'tok-st1234');
+    assert.equal(t.status, 403);
+    assert.equal(t.body.error, 'not approved');
+    assert.equal(t.body.key, undefined);
+    assert.deepEqual((await env.ACCESS.get('approved:st1234', 'json')).lids, []);
+    assert.equal([...env.TRIALS.m.keys()].some((k) => k.includes('st1234')), false);
+
+    // the admin routes still show it, and say what it is
+    const list = await adminList(env);
+    const row = list.body.approved.find((a) => a.accessId === 'st1234');
+    assert.ok(row, 'listed for the maintainer');
+    assert.equal(row.any_installation, true);
+    assert.equal(row.note, 'store-reviewer mock username');
+    assert.deepEqual(row.seat, { bound: false });
+    assert.equal(row.conflicts, 0);
+    const seat = await adminPost(env, 'seat', { accessId: 'st1234' });
+    assert.deepEqual(seat.body, { accessId: 'st1234', any_installation: true, seat: null, conflict: null });
+
+    // an ordinary approval is unaffected everywhere: the real portal binds its first installation and
+    // refuses a second (with the e-mail), a localhost portal is no exemption for it, it is on
+    // /allowlist, and /trial issues it a key
+    assert.equal((await check(env, { access_id: 'ab1234', portal: REAL, install_id: IA })).body.approved, true);
+    assert.equal((await env.ACCESS.get('seat:ab1234', 'json')).install_id, IA);
+    assert.equal((await check(env, { access_id: 'ab1234', portal: REAL, install_id: IB })).body.reason, 'other_installation');
+    assert.equal((await check(env, { access_id: 'ab1234', portal: LOCAL, install_id: IB })).body.reason, 'other_installation');
+    assert.equal((await check(env, { access_id: 'ab1234', portal: LOCAL, install_id: IA })).body.approved, true);
+    assert.equal(mails.length, 1);
+    assert.equal(mails[0].body.subject, 'Beethoven: ab1234 asked from a second installation');
+    assert.ok((await approvedList(env)).body.accessIds.includes('ab1234'));
+    const k = await trial(env, 'tok-ab1234');
+    assert.equal(k.status, 200);
+    assert.ok(k.body.key);
+    const abRow = (await adminList(env)).body.approved.find((a) => a.accessId === 'ab1234');
+    assert.equal('any_installation' in abRow, false);
+
+    // seat-rule one: st1234 is an ordinary approval again, everywhere
+    await adminPost(env, 'seat-rule', { accessId: 'st1234', any: false });
+    assert.equal((await check(env, { portal: REAL, install_id: IC })).body.approved, true);
+    assert.equal((await env.ACCESS.get('seat:st1234', 'json')).install_id, IC);
+    assert.deepEqual((await approvedList(env)).body.accessIds, ['ab1234', 'st1234']);
+    assert.equal((await trial(env, 'tok-st1234')).status, 200);
+  } finally {
+    delete people['tok-st1234'];
+  }
+});
+
+test('D4: the daily reminder never lists the reviewers\' mock account, whatever its age', async () => {
+  const env = mailEnv();
+  await adminPost(env, 'add', { accessId: 'st1234', name: 'Store reviewer (mock portal)' });
+  await adminPost(env, 'seat-rule', { accessId: 'st1234', any: true });
+  await backdate(env, 'st1234', { approved_at: hoursAgo(72) });
+  mails.length = 0;
+  await runCron(env);
+  assert.equal(mails.length, 0, 'the mock alone: nobody waiting');
+  await adminPost(env, 'add', { accessId: 'ab1234', name: 'A. Student' });
+  await backdate(env, 'ab1234', { approved_at: hoursAgo(2) });
+  await runCron(env);
+  assert.equal(mails.length, 1);
+  assert.equal(mails[0].body.subject, 'Beethoven: 1 approved account not invited to Beethoven-users yet');
+  assert.ok(mails[0].body.text.includes('ab1234'));
+  assert.ok(!mails[0].body.text.includes('st1234'));
 });
 
 test('F1 c: decision and CV links belong to one version of the request; a changed form replaces them, the same form keeps them', async () => {

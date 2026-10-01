@@ -16,7 +16,7 @@ address. The same code runs under two Worker names, `beethoven-access` and `ashl
 
 | Route | Who calls it | What it does |
 |---|---|---|
-| `GET /allowlist` | Beethoven for VS Code (`beethoven.allowlistUrl`; `ashley.allowlistUrl` in 3.0.0) | the AccessIDs approved for Beethoven (grant `extension`), in the shape of `extension/media/allowlist.json`; cached one minute |
+| `GET /allowlist` | nobody since 2026-10-01: Beethoven for VS Code read it while `services.json` named it (`beethoven.allowlistUrl`; `ashley.allowlistUrl` in 3.0.0, both empty by default) | an empty list, in the shape of `extension/media/allowlist.json` (`{"about":"The list of approved AccessIDs is not published; ...","accessIds":[]}`), open CORS, cached one minute. Until 2026-10-01 it gave every approved AccessID to anyone, which the browser edition's privacy statement (version 8) does not allow; the maintainer reads the list at `GET /admin/allowlist` |
 | `POST /request` | the request page, `https://openspineconsortium.com/beethoven/request.html` (the browser edition's form sends `product: "bridge"`); `/ashley/request.html`, which older builds open, redirects there | a student asks for access: stored as pending with its CV, e-mailed to the maintainer with three decision links and a CV link (see [The request portal](#the-request-portal)), filed as an issue labelled `beethoven-access-request` when `GITHUB_TOKEN` is set; answers pending, approved or denied |
 | `GET` and `POST /decide?t=<token>` | the links in the e-mails: Approve for Beethoven, Lab membership only, Deny; Move the approval, Withdraw approval; Done, invited (on the Approve page and in the daily reminder) | GET shows one question and one button; the button POSTs the decision. Each link acts only on the version of the request or refusal e-mail it was sent for ([The link](#the-request-portal)) |
 | `GET` and `POST /confirm?t=<token>` | the student's "Confirm it is you" link, when `MAIL_STUDENTS` is `"1"` | GET shows the request and one button; the button confirms it and sends it to the maintainer |
@@ -76,9 +76,10 @@ bash tools/intake/deploy.sh                               # beethoven-access, th
 WORKER_NAME=ashley-service bash tools/intake/deploy.sh    # the old name: same KV ids, same secrets
 ```
 
-On the first, `deploy.sh` writes the six service addresses (`access_check`, `request`, `revocation`,
-`allowlist`, `license_service`, `report`) into the site repository's `beethoven/services.json`, and only
-when one differs; `SKIP_SITE=1` leaves it alone. The site's generator never writes that file, and
+On the first, `deploy.sh` writes the five service addresses (`access_check`, `request`, `revocation`,
+`license_service`, `report`) into the site repository's `beethoven/services.json`, removes an
+`allowlist` key if one is there (the list is not published since 2026-10-01), and writes only when
+something differs; `SKIP_SITE=1` leaves it alone. The site's generator never writes that file, and
 `deploy.sh` never writes `/ashley/services.json`, which installed builds read as it is (it names
 `ashley-service`). `admin.mjs` and `publish.sh` take the address from `BEETHOVEN_SERVICE_URL`, else
 `license_service` in the site's `beethoven/services.json`, else `beethoven-access` (`service.mjs`); either
@@ -135,7 +136,6 @@ editions, the request page and the admin page find the service:
   "access_check": "https://beethoven-access.<account>.workers.dev/access_check",
   "request": "https://beethoven-access.<account>.workers.dev/request",
   "revocation": "https://beethoven-access.<account>.workers.dev/revoked",
-  "allowlist": "https://beethoven-access.<account>.workers.dev/allowlist",
   "license_service": "https://beethoven-access.<account>.workers.dev/trial",
   "request_page": "https://openspineconsortium.com/beethoven/request.html",
   "support_page": "https://openspineconsortium.com/beethoven/support.html",
@@ -143,8 +143,10 @@ editions, the request page and the admin page find the service:
 }
 ```
 
-`deploy.sh` writes the six service addresses itself (for the default name only, and only when one
-differs); the two pages are the site's. Beethoven reads `access_check` from it (cached for a day), the
+`deploy.sh` writes the five service addresses itself (for the default name only, and only when one
+differs); the two pages are the site's. There is no `allowlist` key since 2026-10-01: with none, and
+with `license_service` set, both VS Code builds skip their list check at the sign-in step and `/trial`
+decides (it refuses a person who is not approved, with the request page). Deploy order for this change: publish the site first (its `/beethoven/services.json` and `/ashley/services.json` without `allowlist`), then deploy the Worker under both names no sooner than an hour later (a day is safer). The VS Code builds cache the services file for an hour; one that still holds the old address in that hour reads the empty list and refuses its sign-in step to a student without a key, until the next fetch of the file. Beethoven reads `access_check` from it (cached for a day), the
 VS Code edition reads the other routes, and the request and admin pages read it too, so the Worker's
 address lives in one place. The file the builds before the rename read,
 `https://openspineconsortium.com/ashley/services.json`, names `ashley-service` and is kept byte for
@@ -197,8 +199,9 @@ machine's address. The free plan covers a lab.
   `MAIL_STUDENTS` is `"1"`), decided (approve, lab or deny), invited, and installed (when the account's
   first installation checks in). The admin page and `admin.mjs list` show each approval's stage in one
   line: `lab`, `approved` (not invited yet), `invited` or `installed`, with its seat and refusals.
-- In Beethoven for VS Code the student runs the wizard: the Wayne State sign-in step fetches `/allowlist`, finds them, and the
-  trial button asks `/trial` for a key. The Worker asks Microsoft who they are, requires the approved
+- In Beethoven for VS Code the student runs the wizard: the Wayne State sign-in step passes (since 2026-10-01 the
+  services file names no list, so the step no longer fetches `/allowlist`), and the trial button asks `/trial` for a
+  key, which `/trial` refuses to anyone not approved. The Worker asks Microsoft who they are, requires the approved
   record, and signs a key for `TRIAL_DAYS` days (365) with the trial key; a person can be issued three
   keys a day (a new laptop, a reset), and the id of each is written to their approved record.
 - Remove deletes the record (and the person's seat, installation record, refusals, CV and access-check
@@ -223,12 +226,19 @@ machine's address. The free plan covers a lab.
   `admin.mjs reset-seat <id>` frees it, and a reinstall or a new computer is a new installation, so
   expect to move approvals now and then. [ACCESS_CHECK.md, Installations](ACCESS_CHECK.md#installations)
   has the rules and what they do not stop.
-- The mock portal the store reviewers run signs in as `st1234`; that name is on the approved list
-  (note "store-reviewer mock username") so the reviewers' copy is approved by the real service. Each
-  reviewer installs their own copy, so `st1234` is exempt from the one-installation rule:
-  `admin.mjs seat-rule st1234 any` (set on 2026-09-30). The exemption holds only when the check names a
-  portal on `localhost` or a name under `.localhost` (the mock portal runs on the reviewer's machine);
-  from a real portal `st1234` is held to one installation like anyone else (since 2026-09-30 afternoon).
+- The mock portal the store reviewers run signs in as `st1234`. That record is on the approved list
+  (note "store-reviewer mock username") and marked as the store reviewers' mock account with
+  `admin.mjs seat-rule st1234 any` (set on 2026-09-30), so each reviewer's own copy is approved by the
+  real service and none is refused as a second installation. `st1234` has the shape of a real Wayne
+  State AccessID, and a real person may hold it, so since 2026-10-01 the mock account is an approval on
+  the reviewers' own machine and nowhere else. An access check for it is approved only when the portal
+  it names is `localhost` or a name under `.localhost` (with or without a port), and there from any
+  installation, binding none. From any other portal the answer is the plain no an unknown account gets:
+  no seat is written or changed, no second-installation refusal is recorded and nobody is e-mailed. It
+  is not on the approved list (`GET /admin/allowlist`), `/trial` issues it no key, and the daily reminder skips it. The admin page
+  and `admin.mjs list` still show it, marked as the store reviewers' mock account.
+  (From 2026-09-30 afternoon until then, a check for `st1234` from a real portal was treated as an
+  ordinary approval held to one installation, and `st1234` was on the public `/allowlist`.)
 
 ## The request portal
 
@@ -362,7 +372,8 @@ install; the approval check is what lets an installation work. Both are needed.
    (`clear` after the id takes the mark away).
 4. Once a day (13:00 UTC), if an approval for Beethoven has waited more than an hour without that mark,
    one e-mail lists every such account with its Google account and a Done, invited link each. Not
-   listed: lab members only, an account whose installation has checked in, and `st1234`. One e-mail a
+   listed: lab members only, an account whose installation has checked in, and the store reviewers'
+   mock account (`st1234`). One e-mail a
    day at most, and none when nobody is waiting.
 5. When someone leaves, Remove (or Withdraw approval) stops Beethoven at its next check; take their
    account out of the group too, so they cannot install it again.
@@ -568,5 +579,10 @@ Approve page's invitation step (the copy box and the hash of its script, Done, i
 invited`, the daily reminder (who is listed, once a day, only from `REMINDER_FROM`), the student's
 e-mail at approval, and the Workspace adapter against a stub of Google (the JWT verified with the public
 key, the insert, a member already there, every failure falling back to the manual step, never called
-when `GROUP_MODE` is not `"workspace"`). `vendor.test.mjs` checks the order in which the vendor folder
+when `GROUP_MODE` is not `"workspace"`). Since 2026-10-01 also: the store reviewers' mock account
+approved at localhost from two installations and refused, with nothing written and nobody e-mailed,
+from `ondemand.grid.wayne.edu` and any other portal that is not local; absent from the approved list;
+refused by `/trial`; left out of the reminder; still on the admin list; and an ordinary approval
+unaffected on every one of those routes; and the public `GET /allowlist` naming nobody, whoever asks, while
+`GET /admin/allowlist` gives the maintainer the list behind the admin token. `vendor.test.mjs` checks the order in which the vendor folder
 is found.
