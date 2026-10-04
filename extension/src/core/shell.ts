@@ -151,8 +151,12 @@ export const GRID_CLI = '~/.beethoven/bin/beethoven';
  * install predates the rename (kept so such an account answers, and is offered the update, instead of
  * looking "not installed"; the next grid install moves the folder). No double quotes, so the line passes
  * through Windows argument quoting unchanged; $HOME holds no spaces on the grid.
+ * Before the command it puts an empty `disabled` file beside an API key a build up to 4.0.0 stored, the
+ * one switch a worker still running grid scripts 7 honours: a laptop updated to 5.0.0 talks to such a
+ * grid until the grid step runs, and its first contact must already stop that worker spending on the
+ * key. It deletes nothing.
  */
-const GRID_CLI_PICK = 'b=$HOME/.beethoven/bin/beethoven; [ -x $b ] || b=$HOME/.ashley/bin/ashley; exec $b';
+const GRID_CLI_PICK = 'b=$HOME/.beethoven/bin/beethoven; [ -x $b ] || b=$HOME/.ashley/bin/ashley; k=${b%/bin/*}/accounts/apikey; [ ! -e $k/apikey ] || [ -e $k/disabled ] || touch $k/disabled 2>/dev/null; exec $b';
 /**
  * Sets $h to the grid folder: ~/.beethoven, or ~/.ashley on an account the rename has not moved yet.
  * Files the laptop writes (license, tokens) go where that account's grid command reads them.

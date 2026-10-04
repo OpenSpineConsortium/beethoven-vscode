@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 // A stand-in for `claude -p ... --output-format stream-json` used by the daemon tests.
-// Behaviour is steered by files in CLAUDE_CONFIG_DIR (the account directory):
+// Behaviour is steered by files in CLAUDE_CONFIG_DIR (the sign-in folder):
 //   fake_rate_limit   -> answer like an exhausted subscription window
 //   fake_crash        -> exit 1 with no result
 // It records the argv it received in <cwd>/fake_argv.json so tests can assert on it.
 // Like Claude Code 2.1.283 (measured), it keeps transcripts in
 // <CLAUDE_CONFIG_DIR>/projects/<cwd with every non-alphanumeric replaced by '-'>/<session>.jsonl,
 // creates that file as soon as a run starts, and refuses --resume when it is not there
-// ("No conversation found with session ID: ..."), so tests catch a session moved between accounts.
+// ("No conversation found with session ID: ..."), so tests catch a resume that looks in a folder without the shared history.
 // For phone access it also answers `auth status`, `auth login` (code 'goodcode' signs in) and
 // `remote-control` (prints a session link, records its environment, runs until killed).
 const fs = require('fs');
@@ -63,7 +63,8 @@ if (args[0] === 'remote-control') {
   return;
 }
 fs.writeFileSync(path.join(process.cwd(), 'fake_argv.json'), JSON.stringify({ args, env: { CLAUDE_CONFIG_DIR: cfg, CLAUDE_CODE_OAUTH_TOKEN: process.env.CLAUDE_CODE_OAUTH_TOKEN || null, ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY || null, HF_TOKEN: process.env.HF_TOKEN || null } }));
-// -p needs a credential: the stored sign-in (fake_logged_in in the config folder) or an API key in the environment
+// -p needs a credential: the stored sign-in (fake_logged_in in the config folder) or, as Claude Code would take one,
+// an API key in the environment (which is why the daemon strips every such variable; the tests check it is absent)
 if (!fs.existsSync(path.join(cfg, 'fake_logged_in')) && !process.env.ANTHROPIC_API_KEY && !process.env.CLAUDE_CODE_OAUTH_TOKEN) {
   process.stdout.write('Not logged in · Please run /login\n');
   process.exit(1);

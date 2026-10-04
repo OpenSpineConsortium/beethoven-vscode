@@ -23,7 +23,15 @@ the Desktop folder is `ashley` until the maintainer renames it. The code is prop
   Claude Code's own flow, on the laptop and once on the grid (`beethoven claude login`); Claude Code
   keeps its credential in `~/.beethoven/claude`; Beethoven reads only `claude auth status`. One
   person, one Claude account; no pooling, no rotation of subscriptions (Anthropic's Consumer Terms).
-  Overflow is the student's own Console key only.
+- **Never usage credits, by anyone, ever** (the maintainer, 2026-10-04). No API key, no billing
+  setting, nothing that asks for or relies on paid usage beyond the student's own flat-rate
+  subscription. When the subscription window is spent the worker answers `rate_limited` with the
+  reset time and the request is sent again after it. The pay-per-use key overflow of 4.0.0 is gone
+  since 5.0.0 (grid scripts 8); a key a student stored then is never used or sent and never deleted
+  by Beethoven (an Anthropic Console shows a key only once), only marked `disabled` on the grid for
+  workers still on grid scripts 7, and the student removes it (Manage stored tokens or Reset;
+  `beethoven accounts remove --yes` on the grid). Extra usage on the student's Claude account is
+  theirs to keep off; the texts say so.
 - **Tokens never appear on command lines, in argv, in logs, in job files or in `sbatch --export`.**
   Never echo one. `ANTHROPIC_API_KEY` is never injected into laptop terminals.
 - **Every feature ships with diagnostic nodes** (`extension/src/vscode/diagNodes.ts`, the grid's
@@ -35,7 +43,8 @@ the Desktop folder is `ashley` until the maintainer renames it. The code is prop
   trap; IPC under `/dev/shm`; every job has a wall time.
 - **Terms:** the first-run agreement is `extension/LICENSE.txt` (Trial Edition); `LICENSE-FULL.txt`
   is shown only when a non-trial key is registered. Change the texts and `TERMS_VERSION` together
-  (integer; 5 since the rename). Never pre-tick a box; the button label is part of the record.
+  (integer; 6 since 5.0.0 dropped the API key). Never pre-tick a box; the button label is part of
+  the record.
 - **The old names are aliases, never silent breaks.** Installed builds still use them: Ashley for VS
   Code 3.0.0 reads `https://openspineconsortium.com/ashley/services.json` and accepts only `ASHLEY1.`
   keys and `ASHLEYREV1` lists; grid scripts before 7 and the browser edition up to 7.0.0 name

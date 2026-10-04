@@ -1,6 +1,6 @@
 BEETHOVEN FOR VS CODE TRIAL EDITION LICENSE AGREEMENT
 
-Version 5, 2026-09-30. Applies to the Trial Edition of Beethoven for VS Code 4.0.0 and later
+Version 6, 2026-10-04. Applies to the Trial Edition of Beethoven for VS Code 5.0.0 and later
 versions that ship this text, as distributed through the Visual Studio Code Marketplace and as a
 .vsix file. You can read, copy, save and print this text at any time: it is in the file LICENSE.txt
 inside Beethoven for VS Code, in the command "Beethoven: Read the license terms", in the signing
@@ -111,8 +111,22 @@ token in your operating system's credential store, and copies them into a file r
 in your own grid account, so that your own tools there can use them. You can delete them at any time
 in Beethoven for VS Code and revoke them at GitHub and Hugging Face.
 
-(c) Your optional Anthropic Console key, if you provide one, is stored the same way and used only
-when your subscription window is exhausted.
+(c) No API key and no paid usage. Beethoven for VS Code runs Claude Code only on your own Claude
+subscription. It never asks for, stores or uses an Anthropic API key or any other paid usage, and it
+keeps the variables that would make Claude Code use one out of every Claude Code session it starts,
+on the grid and on your laptop. When your subscription's usage window is spent, the worker answers
+that it is rate-limited, with the time the window resets, and you send the request again after that.
+Beethoven for VS Code cannot see or change the billing settings of your Claude account: if extra
+usage (usage credits) is turned on there, Claude Code may draw on it, so keep it off. An Anthropic
+Console key that Beethoven for VS Code 4.0.0 stored on your laptop, or that an earlier version
+stored in your grid account, is never used or sent: Beethoven for VS Code only checks whether it is
+there, and the first time it reaches your grid account it marks the grid copy disabled, so that a
+worker the earlier version started cannot use it. It does not delete the key for you: you can delete
+it (Beethoven: Manage stored tokens or Beethoven: Reset on your laptop; beethoven accounts remove
+--yes in a terminal on the grid) and revoke it in the Anthropic Console. A key that Ashley for VS
+Code stored on your laptop is in Ashley's own storage, which Beethoven for VS Code cannot reach:
+delete it in Ashley for VS Code, or revoke it in the Anthropic Console, which makes every copy
+useless.
 
 (d) Your access key and the institutional identity you signed in with (AccessID and e-mail) are
 stored on your laptop, and the key is copied to your grid account, where the Beethoven for VS Code

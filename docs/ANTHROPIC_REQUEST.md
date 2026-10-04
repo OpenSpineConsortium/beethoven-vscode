@@ -31,8 +31,10 @@ What the tool does
   phone access. Each student's processes use only that student's own Pro or Max subscription. There
   is no pooling, no rotation across accounts, and no credential of any student passes through
   anything I operate.
-- Optionally a student may add their own Anthropic Console API key, used only when their
-  subscription window is exhausted.
+- The tool never uses an API key or asks for paid usage for a student's work: when a subscription
+  window is spent, the job answers with the reset time and the student sends the request again
+  after it. Extra usage on a student's own Claude account is a setting the tool cannot see; students
+  are told to keep it off.
 - The tool itself requires a per-person license key. Students are never charged for Claude usage,
   and I do not resell or intermediate Claude usage. The only automation on my side (triage of
   students' opt-in error reports) runs on my own Console API key under the Commercial Terms.
@@ -47,8 +49,8 @@ Questions
    cluster count as "ordinary use of Claude Code", or as routing requests on the user's behalf?
 3. Is hosting `claude remote-control` in the student's cluster job, started only when that student
    asks, within the Remote Control terms?
-4. If any of the above is not permitted, would an API-key-only edition (each student provisions a
-   Console key) be the recommended path?
+4. If any of the above is not permitted, what change, within each student's own subscription, would
+   make it so?
 
 Thank you.
 

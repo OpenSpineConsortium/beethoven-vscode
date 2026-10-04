@@ -27,7 +27,7 @@
   <path class="d" d="M330 110 L620 110"/>
   <text x="340" y="104" class="l">poll (1 s), rename to .claimed</text>
   <path class="m" d="M620 140 L880 140"/>
-  <text x="630" y="134" class="l">spawn with CLAUDE_CONFIG_DIR=accounts/&lt;a&gt;, --resume or --session-id</text>
+  <text x="630" y="134" class="l">spawn on your sign-in, --resume or --session-id</text>
   <path class="m" d="M880 170 L620 170"/>
   <text x="630" y="164" class="l">stream-json lines (init, assistant, tool_use, result)</text>
   <rect class="f" x="336" y="182" width="230" height="20"/>

@@ -9,9 +9,9 @@ up carries over (the manual's "Coming from Ashley for VS Code" says what, and wh
    (`anthropic.claude-code`) and **Remote - SSH** (`ms-vscode-remote.remote-ssh`). Sign in to
    Claude Code with your Claude Pro or Max account.
 2. Install **Beethoven for VS Code** (`openspineconsortium.beethoven`) from the Extensions view. Or,
-   from a file your lead gives you (the repository's `dist/release/4.0.0/beethoven-4.0.0.vsix`):
+   from a file your lead gives you (the repository's `dist/release/5.0.0/beethoven-5.0.0.vsix`):
    Extensions view, the `...` menu at the top right, **Install from VSIX...**, pick the file; or from
-   a terminal, `code --install-extension beethoven-4.0.0.vsix`.
+   a terminal, `code --install-extension beethoven-5.0.0.vsix`.
 3. Command Palette (Ctrl/Cmd+Shift+P): **Beethoven: Set up my research environment (wizard)**.
 
 Before the wizard you need, once: a grid account (request it at
@@ -24,7 +24,7 @@ through ondemand.grid.wayne.edu, Interactive Apps, 2FA Setup (VPN required for O
 |---|---|
 | `~/.ssh/id_ed25519_wsu`, `.pub` | a key pair without passphrase |
 | `~/.ssh/config` | one block between `# >>> beethoven` and `# <<< beethoven` (a backup `config.beethoven.bak` is kept); a block Ashley wrote is replaced, never doubled |
-| OS keychain (Windows Credential Manager / macOS Keychain / libsecret) | GitHub and Hugging Face tokens, and an optional Anthropic Console key |
+| OS keychain (Windows Credential Manager / macOS Keychain / libsecret) | GitHub and Hugging Face tokens (and, until you delete it, an Anthropic Console key a 4.0.0 install stored, which is never used) |
 | `~/.beethoven-local` (`~/.ashley-local` on a computer that ran Ashley, which stays in use) | your access key, the Wayne State sign-in record, the accepted terms |
 | VS Code user settings `beethoven.*` | your AccessID and preferences (an `ashley.*` value an earlier install set is still read) |
 
@@ -64,7 +64,7 @@ npm run typecheck
 npm run test:unit      # ssh config, protocol, slurm parsing, licences, terms, and the daemon with a fake claude
 npm run test:vscode    # downloads a VS Code build once, runs the integration suite
 npm run package        # writes ../dist/beethoven-<version>.vsix and checks it
-code --install-extension ../dist/beethoven-4.0.0.vsix
+code --install-extension ../dist/beethoven-5.0.0.vsix
 ```
 
 A release (production build, checks, signed checksums in `dist/release/<version>/`) is

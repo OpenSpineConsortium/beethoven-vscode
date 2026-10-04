@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="generator" content="pandoc" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
-  <meta name="dcterms.date" content="2026-09-30" />
+  <meta name="dcterms.date" content="2026-10-04" />
   <title>Beethoven for VS Code</title>
   <style>
 
@@ -119,8 +119,8 @@ a { color: var(--accent); }
 <header id="title-block-header">
 <h1 class="title">Beethoven for VS Code</h1>
 <p class="subtitle">The Wayne State grid and Claude Code, from one
-wizard. Manual for version 4.0.0</p>
-<p class="date">2026-09-30</p>
+wizard. Manual for version 5.0.0</p>
+<p class="date">2026-10-04</p>
 </header>
 <nav id="TOC" role="doc-toc">
 <ul>
@@ -193,9 +193,10 @@ back into the panel. You can say <em>“check the grid, run the pelvic
 width demo on ten records, and tell me whether the sex difference
 matches the published value”</em> in one sentence.</p>
 <p><strong>Honesty about limits.</strong> When your subscription window
-is used up, the worker says so, tells you when it resets, and waits. It
-never uses anyone else’s account, never types a token on a command line,
-and never runs anything heavy on the login node.</p>
+is used up, the worker says so and tells you when it resets, and you
+send the request again then. Beethoven never switches it to an API key
+or to anyone else’s account, never types a token on a command line, and
+never runs anything heavy on the login node.</p>
 <p><strong>Your science stays yours.</strong> The lab curates the
 datasets, the Claude containers and the software in one folder you can
 read. Everything you build runs in your own grid account, with your own
@@ -258,7 +259,7 @@ through both.</li>
 <p>VS Code, then the extensions <strong>Claude Code</strong>,
 <strong>Remote - SSH</strong>, and <strong>Beethoven for VS
 Code</strong> (from the Marketplace, or
-<code>beethoven-4.0.0.vsix</code>: Extensions view, <code>...</code>,
+<code>beethoven-5.0.0.vsix</code>: Extensions view, <code>...</code>,
 <em>Install from VSIX</em>). Beethoven offers its wizard on first start;
 or press Ctrl/Cmd+Shift+P and type <strong>Beethoven: Set up my research
 environment</strong>.</p>
@@ -653,7 +654,7 @@ have internet, so Claude Code, <code>npm</code>, Hugging Face and Zenodo
 all work from inside the job.</p>
 <h3 id="the-request-queue">The request queue</h3>
 <figure>
-<img role="img" aria-label="One request, from the laptop’s ssh to the RESULT line." src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA5ODAgMzYwIiBmb250LWZhbWlseT0iU2Vnb2UgVUksIEhlbHZldGljYSwgQXJpYWwsIHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTMiPgogIDxkZWZzPgogICAgPG1hcmtlciBpZD0iYiIgdmlld0JveD0iMCAwIDEwIDEwIiByZWZYPSI5IiByZWZZPSI1IiBtYXJrZXJXaWR0aD0iOCIgbWFya2VySGVpZ2h0PSI4IiBvcmllbnQ9ImF1dG8iPjxwYXRoIGQ9Ik0wLDAgTDEwLDUgTDAsMTAgeiIgZmlsbD0iIzMzMyIvPjwvbWFya2VyPgogICAgPHN0eWxlPgogICAgICAubGFuZXtzdHJva2U6I2JiYjtzdHJva2Utd2lkdGg6MX0KICAgICAgLmh7Zm9udC13ZWlnaHQ6NjAwO2ZvbnQtc2l6ZToxNHB4O2ZpbGw6IzIyMn0KICAgICAgLm17c3Ryb2tlOiMzMzM7c3Ryb2tlLXdpZHRoOjEuNTtmaWxsOm5vbmU7bWFya2VyLWVuZDp1cmwoI2IpfQogICAgICAuZHtzdHJva2U6IzMzMztzdHJva2Utd2lkdGg6MS41O2ZpbGw6bm9uZTtzdHJva2UtZGFzaGFycmF5OjUgNDttYXJrZXItZW5kOnVybCgjYil9CiAgICAgIC5se2ZpbGw6IzMzM30uc3tmaWxsOiM2NjY7Zm9udC1zaXplOjExLjVweH0KICAgICAgLmZ7ZmlsbDojZmZmOGUxO3N0cm9rZTojYjg4NjBiO3N0cm9rZS13aWR0aDoxO3J4OjN9CiAgICA8L3N0eWxlPgogIDwvZGVmcz4KICA8Zz4KICAgIDx0ZXh0IHg9IjYwIiB5PSIyNCIgY2xhc3M9ImgiIHRleHQtYW5jaG9yPSJtaWRkbGUiPmxhcHRvcDwvdGV4dD4KICAgIDx0ZXh0IHg9IjMzMCIgeT0iMjQiIGNsYXNzPSJoIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5sb2dpbiBub2RlPC90ZXh0PgogICAgPHRleHQgeD0iNjIwIiB5PSIyNCIgY2xhc3M9ImgiIHRleHQtYW5jaG9yPSJtaWRkbGUiPmJlZXRob3ZlbmQgKGNvbXB1dGUgbm9kZSk8L3RleHQ+CiAgICA8dGV4dCB4PSI4ODAiIHk9IjI0IiBjbGFzcz0iaCIgdGV4dC1hbmNob3I9Im1pZGRsZSI+Y2xhdWRlIC1wPC90ZXh0PgogICAgPGxpbmUgY2xhc3M9ImxhbmUiIHgxPSI2MCIgeTE9IjM0IiB4Mj0iNjAiIHkyPSIzNDAiLz4KICAgIDxsaW5lIGNsYXNzPSJsYW5lIiB4MT0iMzMwIiB5MT0iMzQiIHgyPSIzMzAiIHkyPSIzNDAiLz4KICAgIDxsaW5lIGNsYXNzPSJsYW5lIiB4MT0iNjIwIiB5MT0iMzQiIHgyPSI2MjAiIHkyPSIzNDAiLz4KICAgIDxsaW5lIGNsYXNzPSJsYW5lIiB4MT0iODgwIiB5MT0iMzQiIHgyPSI4ODAiIHkyPSIzNDAiLz4KICA8L2c+CiAgPHBhdGggY2xhc3M9Im0iIGQ9Ik02MCA2MCBMMzMwIDYwIi8+CiAgPHRleHQgeD0iNzAiIHk9IjU0IiBjbGFzcz0ibCI+c3NoIHdzdS1ncmlkIGJlZXRob3ZlbiBhc2sgKHJlcXVlc3QgSlNPTiBvbiBzdGRpbik8L3RleHQ+CiAgPHJlY3QgY2xhc3M9ImYiIHg9IjMzNiIgeT0iNzIiIHdpZHRoPSIyMDAiIGhlaWdodD0iMjAiLz4KICA8dGV4dCB4PSIzNDIiIHk9Ijg2IiBjbGFzcz0icyI+aW5ib3gvJmx0O2lkJmd0Oy5qc29uICgucGFydCwgdGhlbiByZW5hbWUpPC90ZXh0PgogIDxwYXRoIGNsYXNzPSJkIiBkPSJNMzMwIDExMCBMNjIwIDExMCIvPgogIDx0ZXh0IHg9IjM0MCIgeT0iMTA0IiBjbGFzcz0ibCI+cG9sbCAoMSBzKSwgcmVuYW1lIHRvIC5jbGFpbWVkPC90ZXh0PgogIDxwYXRoIGNsYXNzPSJtIiBkPSJNNjIwIDE0MCBMODgwIDE0MCIvPgogIDx0ZXh0IHg9IjYzMCIgeT0iMTM0IiBjbGFzcz0ibCI+c3Bhd24gd2l0aCBDTEFVREVfQ09ORklHX0RJUj1hY2NvdW50cy8mbHQ7YSZndDssIC0tcmVzdW1lIG9yIC0tc2Vzc2lvbi1pZDwvdGV4dD4KICA8cGF0aCBjbGFzcz0ibSIgZD0iTTg4MCAxNzAgTDYyMCAxNzAiLz4KICA8dGV4dCB4PSI2MzAiIHk9IjE2NCIgY2xhc3M9ImwiPnN0cmVhbS1qc29uIGxpbmVzIChpbml0LCBhc3Npc3RhbnQsIHRvb2xfdXNlLCByZXN1bHQpPC90ZXh0PgogIDxyZWN0IGNsYXNzPSJmIiB4PSIzMzYiIHk9IjE4MiIgd2lkdGg9IjIzMCIgaGVpZ2h0PSIyMCIvPgogIDx0ZXh0IHg9IjM0MiIgeT0iMTk2IiBjbGFzcz0icyI+b3V0Ym94LyZsdDtpZCZndDsuZXZlbnRzLmpzb25sIChhcHBlbmRlZCBsaXZlKTwvdGV4dD4KICA8cGF0aCBjbGFzcz0iZCIgZD0iTTMzMCAyMjIgTDYwIDIyMiIvPgogIDx0ZXh0IHg9IjcwIiB5PSIyMTYiIGNsYXNzPSJsIj5FVkVOVCBsaW5lcyBvdmVyIHRoZSBzYW1lIHNzaCAoYmVldGhvdmVuIHdhaXQgLS1zdHJlYW0pPC90ZXh0PgogIDxwYXRoIGNsYXNzPSJtIiBkPSJNODgwIDI1MiBMNjIwIDI1MiIvPgogIDx0ZXh0IHg9IjYzMCIgeT0iMjQ2IiBjbGFzcz0ibCI+ZXhpdDsgcmVzdWx0IGV2ZW50IGhhcyBpc19lcnJvciwgc2Vzc2lvbl9pZCwgY29zdCwgdHVybnM8L3RleHQ+CiAgPHJlY3QgY2xhc3M9ImYiIHg9IjMzNiIgeT0iMjY0IiB3aWR0aD0iMjMwIiBoZWlnaHQ9IjIwIi8+CiAgPHRleHQgeD0iMzQyIiB5PSIyNzgiIGNsYXNzPSJzIj5vdXRib3gvJmx0O2lkJmd0Oy5qc29uICArICBzZXNzaW9ucy8mbHQ7bmFtZSZndDsuanNvbjwvdGV4dD4KICA8cGF0aCBjbGFzcz0ibSIgZD0iTTMzMCAzMDYgTDYwIDMwNiIvPgogIDx0ZXh0IHg9IjcwIiB5PSIzMDAiIGNsYXNzPSJsIj5SRVNVTFQge3N0YXR1cywgcmVzdWx0LCBhY2NvdW50LCByZXRyeV9hZnRlcj99PC90ZXh0PgogIDx0ZXh0IHg9IjYwIiB5PSIzMzYiIGNsYXNzPSJzIj4yIHMgc3NoICsgJmx0Oz0xIHMgcG9sbCArIH41IHMgQ2xhdWRlIHN0YXJ0LCB0aGVuIHRoZSB0YXNrIGl0c2VsZjwvdGV4dD4KPC9zdmc+Cg==" alt="One request, from the laptop’s ssh to the RESULT line." />
+<img role="img" aria-label="One request, from the laptop’s ssh to the RESULT line." src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA5ODAgMzYwIiBmb250LWZhbWlseT0iU2Vnb2UgVUksIEhlbHZldGljYSwgQXJpYWwsIHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTMiPgogIDxkZWZzPgogICAgPG1hcmtlciBpZD0iYiIgdmlld0JveD0iMCAwIDEwIDEwIiByZWZYPSI5IiByZWZZPSI1IiBtYXJrZXJXaWR0aD0iOCIgbWFya2VySGVpZ2h0PSI4IiBvcmllbnQ9ImF1dG8iPjxwYXRoIGQ9Ik0wLDAgTDEwLDUgTDAsMTAgeiIgZmlsbD0iIzMzMyIvPjwvbWFya2VyPgogICAgPHN0eWxlPgogICAgICAubGFuZXtzdHJva2U6I2JiYjtzdHJva2Utd2lkdGg6MX0KICAgICAgLmh7Zm9udC13ZWlnaHQ6NjAwO2ZvbnQtc2l6ZToxNHB4O2ZpbGw6IzIyMn0KICAgICAgLm17c3Ryb2tlOiMzMzM7c3Ryb2tlLXdpZHRoOjEuNTtmaWxsOm5vbmU7bWFya2VyLWVuZDp1cmwoI2IpfQogICAgICAuZHtzdHJva2U6IzMzMztzdHJva2Utd2lkdGg6MS41O2ZpbGw6bm9uZTtzdHJva2UtZGFzaGFycmF5OjUgNDttYXJrZXItZW5kOnVybCgjYil9CiAgICAgIC5se2ZpbGw6IzMzM30uc3tmaWxsOiM2NjY7Zm9udC1zaXplOjExLjVweH0KICAgICAgLmZ7ZmlsbDojZmZmOGUxO3N0cm9rZTojYjg4NjBiO3N0cm9rZS13aWR0aDoxO3J4OjN9CiAgICA8L3N0eWxlPgogIDwvZGVmcz4KICA8Zz4KICAgIDx0ZXh0IHg9IjYwIiB5PSIyNCIgY2xhc3M9ImgiIHRleHQtYW5jaG9yPSJtaWRkbGUiPmxhcHRvcDwvdGV4dD4KICAgIDx0ZXh0IHg9IjMzMCIgeT0iMjQiIGNsYXNzPSJoIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5sb2dpbiBub2RlPC90ZXh0PgogICAgPHRleHQgeD0iNjIwIiB5PSIyNCIgY2xhc3M9ImgiIHRleHQtYW5jaG9yPSJtaWRkbGUiPmJlZXRob3ZlbmQgKGNvbXB1dGUgbm9kZSk8L3RleHQ+CiAgICA8dGV4dCB4PSI4ODAiIHk9IjI0IiBjbGFzcz0iaCIgdGV4dC1hbmNob3I9Im1pZGRsZSI+Y2xhdWRlIC1wPC90ZXh0PgogICAgPGxpbmUgY2xhc3M9ImxhbmUiIHgxPSI2MCIgeTE9IjM0IiB4Mj0iNjAiIHkyPSIzNDAiLz4KICAgIDxsaW5lIGNsYXNzPSJsYW5lIiB4MT0iMzMwIiB5MT0iMzQiIHgyPSIzMzAiIHkyPSIzNDAiLz4KICAgIDxsaW5lIGNsYXNzPSJsYW5lIiB4MT0iNjIwIiB5MT0iMzQiIHgyPSI2MjAiIHkyPSIzNDAiLz4KICAgIDxsaW5lIGNsYXNzPSJsYW5lIiB4MT0iODgwIiB5MT0iMzQiIHgyPSI4ODAiIHkyPSIzNDAiLz4KICA8L2c+CiAgPHBhdGggY2xhc3M9Im0iIGQ9Ik02MCA2MCBMMzMwIDYwIi8+CiAgPHRleHQgeD0iNzAiIHk9IjU0IiBjbGFzcz0ibCI+c3NoIHdzdS1ncmlkIGJlZXRob3ZlbiBhc2sgKHJlcXVlc3QgSlNPTiBvbiBzdGRpbik8L3RleHQ+CiAgPHJlY3QgY2xhc3M9ImYiIHg9IjMzNiIgeT0iNzIiIHdpZHRoPSIyMDAiIGhlaWdodD0iMjAiLz4KICA8dGV4dCB4PSIzNDIiIHk9Ijg2IiBjbGFzcz0icyI+aW5ib3gvJmx0O2lkJmd0Oy5qc29uICgucGFydCwgdGhlbiByZW5hbWUpPC90ZXh0PgogIDxwYXRoIGNsYXNzPSJkIiBkPSJNMzMwIDExMCBMNjIwIDExMCIvPgogIDx0ZXh0IHg9IjM0MCIgeT0iMTA0IiBjbGFzcz0ibCI+cG9sbCAoMSBzKSwgcmVuYW1lIHRvIC5jbGFpbWVkPC90ZXh0PgogIDxwYXRoIGNsYXNzPSJtIiBkPSJNNjIwIDE0MCBMODgwIDE0MCIvPgogIDx0ZXh0IHg9IjYzMCIgeT0iMTM0IiBjbGFzcz0ibCI+c3Bhd24gb24geW91ciBzaWduLWluLCAtLXJlc3VtZSBvciAtLXNlc3Npb24taWQ8L3RleHQ+CiAgPHBhdGggY2xhc3M9Im0iIGQ9Ik04ODAgMTcwIEw2MjAgMTcwIi8+CiAgPHRleHQgeD0iNjMwIiB5PSIxNjQiIGNsYXNzPSJsIj5zdHJlYW0tanNvbiBsaW5lcyAoaW5pdCwgYXNzaXN0YW50LCB0b29sX3VzZSwgcmVzdWx0KTwvdGV4dD4KICA8cmVjdCBjbGFzcz0iZiIgeD0iMzM2IiB5PSIxODIiIHdpZHRoPSIyMzAiIGhlaWdodD0iMjAiLz4KICA8dGV4dCB4PSIzNDIiIHk9IjE5NiIgY2xhc3M9InMiPm91dGJveC8mbHQ7aWQmZ3Q7LmV2ZW50cy5qc29ubCAoYXBwZW5kZWQgbGl2ZSk8L3RleHQ+CiAgPHBhdGggY2xhc3M9ImQiIGQ9Ik0zMzAgMjIyIEw2MCAyMjIiLz4KICA8dGV4dCB4PSI3MCIgeT0iMjE2IiBjbGFzcz0ibCI+RVZFTlQgbGluZXMgb3ZlciB0aGUgc2FtZSBzc2ggKGJlZXRob3ZlbiB3YWl0IC0tc3RyZWFtKTwvdGV4dD4KICA8cGF0aCBjbGFzcz0ibSIgZD0iTTg4MCAyNTIgTDYyMCAyNTIiLz4KICA8dGV4dCB4PSI2MzAiIHk9IjI0NiIgY2xhc3M9ImwiPmV4aXQ7IHJlc3VsdCBldmVudCBoYXMgaXNfZXJyb3IsIHNlc3Npb25faWQsIGNvc3QsIHR1cm5zPC90ZXh0PgogIDxyZWN0IGNsYXNzPSJmIiB4PSIzMzYiIHk9IjI2NCIgd2lkdGg9IjIzMCIgaGVpZ2h0PSIyMCIvPgogIDx0ZXh0IHg9IjM0MiIgeT0iMjc4IiBjbGFzcz0icyI+b3V0Ym94LyZsdDtpZCZndDsuanNvbiAgKyAgc2Vzc2lvbnMvJmx0O25hbWUmZ3Q7Lmpzb248L3RleHQ+CiAgPHBhdGggY2xhc3M9Im0iIGQ9Ik0zMzAgMzA2IEw2MCAzMDYiLz4KICA8dGV4dCB4PSI3MCIgeT0iMzAwIiBjbGFzcz0ibCI+UkVTVUxUIHtzdGF0dXMsIHJlc3VsdCwgYWNjb3VudCwgcmV0cnlfYWZ0ZXI/fTwvdGV4dD4KICA8dGV4dCB4PSI2MCIgeT0iMzM2IiBjbGFzcz0icyI+MiBzIHNzaCArICZsdDs9MSBzIHBvbGwgKyB+NSBzIENsYXVkZSBzdGFydCwgdGhlbiB0aGUgdGFzayBpdHNlbGY8L3RleHQ+Cjwvc3ZnPgo=" alt="One request, from the laptop’s ssh to the RESULT line." />
 <figcaption aria-hidden="true">One request, from the laptop’s ssh to the
 RESULT line.</figcaption>
 </figure>
@@ -666,10 +667,11 @@ rename, so the daemon never reads a half-written file).</li>
 <li><code>beethovend.js</code> polls the inbox every second, claims the
 file by renaming it to <code>&lt;id&gt;.json.claimed</code> (an atomic
 operation on the shared filesystem; two daemons cannot both win).</li>
-<li>It picks a credential (below), resolves the session, and spawns
+<li>It checks that Claude Code is signed in (below), resolves the
+session, and spawns
 <code>claude -p &lt;prompt&gt; --output-format stream-json --verbose --permission-mode &lt;mode&gt; --max-turns N [--resume &lt;sid&gt; | --session-id &lt;uuid&gt;]</code>
 in the session’s working directory, with
-<code>CLAUDE_CONFIG_DIR=~/.beethoven/accounts/&lt;account&gt;</code>.</li>
+<code>CLAUDE_CONFIG_DIR=~/.beethoven/claude</code>.</li>
 <li>Every stream-json line is appended to
 <code>outbox/&lt;id&gt;.events.jsonl</code> as it arrives.
 <code>beethoven wait --stream</code> tails that file to the laptop as
@@ -770,22 +772,22 @@ id is known even if the run dies; later turns pass
 under
 <code>&lt;CLAUDE_CONFIG_DIR&gt;/projects/&lt;encoded cwd&gt;/&lt;uuid&gt;.jsonl</code>,
 which is why a session stays bound to its directory.</p>
-<p><code>--resume</code> looks only in the running account’s
+<p><code>--resume</code> looks only in the running config folder’s
 <code>projects/</code>. Measured on Claude Code 2.1.283: from a second
 config folder the resume answers “No conversation found”; with the
-transcript present it finds it. A turn moved to the student’s API key
-after a limit would therefore start from nothing. So every account’s
-<code>projects/</code> is a link to one
-<code>~/.beethoven/projects</code> (the daemon links it before each run;
-<code>beethoven accounts add-key</code> links it when an account is
-made; the diagnostics node <code>grid.accounts</code> finds and repairs
-an unlinked one). All accounts belong to one person, so this shares
-nothing between people.</p>
+transcript present it finds it. Up to grid scripts 7 a turn could move
+to the student’s API key after a limit, so every account’s
+<code>projects/</code> became a link to one
+<code>~/.beethoven/projects</code>. The sign-in folder’s link stays (the
+daemon links it before each run; the diagnostics node
+<code>grid.accounts</code> finds and repairs an unlinked one), so the
+sessions kept there still resume.</p>
 <h3 id="credentials">Credentials</h3>
 <figure>
-<img role="img" aria-label="Rotation among a student’s own credentials; a limit becomes a cooldown, not a failure." src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA5ODAgMzAwIiBmb250LWZhbWlseT0iU2Vnb2UgVUksIEhlbHZldGljYSwgQXJpYWwsIHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTMiPgogIDxkZWZzPgogICAgPG1hcmtlciBpZD0iZCIgdmlld0JveD0iMCAwIDEwIDEwIiByZWZYPSI5IiByZWZZPSI1IiBtYXJrZXJXaWR0aD0iNyIgbWFya2VySGVpZ2h0PSI3IiBvcmllbnQ9ImF1dG8iPjxwYXRoIGQ9Ik0wLDAgTDEwLDUgTDAsMTAgeiIgZmlsbD0iIzMzMyIvPjwvbWFya2VyPgogICAgPHN0eWxlPgogICAgICAuYntmaWxsOiNmZmY7c3Ryb2tlOiMzMzM7c3Ryb2tlLXdpZHRoOjEuNDtyeDo4fQogICAgICAud3tmaWxsOiNmZGVjZWE7c3Ryb2tlOiNiNzFjMWM7c3Ryb2tlLXdpZHRoOjEuNDtyeDo4fQogICAgICAuZ3tmaWxsOiNlOGY1ZTk7c3Ryb2tlOiMyZTdkMzI7c3Ryb2tlLXdpZHRoOjEuNDtyeDo4fQogICAgICAubntmb250LXdlaWdodDo2MDA7ZmlsbDojMjIyfS5ze2ZpbGw6IzU1NTtmb250LXNpemU6MTEuNXB4fQogICAgICAuYXtzdHJva2U6IzMzMztzdHJva2Utd2lkdGg6MS4zO2ZpbGw6bm9uZTttYXJrZXItZW5kOnVybCgjZCl9CiAgICA8L3N0eWxlPgogIDwvZGVmcz4KICA8dGV4dCB4PSIyMCIgeT0iMjYiIGZvbnQtc2l6ZT0iMTUiIGZvbnQtd2VpZ2h0PSI2MDAiIGZpbGw9IiMyMjIiPldoZW4gYSBjcmVkZW50aWFsIHJ1bnMgb3V0OiB5b3VyIG93biBhY2NvdW50cyBvbmx5PC90ZXh0PgogIDxyZWN0IGNsYXNzPSJiIiB4PSIyMCIgeT0iNjAiIHdpZHRoPSIyMDAiIGhlaWdodD0iNjQiLz48dGV4dCB4PSIzMCIgeT0iODIiIGNsYXNzPSJuIj5yZXF1ZXN0IGFycml2ZXM8L3RleHQ+PHRleHQgeD0iMzAiIHk9IjEwMCIgY2xhc3M9InMiPnBpY2sgZmlyc3QgZW5hYmxlZCBhY2NvdW50PC90ZXh0Pjx0ZXh0IHg9IjMwIiB5PSIxMTQiIGNsYXNzPSJzIj5ub3Qgb24gY29vbGRvd24sIG5vdCBleGNsdWRlZDwvdGV4dD4KICA8cmVjdCBjbGFzcz0iZyIgeD0iMjYwIiB5PSI2MCIgd2lkdGg9IjIwMCIgaGVpZ2h0PSI2NCIvPjx0ZXh0IHg9IjI3MCIgeT0iODIiIGNsYXNzPSJuIj5hY2NvdW50cy9kZWZhdWx0PC90ZXh0Pjx0ZXh0IHg9IjI3MCIgeT0iMTAwIiBjbGFzcz0icyI+c3Vic2NyaXB0aW9uIHRva2VuIChzZXR1cC10b2tlbik8L3RleHQ+PHRleHQgeD0iMjcwIiB5PSIxMTQiIGNsYXNzPSJzIj50cmllZCBmaXJzdDwvdGV4dD4KICA8cmVjdCBjbGFzcz0idyIgeD0iMjYwIiB5PSIxNzAiIHdpZHRoPSIyMDAiIGhlaWdodD0iNjQiLz48dGV4dCB4PSIyNzAiIHk9IjE5MiIgY2xhc3M9Im4iPnJlc3VsdCBzYXlzIGxpbWl0IGhpdDwvdGV4dD48dGV4dCB4PSIyNzAiIHk9IjIxMCIgY2xhc3M9InMiPiJoaXQgeW91ciBsaW1pdCIsIDQyOSwgcmF0ZV9saW1pdDwvdGV4dD48dGV4dCB4PSIyNzAiIHk9IjIyNCIgY2xhc3M9InMiPmNvb2xkb3duX3VudGlsID0gcmVzZXQgdGltZSBvciArNjAgbWluPC90ZXh0PgogIDxyZWN0IGNsYXNzPSJnIiB4PSI1MjAiIHk9IjYwIiB3aWR0aD0iMjAwIiBoZWlnaHQ9IjY0Ii8+PHRleHQgeD0iNTMwIiB5PSI4MiIgY2xhc3M9Im4iPmFjY291bnRzL2FwaWtleTwvdGV4dD48dGV4dCB4PSI1MzAiIHk9IjEwMCIgY2xhc3M9InMiPnlvdXIgb3duIEFQSSBrZXksIHNwZW5kIGNhcDwvdGV4dD48dGV4dCB4PSI1MzAiIHk9IjExNCIgY2xhc3M9InMiPnRyaWVkIG9ubHkgYWZ0ZXIgc3Vic2NyaXB0aW9uczwvdGV4dD4KICA8cmVjdCBjbGFzcz0iYiIgeD0iNzYwIiB5PSI2MCIgd2lkdGg9IjIwMCIgaGVpZ2h0PSI2NCIvPjx0ZXh0IHg9Ijc3MCIgeT0iODIiIGNsYXNzPSJuIj5hbnN3ZXIgd3JpdHRlbjwvdGV4dD48dGV4dCB4PSI3NzAiIHk9IjEwMCIgY2xhc3M9InMiPnN0YXR1cyBvaywgYWNjb3VudCBuYW1lZDwvdGV4dD4KICA8cmVjdCBjbGFzcz0idyIgeD0iNTIwIiB5PSIxNzAiIHdpZHRoPSI0NDAiIGhlaWdodD0iNjQiLz48dGV4dCB4PSI1MzAiIHk9IjE5MiIgY2xhc3M9Im4iPmV2ZXJ5IGFjY291bnQgY29vbGluZzwvdGV4dD48dGV4dCB4PSI1MzAiIHk9IjIxMCIgY2xhc3M9InMiPnN0YXR1cyByYXRlX2xpbWl0ZWQsIHJldHJ5X2FmdGVyID0gc29vbmVzdCByZXNldDsgd29ya2VyIGhlYXJ0YmVhdCA9IGJsb2NrZWQ8L3RleHQ+PHRleHQgeD0iNTMwIiB5PSIyMjQiIGNsYXNzPSJzIj50aGUgbGFwdG9wIHNob3dzICJyZXNldHMgYXQgLi4uIiBhbmQgdGhlIHJlcXVlc3Qgc3RheXMgYW5zd2VyYWJsZSBsYXRlcjwvdGV4dD4KICA8cGF0aCBjbGFzcz0iYSIgZD0iTTIyMCA5MiBMMjYwIDkyIi8+CiAgPHBhdGggY2xhc3M9ImEiIGQ9Ik0zNjAgMTI0IEwzNjAgMTcwIi8+CiAgPHBhdGggY2xhc3M9ImEiIGQ9Ik00NjAgOTIgTDc2MCA5MiIvPgogIDxwYXRoIGNsYXNzPSJhIiBkPSJNNDYwIDIwMiBMNTIwIDIwMiIvPgogIDxwYXRoIGNsYXNzPSJhIiBkPSJNNDYwIDE5MCBDIDQ5MCAxNTAsIDUwMCAxMjAsIDUyMCAxMDAiLz4KICA8dGV4dCB4PSI0NzAiIHk9IjE1MCIgY2xhc3M9InMiPnJlLXF1ZXVlPC90ZXh0PgogIDxwYXRoIGNsYXNzPSJhIiBkPSJNNzIwIDkyIEw3NjAgOTIiLz4KICA8dGV4dCB4PSIyMCIgeT0iMjc1IiBjbGFzcz0icyI+TmV2ZXIgYW5vdGhlciBzdHVkZW50J3MgYWNjb3VudDogdGhlIENvbnN1bWVyIFRlcm1zIGJpbmQgYW4gYWNjb3VudCB0byB0aGUgcGVyc29uIHdobyBob2xkcyBpdC4gT25lIHdvcmtlciBwZXIgYWNjb3VudC48L3RleHQ+Cjwvc3ZnPgo=" alt="Rotation among a student’s own credentials; a limit becomes a cooldown, not a failure." />
-<figcaption aria-hidden="true">Rotation among a student’s own
-credentials; a limit becomes a cooldown, not a failure.</figcaption>
+<img role="img" aria-label="One sign-in, the student’s own subscription; a spent window becomes a wait for its reset, not a failure." src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA5ODAgMzAwIiBmb250LWZhbWlseT0iU2Vnb2UgVUksIEhlbHZldGljYSwgQXJpYWwsIHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTMiPgogIDxkZWZzPgogICAgPG1hcmtlciBpZD0iZCIgdmlld0JveD0iMCAwIDEwIDEwIiByZWZYPSI5IiByZWZZPSI1IiBtYXJrZXJXaWR0aD0iNyIgbWFya2VySGVpZ2h0PSI3IiBvcmllbnQ9ImF1dG8iPjxwYXRoIGQ9Ik0wLDAgTDEwLDUgTDAsMTAgeiIgZmlsbD0iIzMzMyIvPjwvbWFya2VyPgogICAgPHN0eWxlPgogICAgICAuYntmaWxsOiNmZmY7c3Ryb2tlOiMzMzM7c3Ryb2tlLXdpZHRoOjEuNDtyeDo4fQogICAgICAud3tmaWxsOiNmZGVjZWE7c3Ryb2tlOiNiNzFjMWM7c3Ryb2tlLXdpZHRoOjEuNDtyeDo4fQogICAgICAuZ3tmaWxsOiNlOGY1ZTk7c3Ryb2tlOiMyZTdkMzI7c3Ryb2tlLXdpZHRoOjEuNDtyeDo4fQogICAgICAubntmb250LXdlaWdodDo2MDA7ZmlsbDojMjIyfS5ze2ZpbGw6IzU1NTtmb250LXNpemU6MTEuNXB4fQogICAgICAuYXtzdHJva2U6IzMzMztzdHJva2Utd2lkdGg6MS4zO2ZpbGw6bm9uZTttYXJrZXItZW5kOnVybCgjZCl9CiAgICA8L3N0eWxlPgogIDwvZGVmcz4KICA8dGV4dCB4PSIyMCIgeT0iMjYiIGZvbnQtc2l6ZT0iMTUiIGZvbnQtd2VpZ2h0PSI2MDAiIGZpbGw9IiMyMjIiPldoZW4gdGhlIHN1YnNjcmlwdGlvbiB3aW5kb3cgaXMgc3BlbnQ6IHdhaXQgZm9yIHRoZSByZXNldDwvdGV4dD4KICA8cmVjdCBjbGFzcz0iYiIgeD0iMjAiIHk9IjYwIiB3aWR0aD0iMjAwIiBoZWlnaHQ9IjY0Ii8+PHRleHQgeD0iMzAiIHk9IjgyIiBjbGFzcz0ibiI+cmVxdWVzdCBhcnJpdmVzPC90ZXh0Pjx0ZXh0IHg9IjMwIiB5PSIxMDAiIGNsYXNzPSJzIj5DbGF1ZGUgQ29kZSBzaWduZWQgaW4/PC90ZXh0Pjx0ZXh0IHg9IjMwIiB5PSIxMTQiIGNsYXNzPSJzIj5zaWduLWluIG5vdCBvbiBjb29sZG93bj88L3RleHQ+CiAgPHJlY3QgY2xhc3M9ImciIHg9IjI2MCIgeT0iNjAiIHdpZHRoPSIyMDAiIGhlaWdodD0iNjQiLz48dGV4dCB4PSIyNzAiIHk9IjgyIiBjbGFzcz0ibiI+fi8uYmVldGhvdmVuL2NsYXVkZTwvdGV4dD48dGV4dCB4PSIyNzAiIHk9IjEwMCIgY2xhc3M9InMiPkNsYXVkZSBDb2RlJ3Mgb3duIHNpZ24taW48L3RleHQ+PHRleHQgeD0iMjcwIiB5PSIxMTQiIGNsYXNzPSJzIj55b3VyIHN1YnNjcmlwdGlvbiBvbmx5PC90ZXh0PgogIDxyZWN0IGNsYXNzPSJ3IiB4PSIyNjAiIHk9IjE3MCIgd2lkdGg9IjIwMCIgaGVpZ2h0PSI2NCIvPjx0ZXh0IHg9IjI3MCIgeT0iMTkyIiBjbGFzcz0ibiI+cmVzdWx0IHNheXMgbGltaXQgaGl0PC90ZXh0Pjx0ZXh0IHg9IjI3MCIgeT0iMjEwIiBjbGFzcz0icyI+ImhpdCB5b3VyIGxpbWl0IiwgNDI5LCByYXRlX2xpbWl0PC90ZXh0Pjx0ZXh0IHg9IjI3MCIgeT0iMjI0IiBjbGFzcz0icyI+Y29vbGRvd25fdW50aWwgPSByZXNldCB0aW1lIG9yICs2MCBtaW48L3RleHQ+CiAgPHJlY3QgY2xhc3M9ImIiIHg9IjUyMCIgeT0iNjAiIHdpZHRoPSIyMDAiIGhlaWdodD0iNjQiLz48dGV4dCB4PSI1MzAiIHk9IjgyIiBjbGFzcz0ibiI+YW5zd2VyIHdyaXR0ZW48L3RleHQ+PHRleHQgeD0iNTMwIiB5PSIxMDAiIGNsYXNzPSJzIj5zdGF0dXMgb2s8L3RleHQ+CiAgPHJlY3QgY2xhc3M9InciIHg9IjUyMCIgeT0iMTcwIiB3aWR0aD0iNDQwIiBoZWlnaHQ9IjY0Ii8+PHRleHQgeD0iNTMwIiB5PSIxOTIiIGNsYXNzPSJuIj53aW5kb3cgc3BlbnQ8L3RleHQ+PHRleHQgeD0iNTMwIiB5PSIyMTAiIGNsYXNzPSJzIj5zdGF0dXMgcmF0ZV9saW1pdGVkLCByZXRyeV9hZnRlciA9IHJlc2V0IHRpbWU7IHdvcmtlciBoZWFydGJlYXQgPSBibG9ja2VkPC90ZXh0Pjx0ZXh0IHg9IjUzMCIgeT0iMjI0IiBjbGFzcz0icyI+dGhlIGxhcHRvcCBzaG93cyB0aGUgcmVzZXQgdGltZTsgc2VuZCB0aGUgcmVxdWVzdCBhZ2FpbiBhZnRlciBpdDwvdGV4dD4KICA8cGF0aCBjbGFzcz0iYSIgZD0iTTIyMCA5MiBMMjYwIDkyIi8+CiAgPHBhdGggY2xhc3M9ImEiIGQ9Ik0zNjAgMTI0IEwzNjAgMTcwIi8+CiAgPHBhdGggY2xhc3M9ImEiIGQ9Ik00NjAgOTIgTDUyMCA5MiIvPgogIDxwYXRoIGNsYXNzPSJhIiBkPSJNNDYwIDIwMiBMNTIwIDIwMiIvPgogIDx0ZXh0IHg9IjIwIiB5PSIyNzUiIGNsYXNzPSJzIj5CZWV0aG92ZW4gdXNlcyBubyBBUEkga2V5IGFuZCBhc2tzIGZvciBubyBwYWlkIHVzYWdlLCBhbmQgbmV2ZXIgYW5vdGhlciBzdHVkZW50J3MgYWNjb3VudDogdGhlIENvbnN1bWVyIFRlcm1zIGJpbmQgYW4gYWNjb3VudCB0byBpdHMgaG9sZGVyLjwvdGV4dD4KPC9zdmc+Cg==" alt="One sign-in, the student’s own subscription; a spent window becomes a wait for its reset, not a failure." />
+<figcaption aria-hidden="true">One sign-in, the student’s own
+subscription; a spent window becomes a wait for its reset, not a
+failure.</figcaption>
 </figure>
 <p>The rule, since version 2: <strong>Beethoven never reads, stores,
 copies or relays a Claude credential.</strong> Anthropic’s Claude Code
@@ -819,11 +821,28 @@ minutes and when the credential file changes, and puts the answer
 laptop shows it; the diagnostics node <code>grid.claude-login</code>
 reads it; a prompt sent while not signed in is answered with the command
 that fixes it.</li>
-<li>One person, one Claude account. The only other credential is the
-student’s own Anthropic Console key
-(<code>~/.beethoven/accounts/apikey/apikey</code>, Commercial Terms),
-used only when the subscription window is exhausted, and only in that
-process’s environment.</li>
+<li>One person, one Claude account, and no other credential: no API key
+and no usage credits, by anyone, ever (the maintainer, 2026-10-04). When
+the subscription window is spent the daemon answers
+<code>rate_limited</code> with the reset time in
+<code>retry_after</code>; nothing retries by itself, and the student
+sends the request again after the reset. The pay-per-use key overflow of
+4.0.0 (grid scripts 7) is gone; a key it stored in
+<code>~/.beethoven/accounts/apikey/apikey</code> is never used or sent
+and never deleted by Beethoven. A worker still running the grid scripts
+7 daemon reads that key on every request and honours only the
+<code>disabled</code> file beside it, so every grid command the laptop
+runs (<code>GRID_CLI_PICK</code> in <code>shell.ts</code>) puts that
+file there first, and <code>beethoven install</code>,
+<code>worker start</code>, the laptop’s token push and
+<code>diag --repair</code> do as well (it deletes nothing). The first
+contact of a laptop updated to 5.0.0 therefore stops such a worker
+before the grid step replaces the scripts. A request already running on
+the key when the file appears finishes there. <code>grid.accounts</code>
+reports the key until the student runs
+<code>beethoven accounts remove --yes</code> in a terminal. Extra usage
+(usage credits) on the student’s Claude account is a setting Beethoven
+cannot see or change; the texts tell the student to keep it off.</li>
 <li>On the laptop, the wizard checks <code>claude auth status</code> of
 the student’s own Claude Code and requires a subscription sign-in (Pro
 or Max), because the lab works on subscriptions; it stores nothing.</li>
@@ -869,10 +888,14 @@ into the worker’s environment</td>
 </tr>
 <tr>
 <td>Anthropic API key</td>
-<td>SecretStorage</td>
-<td><code>~/.beethoven/accounts/apikey/apikey</code> (600)</td>
-<td>laptop terminals (it would silently switch the local Claude Code to
-pay-per-use)</td>
+<td>none asked for; a copy 4.0.0 stored is never used or sent, only its
+presence checked (Manage stored tokens and Reset delete it)</td>
+<td>none written; <code>accounts/apikey/apikey</code> from 4.0.0 is
+never used, and marked <code>disabled</code> for workers of grid scripts
+7 (<code>beethoven accounts remove --yes</code> deletes it)</td>
+<td>laptop terminals and every Claude Code environment
+(<code>ANTHROPIC_API_KEY</code> is stripped: it would switch Claude Code
+to pay-per-use)</td>
 </tr>
 <tr>
 <td>Grid password / OTP</td>
@@ -1292,14 +1315,15 @@ on the login node</td>
 <td>Use someone else’s Claude account, or pool accounts across
 students</td>
 <td>Anthropic’s consumer terms: an account is for the person who holds
-it. Beethoven rotates only <em>your</em> credentials (your subscription,
-then your own API key)</td>
+it. Beethoven runs only on <em>your</em> own Claude sign-in</td>
 </tr>
 <tr>
 <td>Get more than your plan’s window</td>
 <td>A Pro/Max window is per account. When it is exhausted the worker
-reports <code>rate_limited</code> with the reset time and waits; an API
-key with a spending cap is the only overflow</td>
+answers <code>rate_limited</code> with the reset time; send the request
+again after it. There is no overflow: Beethoven never uses an API key or
+paid usage, and extra usage (usage credits) on your Claude account is
+yours to keep off, since Beethoven cannot see it</td>
 </tr>
 <tr>
 <td>Put patient data, PHI, survey CSVs or contact lists on the grid</td>
@@ -1390,10 +1414,10 @@ your Claude Pro or Max account.</li>
 <li>Install <strong>Beethoven for VS Code</strong>
 (<code>openspineconsortium.beethoven</code>) from the Extensions view.
 Or, from a file your lead gives you (the repository’s
-<code>dist/release/4.0.0/beethoven-4.0.0.vsix</code>): Extensions view,
+<code>dist/release/5.0.0/beethoven-5.0.0.vsix</code>): Extensions view,
 the <code>...</code> menu at the top right, <strong>Install from
 VSIX…</strong>, pick the file; or from a terminal,
-<code>code --install-extension beethoven-4.0.0.vsix</code>.</li>
+<code>code --install-extension beethoven-5.0.0.vsix</code>.</li>
 <li>Command Palette (Ctrl/Cmd+Shift+P): <strong>Beethoven: Set up my
 research environment (wizard)</strong>.</li>
 </ol>
@@ -1429,8 +1453,8 @@ replaced, never doubled</td>
 <tr>
 <td>OS keychain (Windows Credential Manager / macOS Keychain /
 libsecret)</td>
-<td>GitHub and Hugging Face tokens, and an optional Anthropic Console
-key</td>
+<td>GitHub and Hugging Face tokens (and, until you delete it, an
+Anthropic Console key a 4.0.0 install stored, which is never used)</td>
 </tr>
 <tr>
 <td><code>~/.beethoven-local</code> (<code>~/.ashley-local</code> on a
@@ -1479,7 +1503,7 @@ brand-new Windows, <code>tools/sandbox/README.md</code>.</p>
 <span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a><span class="ex">npm</span> run test:unit      <span class="co"># ssh config, protocol, slurm parsing, licences, terms, and the daemon with a fake claude</span></span>
 <span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a><span class="ex">npm</span> run test:vscode    <span class="co"># downloads a VS Code build once, runs the integration suite</span></span>
 <span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a><span class="ex">npm</span> run package        <span class="co"># writes ../dist/beethoven-&lt;version&gt;.vsix and checks it</span></span>
-<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a><span class="ex">code</span> <span class="at">--install-extension</span> ../dist/beethoven-4.0.0.vsix</span></code></pre></div>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a><span class="ex">code</span> <span class="at">--install-extension</span> ../dist/beethoven-5.0.0.vsix</span></code></pre></div>
 <p>A release (production build, checks, signed checksums in
 <code>dist/release/&lt;version&gt;/</code>) is
 <code>node ../tools/release.mjs</code> with the vendor folder at hand
@@ -1690,9 +1714,10 @@ again</td>
 <td>run <strong>Beethoven: Sign in to Claude on the grid</strong></td>
 </tr>
 <tr>
-<td>Step 5 says <em>signed in with an API key, not a Claude
+<td>Step 5 says <em>signed in through …, not a Claude
 subscription</em></td>
-<td>Claude Code on your laptop is using a Console key</td>
+<td>Claude Code on your laptop is using a Console key, a key helper or a
+cloud provider</td>
 <td>in Claude Code, sign out and sign in with your Claude Pro or Max
 account</td>
 </tr>

@@ -1,5 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { makeRequest, newRequestId, looksRateLimited, parseResetTime } from './protocol';
 import { parseSqueue, parseSbatchId, workerStartArgs, describeWall } from './slurm';
 import { normaliseAccessId, gridHome, SERVICES, extractWrappedToken } from './services';
@@ -71,7 +75,7 @@ test('token patterns accept real shapes and reject junk', () => {
   assert.ok(gh.pattern!.test('ghp_' + 'a'.repeat(36)));
   assert.ok(!gh.pattern!.test('https://github.com/settings/tokens'));
   assert.equal(SERVICES.find((s) => s.id === ('claudeOauth' as string)), undefined, 'Beethoven stores no Claude credential');
-  assert.equal(SERVICES.find((s) => s.id === 'anthropicApiKey')!.injectLocally, false);
+  assert.equal(SERVICES.find((s) => s.envVars.includes('ANTHROPIC_API_KEY')), undefined, 'no API key: the worker runs only on the subscription');
 });
 
 test('remote quoting is single-layer POSIX', () => {
@@ -91,7 +95,7 @@ test('the grid command: the new path first, the one before the rename as the fal
   const argv = gridCli(['status', '--json']);
   assert.deepEqual(argv.slice(0, 2), ['bash', '-c']);
   assert.deepEqual(argv.slice(3), ['beethoven', 'status', '--json'], 'the arguments reach the command as "$@"');
-  assert.match(argv[2], /^b=\$HOME\/\.beethoven\/bin\/beethoven; \[ -x \$b \] \|\| b=\$HOME\/\.ashley\/bin\/ashley; exec \$b "\$@"$/);
+  assert.match(argv[2], /^b=\$HOME\/\.beethoven\/bin\/beethoven; \[ -x \$b \] \|\| b=\$HOME\/\.ashley\/bin\/ashley; .*exec \$b "\$@"$/);
   // one argument over ssh: the script is quoted once, the arguments each once
   assert.equal(renderRemote(argv).split("' '").length, 6);
   const line = gridCliLine(['claude', 'login']);
@@ -99,6 +103,27 @@ test('the grid command: the new path first, the one before the rename as the fal
   assert.ok(!line.includes('"'), 'no double quotes: the line passes through Windows argument quoting unchanged');
   assert.ok(!GRID_HOME_PICK.includes('"'));
   assert.match(GRID_HOME_PICK, /h=\$HOME\/\.beethoven;.*h=\$HOME\/\.ashley;$/);
+});
+
+test('every grid command first marks an API key a build up to 4.0.0 stored disabled, and deletes nothing', { skip: process.platform === 'win32' && 'needs bash' }, () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'beethoven-gridcli-'));
+  const bin = path.join(home, '.beethoven', 'bin');
+  fs.mkdirSync(bin, { recursive: true });
+  fs.writeFileSync(path.join(bin, 'beethoven'), '#!/bin/sh\necho "ran $*"\n', { mode: 0o755 });
+  const call = (args: string[]) => spawnSync('bash', gridCli(args).slice(1), { env: { ...process.env, HOME: home }, encoding: 'utf8' });
+  // no key: nothing is created
+  assert.equal(call(['status']).stdout.trim(), 'ran status');
+  assert.equal(fs.existsSync(path.join(home, '.beethoven', 'accounts')), false);
+  // a key: the marker appears beside it, the key stays, the command still runs with its arguments and exit code
+  const keyDir = path.join(home, '.beethoven', 'accounts', 'apikey');
+  fs.mkdirSync(keyDir, { recursive: true });
+  fs.writeFileSync(path.join(keyDir, 'apikey'), 'sk-ant-api03-fake\n');
+  const r = call(['worker', 'start', '--name', 'w 1']);
+  assert.equal(r.status, 0);
+  assert.equal(r.stdout.trim(), 'ran worker start --name w 1');
+  assert.ok(fs.existsSync(path.join(keyDir, 'disabled')));
+  assert.equal(fs.readFileSync(path.join(keyDir, 'apikey'), 'utf8'), 'sk-ant-api03-fake\n');
+  fs.rmSync(home, { recursive: true, force: true });
 });
 
 test('a token is captured whole: across chunks and across hard line wraps', () => {

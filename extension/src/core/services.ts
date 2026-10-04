@@ -2,7 +2,28 @@
 // No 'vscode' import here: this file is shared by the extension, the CLI and the MCP
 // server, and it is what a future Xcode/Swift port translates first.
 
-export type SecretId = 'github' | 'huggingface' | 'anthropicApiKey';
+export type SecretId = 'github' | 'huggingface';
+
+/**
+ * Secrets builds up to 4.0.0 kept and this one never uses. 'anthropicApiKey' was the optional
+ * pay-per-use API key the grid worker fell over to when the subscription window was spent; paid usage
+ * beyond the student's own subscription is ruled out for everyone (the maintainer, 2026-10-04). A stored
+ * copy is not deleted for the student (the Console shows a key's value only once): Manage stored tokens
+ * offers to delete it.
+ */
+export const RETIRED_SECRETS: ReadonlyArray<{ id: string; name: string }> = [{ id: 'anthropicApiKey', name: 'Anthropic API key (no longer used)' }];
+
+/**
+ * The variables that make Claude Code use an API key, a token or another endpoint instead of the sign-in
+ * it keeps for the student's subscription. The grid daemon removes the same list from the worker
+ * (grid/beethovend.js, AUTH_VARS); a Claude Code run Beethoven starts on the laptop gets them unset too.
+ */
+export const CLAUDE_CREDENTIAL_ENV = ['CLAUDE_CODE_OAUTH_TOKEN', 'ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_BASE_URL', 'CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR', 'CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR', 'CLAUDE_CODE_USE_BEDROCK', 'CLAUDE_CODE_USE_VERTEX', 'CLAUDE_CODE_USE_FOUNDRY'] as const;
+
+/** Overrides for run(): spawn() leaves out a variable whose value is undefined. */
+export function withoutClaudeCredentials(): Record<string, undefined> {
+  return Object.fromEntries(CLAUDE_CREDENTIAL_ENV.map((k) => [k, undefined]));
+}
 
 export interface ServiceConfig {
   id: SecretId;
@@ -15,8 +36,8 @@ export interface ServiceConfig {
   instructions: string;
   prompt: string;
   /** A cheap authenticated request that proves the token works (GET, bearer). */
-  validate?: { url: string; header: 'Authorization' | 'X-Api-Key'; expectField?: string; extraHeaders?: Record<string, string> };
-  /** Injected into local integrated terminals? ANTHROPIC_API_KEY deliberately is not. */
+  validate?: { url: string; header: 'Authorization'; expectField?: string; extraHeaders?: Record<string, string> };
+  /** Injected into local integrated terminals? */
   injectLocally: boolean;
   /** Pushed to the grid worker's private env file? */
   pushToGrid: boolean;
@@ -54,20 +75,6 @@ export const SERVICES: ServiceConfig[] = [
     pushToGrid: true,
     optional: false,
     pattern: /^hf_[A-Za-z0-9]{20,}$/,
-  },
-  {
-    id: 'anthropicApiKey',
-    name: 'Anthropic API key (optional overflow, pay-per-use)',
-    envVars: ['ANTHROPIC_API_KEY'],
-    tokenUrl: 'https://console.anthropic.com/settings/keys',
-    instructions:
-      'Optional. If you have a Console account with a spending limit, the grid worker can fall back to it when your subscription window is exhausted. Never put this in your laptop terminals: Claude Code would silently bill the key instead of your subscription.',
-    prompt: 'Paste an Anthropic API key (starts with sk-ant-api), or leave empty to skip',
-    validate: { url: 'https://api.anthropic.com/v1/models', header: 'X-Api-Key', expectField: 'data' },
-    injectLocally: false,
-    pushToGrid: true,
-    optional: true,
-    pattern: /^sk-ant-api[A-Za-z0-9_\-]{20,}$/,
   },
 ];
 

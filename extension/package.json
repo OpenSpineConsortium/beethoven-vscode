@@ -1,8 +1,8 @@
 {
   "name": "beethoven",
   "displayName": "Beethoven for VS Code",
-  "description": "Sets up a medical student's laptop for research on the university HPC grid: SSH through the login node to a compute node, tokens for GitHub, Hugging Face and Claude, a persistent Claude Code worker in a Singularity container on the grid, and a bridge so the Claude Code extension can send it work.",
-  "version": "4.0.0",
+  "description": "Sets up a medical student's laptop for research on the university HPC grid: SSH through the login node to a compute node, tokens for GitHub and Hugging Face, your own Claude sign-in on the grid, a persistent Claude Code worker in a Singularity container on the grid, and a bridge so the Claude Code extension can send it work.",
+  "version": "5.0.0",
   "publisher": "openspineconsortium",
   "license": "SEE LICENSE IN LICENSE.txt",
   "repository": {
@@ -481,7 +481,7 @@
     "test:vscode": "node esbuild.mjs --tests && vscode-test --label unit",
     "test": "npm run test:unit && npm run test:vscode",
     "notices": "node ../tools/third_party_notices.mjs",
-    "package": "node esbuild.mjs --production && node ../tools/third_party_notices.mjs && vsce package --no-dependencies --out ../dist/ && node ../tools/release_check.mjs ../dist/beethoven-4.0.0.vsix",
+    "package": "node esbuild.mjs --production && node ../tools/third_party_notices.mjs && vsce package --no-dependencies --out ../dist/ && node ../tools/release_check.mjs ../dist/beethoven-5.0.0.vsix",
     "vscode:prepublish": "node esbuild.mjs --production"
   },
   "dependencies": {

@@ -2,6 +2,45 @@
 
 The format follows Keep a Changelog; versions follow Semantic Versioning.
 
+## 5.0.0 (2026-10-04)
+
+### Removed
+- The optional Anthropic API key and the pay-per-use overflow onto it. Beethoven uses no API key and
+  asks for no paid usage: the grid worker runs only on your own Claude subscription, and when its
+  window is spent it answers "rate limited" with the reset time, as it already did when no key was
+  set; send the prompt again after that. The setup and Manage stored tokens no longer take a key,
+  nothing copies one to the grid, the worker never reads one, and `beethoven accounts` keeps `list`
+  and `remove --yes` (grid scripts version 8). A request that names another account than your
+  sign-in is refused.
+- Investigate the failure with Claude runs only when Claude Code on this laptop is signed in with
+  your Claude subscription (not an API key, a key helper or a cloud provider), with the API key,
+  token and provider variables removed from its environment.
+
+### Changed
+- New agreement texts (Trial and Full Edition version 6, privacy statement version 6): section 5(c)
+  says Beethoven for VS Code asks for no API key and uses no paid usage, and asks you to keep extra
+  usage (usage credits) off in your Claude account's settings, which Beethoven cannot see; the
+  agreement no longer lists a key among what Beethoven stores, and says how to delete one an earlier
+  version left. The terms version is 6, so the signing dialog is shown once more.
+- Update every computer you use Beethoven on to 5.0.0 before you run the grid step again, and do not
+  run the grid step of Ashley for VS Code: the grid step of an earlier version puts its own grid
+  scripts back.
+
+### Kept, so nothing is lost
+- A key that 4.0.0 stored is never used or sent, and Beethoven does not delete it (the Anthropic
+  Console shows a key's value only once). The Beethoven view lists it as not used until you delete
+  it with **Beethoven: Manage stored tokens** or **Beethoven: Reset**; the command-line edition's
+  copy is in `~/.beethoven-local/secrets.json`, to delete by hand, and a copy Ashley for VS Code
+  stored stays in Ashley's own storage. On the grid, every command this version sends puts an
+  empty `disabled` file beside the key first, as do the install, every worker start and the
+  troubleshooter's repair: it is the one switch a worker still running grid scripts 7 honours, so
+  that worker cannot use the key for the rest of its job either. The troubleshooter reports the
+  key, and `beethoven accounts remove --yes`, typed in a terminal on the grid, deletes it. Revoke
+  the key itself in the Anthropic Console.
+- `ANTHROPIC_API_KEY` and the other credential variables are still removed from every Claude Code
+  environment the worker starts, and still never put into laptop terminals; the switches to
+  Bedrock, Vertex and Foundry join them.
+
 ## 4.0.0 (2026-09-30)
 
 ### Changed

@@ -42,9 +42,10 @@ tools for the grid. It can plan, and hand the heavy step to the grid worker, and
 back into the panel. You can say *"check the grid, run the pelvic width demo on ten records, and
 tell me whether the sex difference matches the published value"* in one sentence.
 
-**Honesty about limits.** When your subscription window is used up, the worker says so, tells you
-when it resets, and waits. It never uses anyone else's account, never types a token on a command
-line, and never runs anything heavy on the login node.
+**Honesty about limits.** When your subscription window is used up, the worker says so and tells
+you when it resets, and you send the request again then. Beethoven never switches it to an API key
+or to anyone else's account, never types a token on a command line, and never runs anything heavy
+on the login node.
 
 **Your science stays yours.** The lab curates the datasets, the Claude containers and the software
 in one folder you can read. Everything you build runs in your own grid account, with your own

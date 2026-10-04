@@ -41,10 +41,17 @@ Read this before installing. It is the complete list.
 - **Sign-ins through VS Code's own providers.** The Microsoft provider (your institutional account,
   to check your license names you) and the GitHub provider (a token with the scopes repo, workflow,
   read:org and gist). Beethoven never sees passwords.
-- **Tokens.** Your GitHub token, your Hugging Face token (which you paste) and an optional Anthropic
-  Console key are stored in the operating system's credential store through VS Code SecretStorage
-  and, with your consent in each wizard step, copied over SSH into a file readable only by you in
-  your own grid account. Delete them any time with `Beethoven: Manage stored tokens`.
+- **Tokens.** Your GitHub token and your Hugging Face token (which you paste) are stored in the
+  operating system's credential store through VS Code SecretStorage and, with your consent in each
+  wizard step, copied over SSH into a file readable only by you in your own grid account. Delete them
+  any time with `Beethoven: Manage stored tokens`.
+- **No API key, no paid usage.** Your worker runs only on your own Claude subscription; when its
+  window is spent it answers "rate limited" with the reset time, and you send the prompt again after
+  that. Keep extra usage (usage credits) off in your Claude account's settings: Beethoven cannot see
+  or change them. An Anthropic Console key that version 4.0.0 stored is never used or sent;
+  `Beethoven: Manage stored tokens` deletes it from the laptop (the command-line edition's copy is
+  in `~/.beethoven-local/secrets.json`, to delete by hand) and `beethoven accounts remove --yes`,
+  typed in a terminal on the grid, from the grid.
 - **No Claude credential.** Beethoven never reads, stores or copies a Claude credential. You sign in
   to Claude Code yourself, on the laptop and once in a terminal on the grid; Beethoven only reads
   Claude Code's yes-or-no answer about whether it is signed in.

@@ -21,7 +21,7 @@ it never asks you to build or install anything under the hood.
 ## Install
 
 VS Code, then the extensions **Claude Code**, **Remote - SSH**, and **Beethoven for VS Code** (from
-the Marketplace, or `beethoven-4.0.0.vsix`: Extensions view, `...`, *Install from VSIX*). Beethoven
+the Marketplace, or `beethoven-5.0.0.vsix`: Extensions view, `...`, *Install from VSIX*). Beethoven
 offers its wizard on first start; or press Ctrl/Cmd+Shift+P and type **Beethoven: Set up my research
 environment**.
 

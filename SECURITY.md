@@ -11,8 +11,8 @@ not be met with a claim.
 
 ## What Beethoven for VS Code holds, and where
 
-- On the laptop: settings; GitHub and Hugging Face tokens and an optional Console key in the OS
-  credential store; the license key and the institutional identity in `~/.beethoven-local`
+- On the laptop: settings; GitHub and Hugging Face tokens in the OS credential store (and, until
+  the student deletes it, an Anthropic Console key a 4.0.0 install stored, never used or sent since 5.0.0, only its presence checked); the license key and the institutional identity in `~/.beethoven-local`
   (`~/.ashley-local` on a computer that ran Ashley for VS Code); copies of error reports and
   troubleshooter logs in the extension's storage.
 - In the student's grid account: the same tokens in a mode-600 file, the license key, worker files,

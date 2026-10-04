@@ -7,7 +7,7 @@ troubleshooting, appendix pointers. pandoc embeds the SVG figures and the CSS; E
 prints the PDF; the HTML is also copied into extension/media so "Beethoven: Open the manual" shows it.
 """
 from __future__ import annotations
-import os, re, shutil, subprocess, sys, datetime
+import os, re, shutil, subprocess, sys, datetime, json
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 DOCS = os.path.join(ROOT, "docs")
 MAN = os.path.join(DOCS, "manual")
@@ -27,9 +27,11 @@ def figure(path, caption):
 
 parts = []
 today = datetime.date.today().isoformat()
+# the version the manual describes is the extension's own, so the subtitle cannot fall behind it
+VERSION = json.load(open(os.path.join(ROOT, "extension", "package.json"), encoding="utf-8"))["version"]
 parts.append(f"""---
 title: "Beethoven for VS Code"
-subtitle: "The Wayne State grid and Claude Code, from one wizard. Manual for version 4.0.0"
+subtitle: "The Wayne State grid and Claude Code, from one wizard. Manual for version {VERSION}"
 date: "{today}"
 ---
 
@@ -44,7 +46,7 @@ arch = demote(arch).split("\n", 1)[1]
 # insert the rendered figures beside the ASCII sketch and the queue section
 arch = arch.replace("## Topology\n", "## Topology\n" + figure("../figures/topology.svg", "The three places and what runs in each; every laptop action is one ssh to the login node."), 1)
 arch = arch.replace("## The request queue\n", "## The request queue\n" + figure("../figures/lifecycle.svg", "One request, from the laptop's ssh to the RESULT line."), 1)
-arch = arch.replace("## Credentials\n", "## Credentials\n" + figure("../figures/accounts.svg", "Rotation among a student's own credentials; a limit becomes a cooldown, not a failure."), 1)
+arch = arch.replace("## Credentials\n", "## Credentials\n" + figure("../figures/accounts.svg", "One sign-in, the student's own subscription; a spent window becomes a wait for its reset, not a failure."), 1)
 parts.append("# How it works\n\n" + arch)
 parts.append("# What you can ask, and what you cannot\n\n" + demote(read("LIMITS.md")).split("\n", 1)[1])
 parts.append("# Installing and building\n\n" + demote(read("INSTALL.md")).split("\n", 1)[1])
