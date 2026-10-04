@@ -1753,14 +1753,14 @@ Depends on: `vscode.secret-storage`, `account.claude-subscription`
 
 ### `account.anthropic-api-key` Optional Anthropic API key (overflow)
 
-> Since 5.0.0 (2026-10-04) there is no API key: none is asked for, stored, copied or used. A key 4.0.0 stored is never used or sent; on the grid an empty `disabled` file is put beside it, the switch a worker still on grid scripts 7 honours, and `grid.accounts` reports it until `beethoven accounts remove --yes` deletes it; on the laptop Manage stored tokens or Reset deletes it. The entry below describes 4.0.0.
+> Since 5.0.0 (2026-10-04) there is no API key: none is asked for, stored, copied or used. A key 4.0.0 stored is never used or sent; on the grid an empty `disabled` file is put beside it, the switch a worker still on grid scripts 7 honours, and `grid.accounts` reports it until `beethoven accounts remove --yes` deletes it; on the laptop Manage stored tokens or Reset deletes it. The entry below describes 4.0.0, except the step by hand, which is today's.
 
 Depends on: `vscode.secret-storage`
 
 - **Assumes:** An optional sk-ant-api key. Since wizard v2 it is no longer a wizard step; it is set through Manage tokens. GET /v1/models with X-Api-Key returns 200. On the grid it is stored at ~/.ashley/accounts/apikey/apikey (mode 600). It is never injected into laptop terminals, and the grid's verify-tokens does not check it.
 - **Check:** Skip when not set. On the laptop, validateToken(anthropicApiKey) succeeds. On the grid, `stat -c %a ~/.ashley/accounts/apikey/apikey` prints 600, and `ashley status --json` lists 'apikey' among the accounts.
 - **Looks like:** `the service rejected it (HTTP 401)`; `invalid x-api-key`; `credit balance is too low`
-- **By hand:** Create a key with a spending limit in the Anthropic Console, or leave it unset.
+- **By hand:** Nothing to set up: Beethoven uses no API key. To delete a key 4.0.0 stored: Manage stored tokens or Reset on the laptop, beethoven accounts remove --yes in a terminal on the grid; revoke the key itself in the Anthropic Console.
 - **Could break when:** Changes to the Console URL (console.anthropic.com may redirect) or to billing policy.
 - **Code:** extension/src/core/services.ts:72-85; extension/src/core/wizard.ts:485-488; extension/src/extension.ts:424-439
 
@@ -1824,15 +1824,15 @@ Depends on: `grid-node.accounts-available`, `external.anthropic-api-from-node`, 
 
 ### `account.claude-usage-window` The subscription window is not exhausted
 
-> Since 5.0.0 there is no rotation and no overflow onto an API key: a spent window is answered `rate_limited` with `retry_after`, and the request is sent again after the reset. "Add an API key" below is withdrawn; extra usage (usage credits) on the Claude account is the student's to keep off.
+> Since 5.0.0 there is no rotation and no overflow onto an API key: a spent window is answered `rate_limited` with `retry_after`, and the request is sent again after the reset. No API key and no usage credits, by anyone: extra usage (usage credits) on the Claude account is the student's to keep off. The assumption, the repair and the step by hand below are today's; the study's text of 4.0.0 stays in the JSON record.
 
 Depends on: `account.claude-grid-credential`
 
-- **Assumes:** Pro/Max five-hour and weekly windows have room; rotation happens only among the student's own credentials (subscription first, own API key as overflow), never across people.
+- **Assumes:** Pro/Max five-hour and weekly windows have room. The worker runs only on the student's own subscription: no API key, no usage credits, no other account, never another person's.
 - **Check:** Login node: grep -h cooldown_until ~/.ashley/accounts/*/state.json; ashley worker list --json -> state.status not 'blocked'.
 - **Looks like:** `You've hit your session limit · resets 3:45pm`; `You've hit your weekly limit · resets Mon 12:00am`; `status rate_limited with retry_after`; `credits_required`
-- **Repair:** None beyond the daemon's own rotation; wait for retry_after.
-- **By hand:** Wait for the reset, or add an API key with a spending cap.
+- **Repair:** None: the worker answers rate_limited with retry_after and starts nothing until the reset.
+- **By hand:** Wait for the reset, then send the request again. No API key, no usage credits.
 - **Could break when:** Plan limits and wording change.
 - **Code:** grid/ashleyd.js:17-20,229-250,355-357; docs/ARCHITECTURE.md:106-115
 

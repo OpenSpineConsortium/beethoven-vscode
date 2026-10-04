@@ -119,7 +119,7 @@ server.registerTool(
       a.worker,
       a.timeout_sec,
     );
-    const head = `[${r.status}] request ${r.id} session=${r.session} account=${r.account ?? '?'} turns=${r.num_turns ?? '?'} cost=$${r.cost_usd ?? '?'} ${r.duration_ms ? Math.round(r.duration_ms / 1000) + 's' : ''}`;
+    const head = `[${r.status}] request ${r.id} session=${r.session} account=${r.account ?? '?'} turns=${r.num_turns ?? '?'} ${r.duration_ms ? Math.round(r.duration_ms / 1000) + 's' : ''}`;
     return text(`${head}\n\n${r.result || r.error || ''}${r.retry_after ? `\n\nretry after ${r.retry_after}` : ''}`);
   },
 );
@@ -153,7 +153,8 @@ server.registerTool(
   },
   async (a) => {
     const r = await grid.result(a.id, a.worker);
-    return text(r ? JSON.stringify(r, null, 2) : `request ${a.id} has no result yet`);
+    // without cost_usd: a list-price estimate that reads like a bill, and on the subscription it is none
+    return text(r ? JSON.stringify({ ...r, cost_usd: undefined }, null, 2) : `request ${a.id} has no result yet`);
   },
 );
 

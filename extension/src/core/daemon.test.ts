@@ -248,3 +248,28 @@ test('when the sign-in is gone the worker says how to sign in, and picks it up a
   assert.equal(result('r41').status, 'ok');
   assert.equal(result('r41').account, 'claude');
 });
+
+test('a sign-in that is not a Claude subscription gets no work, says so, and the subscription is picked up again', async () => {
+  const state = () => JSON.parse(fs.readFileSync(path.join(worker, 'state.json'), 'utf8'));
+  let n = 2;
+  const touch = () => fs.writeFileSync(path.join(claudeHome, '.credentials.json'), `{"fake":true,"changed":${++n}}\n`); // the daemon watches this file
+  // a token taken from the environment (the setup-token route the credential rule forbids), then a cloud provider (paid by use)
+  for (const [file, field, value, id] of [['fake_auth_method', 'authMethod', 'oauth_token', 'r50'], ['fake_api_provider', 'apiProvider', 'bedrock', 'r51']] as const) {
+    fs.writeFileSync(path.join(claudeHome, file), value);
+    touch();
+    assert.ok(await waitFor(() => state().claude_login?.[field] === value, 20000), `the heartbeat has the new answer (${value})`);
+    assert.equal(state().claude_login.subscription, false, 'not a subscription');
+    assert.equal(state().claude_login.loggedIn, true, 'what Claude Code said is kept');
+    send({ v: 1, id, prompt: 'not on a key', session: `s-${id}`, mode: 'acceptEdits', max_turns: 5, created: new Date().toISOString(), from: 'test' });
+    assert.ok(await waitFor(() => !!result(id)));
+    assert.equal(result(id).status, 'error');
+    assert.match(result(id).error, /not with a Claude subscription/);
+    assert.equal(fs.existsSync(path.join(root, 'workspaces', `s-${id}`, 'fake_argv.json')), false, 'Claude Code was not started');
+    fs.rmSync(path.join(claudeHome, file));
+    touch();
+    assert.ok(await waitFor(() => state().claude_login?.subscription === true, 20000), 'the subscription again');
+  }
+  send({ v: 1, id: 'r52', prompt: 'subscription', session: 's-r52', mode: 'acceptEdits', max_turns: 5, created: new Date().toISOString(), from: 'test' });
+  assert.ok(await waitFor(() => !!result('r52')));
+  assert.equal(result('r52').status, 'ok');
+});

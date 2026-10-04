@@ -37,6 +37,8 @@ const AUTH_VARS = ['CLAUDE_CODE_OAUTH_TOKEN', 'ANTHROPIC_API_KEY', 'ANTHROPIC_AU
 function clean(s) {
   return String(s).replace(ANSI, '');
 }
+const isSubscription = (j) => !!j.loggedIn && j.authMethod === 'claude.ai' && (j.apiProvider ?? 'firstParty') === 'firstParty';
+const NOT_SUBSCRIPTION = 'Claude on the grid is signed in, but not with a Claude subscription, and phone access runs only on your own subscription: sign in again with it: beethoven claude login (Beethoven: Sign in to Claude on the grid)';
 
 function startPhone(o) {
   // the grid folder: beethovenHome (ashleyHome, its option name before grid scripts 7, still accepted)
@@ -91,19 +93,26 @@ function startPhone(o) {
   function claudeCmd(args) {
     return o.claude.endsWith('.js') ? `'${process.execPath}' '${o.claude}' ${args}` : `'${o.claude}' ${args}`;
   }
-  /** Claude Code's own answer about its stored login; Beethoven reads status, never the credential. */
+  /**
+   * Claude Code's own answer about its stored login; Beethoven reads status, never the credential. Only a
+   * claude.ai sign-in billed by Anthropic itself counts (the worker's and the laptop's rule): one through an
+   * API key, a token or a cloud provider is treated as no sign-in, and `other` says why.
+   */
   function loggedIn(force) {
     if (!force && Date.now() - loggedInCache.at < 60_000) return loggedInCache.value;
     const cmd = o.claude.endsWith('.js') ? process.execPath : o.claude;
     const args = o.claude.endsWith('.js') ? [o.claude, 'auth', 'status'] : ['auth', 'status'];
     const r = spawnSync(cmd, args, { env: env(), encoding: 'utf8', timeout: 60_000 });
-    let v = false;
+    let j;
     try {
-      v = !!JSON.parse(r.stdout || '{}').loggedIn;
+      j = JSON.parse(r.stdout || '{}');
     } catch {
-      v = /"loggedIn":\s*true/.test(r.stdout || '');
+      const s = r.stdout || '';
+      const field = (k) => (new RegExp(`"${k}":\\s*"([^"]*)"`).exec(s) || [])[1];
+      j = { loggedIn: /"loggedIn":\s*true/.test(s), authMethod: field('authMethod'), apiProvider: field('apiProvider') };
     }
-    loggedInCache = { at: Date.now(), value: v };
+    const v = isSubscription(j || {});
+    loggedInCache = { at: Date.now(), value: v, other: !v && !!(j && j.loggedIn) };
     return v;
   }
   function pty(cmdline, transcript, cwd) {
@@ -251,7 +260,9 @@ function startPhone(o) {
       }
       if (session) return;
       if (!loggedIn(false)) {
-        if (st.phase !== 'need_login') write({ phase: 'need_login', session_url: null, message: 'sign in to Claude on the grid first: beethoven claude login (Beethoven: Sign in to Claude on the grid)' });
+        const message = loggedInCache.other ? NOT_SUBSCRIPTION : 'sign in to Claude on the grid first: beethoven claude login (Beethoven: Sign in to Claude on the grid)';
+        // the message of an ended sign-in (written when Remote Control exits) stays until the answer changes kind
+        if (st.phase !== 'need_login' || (st.message !== message && (message === NOT_SUBSCRIPTION || st.message === NOT_SUBSCRIPTION))) write({ phase: 'need_login', session_url: null, message });
         return;
       }
       if (!consentGiven()) {

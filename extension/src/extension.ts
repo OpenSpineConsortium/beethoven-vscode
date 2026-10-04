@@ -490,7 +490,8 @@ async function commandAsk(grid: GridApi): Promise<void> {
       },
       ctl.signal,
     );
-    chan.appendLine(`\n---\n**${result.status}** in ${result.duration_ms ? Math.round(result.duration_ms / 1000) : '?'} s, ${result.num_turns ?? '?'} turns, $${result.cost_usd?.toFixed(3) ?? '?'} (${result.account ?? ''})`);
+    // no dollar figure: Claude Code's cost_usd is a list-price estimate, and on the subscription it is not a bill
+    chan.appendLine(`\n---\n**${result.status}** in ${result.duration_ms ? Math.round(result.duration_ms / 1000) : '?'} s, ${result.num_turns ?? '?'} turns (${result.account ?? ''})`);
     if (result.status !== 'ok') chan.appendLine(`${result.error ?? ''}${result.retry_after ? ` retry after ${result.retry_after}` : ''}`);
   });
 }
@@ -678,7 +679,15 @@ async function commandPhone(context: vscode.ExtensionContext, grid: GridApi, wor
   let st = await wait(['need_login', 'need_consent', 'running', 'error', 'elsewhere'], 120);
   for (let round = 0; st && (st.phase === 'need_login' || st.phase === 'need_consent') && round < 2; round++) {
     if (st.phase === 'need_login') {
-      const go = await p.confirm('Phone access uses your own Claude sign-in on the grid, and there is none yet. A terminal opens; Claude Code signs you in there (click the link, Authorize, paste the code). Beethoven never sees the sign-in.', 'Open the terminal', 'Not now');
+      // the grid gives the same phase for a sign-in that is not a subscription; only its message tells them apart
+      const other = /not with a Claude subscription/.test(st.message ?? '');
+      const go = await p.confirm(
+        other
+          ? 'Phone access runs only on your own Claude subscription, and Claude on the grid is signed in some other way. A terminal opens; sign in again there with your Claude Pro or Max account (click the link, Authorize, paste the code). Beethoven never sees the sign-in.'
+          : 'Phone access uses your own Claude sign-in on the grid, and there is none yet. A terminal opens; Claude Code signs you in there (click the link, Authorize, paste the code). Beethoven never sees the sign-in.',
+        'Open the terminal',
+        'Not now',
+      );
       if (!go) return p.finish('Phone access is waiting for the sign-in; run this again any time.', false);
       await p.runInteractive('Sign in to Claude on the grid', 'ssh', ['-t', alias, gridCliLine(['claude', 'login'])]);
     } else {

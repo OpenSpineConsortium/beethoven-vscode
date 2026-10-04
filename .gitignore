@@ -1,10 +1,10 @@
 node_modules/
-# the built extension is committed (students install it from here); bundles, unpacked copies and
-# test builds are not. dist/release/<version>/ holds each release with its signed checksums.
+# the built extension of each release from 5.0.0 is committed (students install it from here); bundles,
+# unpacked copies and test builds are not. dist/release/<version>/ holds each release with its signed
+# checksums. The packages of 2.0.0 to 4.0.0 ask for an API key and were withdrawn on 2026-10-04
+# (dist/release/README.md); only their records stay.
 /dist/*
 !/dist/beethoven-*.vsix
-# the builds before the rename (Ashley for VS Code 2.0.0 and 3.0.0) stay committed under their names
-!/dist/ashley-*.vsix
 !/dist/release/
 extension/dist/
 dist-test/

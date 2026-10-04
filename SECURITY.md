@@ -27,7 +27,10 @@ Tokens never appear on command lines, in job logs or in `sbatch --export`. Every
 quoted once. Every Claude Code process runs in a Slurm allocation, never on the login node. The
 worker refuses work without a valid license and without the student's own sign-in. The maintenance
 pipeline runs on the maintainer's own accounts, treats reports as hostile input, holds no secrets
-besides a repository-scoped token and the maintainer's API key, and cannot merge.
+besides a repository-scoped token, and cannot merge: reports arrive as GitHub issues and the
+maintainer reads them. Nothing on the maintainer's side runs on an API key, and nothing runs Claude
+Code unattended in GitHub Actions, because that would need a key or a token held as a secret; any
+help from Claude Code is the maintainer's own interactive session on his own subscription.
 
 ## Supported versions
 

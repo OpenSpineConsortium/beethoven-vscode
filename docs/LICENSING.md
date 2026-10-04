@@ -125,9 +125,13 @@ uses, or the old credential capture. Bundles are readable on purpose (the Market
 minified extensions); source maps never ship.
 `dist/release/<version>/` holds the `.vsix`, the changelog, both agreements, the privacy statement,
 the notices, `SHA256SUMS` and `SHA256SUMS.sig`; `beethoven-license.mjs verify-release <dir>` checks
-them (the signature's domain tag is still `ASHLEY-RELEASE1`, so every earlier release verifies too).
-The `.vsix` in `dist/` and the release folders are committed, so students can install from the
-repository; the Marketplace upload is `docs/MARKETPLACE.md`.
+them (the signature's domain tag is still `ASHLEY-RELEASE1`, so every earlier release verifies too;
+the folders of 2.0.0 to 4.0.0 verify only with their withdrawn package put back beside the records,
+`dist/release/README.md`).
+The `.vsix` in `dist/` and the release folders are committed from 5.0.0 on, so students can install
+from the repository; the packages of 2.0.0 to 4.0.0 ask for an API key and were withdrawn on
+2026-10-04, their records kept (`dist/release/README.md`). The Marketplace upload is
+`docs/MARKETPLACE.md`.
 
 ## What is still to settle (from the compliance report)
 

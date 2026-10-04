@@ -19,14 +19,16 @@ grid/        what gets installed in ~/.beethoven/bin on the grid: the beethoven 
 cli/         ten-line ssh forwarders for laptops without Node (macOS/Linux bash, Windows PowerShell)
 docs/        manual (HTML + PDF), pitch, architecture, limits, install, research notes, figures
 tools/       release, license and access-service tooling (maintainer only)
-dist/        the built .vsix files
+dist/        the release records, and the built .vsix of each release from 5.0.0
 ```
 
 ## Quick start
 
-1. Install **Beethoven for VS Code** from the Marketplace, or `dist/release/4.0.0/beethoven-4.0.0.vsix`
-   (Extensions view, `...`, *Install from VSIX*). Accept the terms; sign in with Wayne State and your
-   access key arrives by itself if the lab has approved you.
+1. Install **Beethoven for VS Code** 5.0.0, from the Marketplace once it is published there, or
+   `dist/release/5.0.0/beethoven-5.0.0.vsix` once the maintainer has built and signed it with
+   `tools/release.mjs` (Extensions view, `...`, *Install from VSIX*). Do not install 4.0.0 or anything
+   earlier, nor Ashley for VS Code 3.0.0 from the Marketplace: they ask for an API key. Accept the
+   terms; sign in with Wayne State and your access key arrives by itself if the lab has approved you.
 2. `Beethoven: Set up my research environment (wizard)`.
 3. `Beethoven: Start a Claude worker on the grid`, then `Beethoven: Ask the grid Claude`, or open the
    Claude Code panel and say "check the grid status".
@@ -37,9 +39,15 @@ Everything else: [docs/manual.html](docs/manual.html) (also `docs/manual.pdf`, b
 [docs/PITCH.md](docs/PITCH.md), [docs/RESEARCH.md](docs/RESEARCH.md),
 [docs/DIAGNOSTICS.md](docs/DIAGNOSTICS.md), [docs/MARKETPLACE.md](docs/MARKETPLACE.md).
 
-## Status (2026-09-30): version 4.0.0, the rename
+## Status (2026-10-04): version 5.0.0, no API key
 
-Version 4 is Ashley for VS Code 3.0.0 under its new name, **Beethoven for VS Code**, and a new
+Version 5 removes the optional Anthropic API key of 4.0.0 and the pay-per-use overflow onto it: the
+grid worker runs only on the student's own Claude subscription and, when its window is spent, answers
+with the time it resets. It is merged but not yet built, signed or released. The packages of 2.0.0 to
+4.0.0 ask for an API key and were withdrawn from `dist/` on 2026-10-04 (`dist/release/README.md`);
+`extension/CHANGELOG.md` has the full list.
+
+Version 4 was Ashley for VS Code 3.0.0 under its new name, **Beethoven for VS Code**, and a new
 Marketplace item, `openspineconsortium.beethoven` (the old item, `openspineconsortium.ashley`, is
 retired as `docs/MARKETPLACE.md` describes). Commands, settings, the view, the MCP server and the grid
 command are `beethoven`; the grid folder is `~/.beethoven`. Nothing a student set up is lost: the old
@@ -61,8 +69,8 @@ What version 2 and 3 introduced still holds:
   their own grid account; Claude Code keeps its own credential and Beethoven only points at it. This
   follows the compliance research in `docs/research/reports/` (Anthropic's Claude Code terms forbid
   third-party tools from handling Claude credentials).
-- **Error reports, opt-out at first run**, scrubbed of identity, feeding a maintenance pipeline that
-  runs on the maintainer's own accounts and proposes reviewed pull requests.
+- **Error reports, opt-out at first run**, scrubbed of identity, filed as GitHub issues on the
+  maintainer's own accounts, where the maintainer reads them; nothing there runs on an API key.
 - The source is proprietary: `LICENSE`, `extension/LICENSE.txt`, `extension/LICENSE-FULL.txt`,
   `extension/PRIVACY.md`, `extension/THIRD_PARTY_NOTICES.md`.
 
@@ -72,8 +80,8 @@ terms. The history of every pass is in `docs/CHECKPOINT_2026-09-28.md`.
 Still needs a person: the Claude sign-in on the grid and a first prompt through a worker; a phone
 session with a real code; the Wayne State sign-in in the university tenant; a second student account;
 the three written answers the compliance report asks for (Anthropic, the university's technology
-office, counsel on the licensor entity); the Marketplace upload of the new item and the retirement of
-the old one. `docs/LICENSING.md` has the release and issuing steps.
+office, counsel on the licensor entity); building and signing 5.0.0; the Marketplace upload of the
+new item and the retirement of the old one. `docs/LICENSING.md` has the release and issuing steps.
 
 ## Licence
 

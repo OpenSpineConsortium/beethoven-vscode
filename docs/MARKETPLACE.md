@@ -23,15 +23,18 @@ students enter those once more; the manual and the README say so.
 
 Retiring `openspineconsortium.ashley`, in this order:
 
-1. Publish Beethoven for VS Code 4.0.0 (below) and tell the students (the support page, the lab's
-   channel): install Beethoven for VS Code, run its wizard once, let it uninstall Ashley.
-2. Leave the Ashley listing up until the students have moved. Installed copies of 3.0.0 keep
-   working meanwhile: they read `https://openspineconsortium.com/ashley/services.json` and the other
-   `/ashley/` addresses, which the site keeps (copies or forwards; see the site's `tools/build_site.py`
+1. Publish Beethoven for VS Code 5.0.0 (below), never 4.0.0 or an earlier package: they ask for an
+   API key, which Beethoven uses nowhere. Tell the students (the support page, the lab's channel):
+   install Beethoven for VS Code, run its wizard once, let it uninstall Ashley.
+2. Do not leave the Ashley listing up while the students move: the version it offers, Ashley for VS
+   Code 3.0.0, asks for an API key and must not be installed, so unpublish it (step 3) as soon as
+   5.0.0 is listed. Installed copies of 3.0.0 keep working meanwhile: they read
+   `https://openspineconsortium.com/ashley/services.json` and the other `/ashley/` addresses, which
+   the site keeps (copies or forwards; see the site's `tools/build_site.py`
    redirect table), and they accept only keys beginning `ASHLEY1.`, which is why every issuer still
    writes that prefix (`beethoven-license.mjs --prefix`, the access service's `KEY_PREFIX`: flip only
    after every installed build older than Beethoven 8.0.0 and Beethoven for VS Code 4.0.0 is retired).
-3. Then, on the publisher page, open the Ashley row's **…** menu and choose **Unpublish**: the item
+3. On the publisher page, open the Ashley row's **…** menu and choose **Unpublish**: the item
    leaves search and the install button, installed copies keep working and simply get no update. If
    the page offers to mark the item deprecated with a replacement, name `openspineconsortium.beethoven`
    (VS Code then tells people who still have Ashley installed where it went); whether this publisher
@@ -69,7 +72,8 @@ Since 2026 a **new** Azure DevOps organization must be linked to an Azure subscr
 and identity check), so the Personal Access Token in step 3 is not available until an Azure
 subscription exists. The Marketplace does not need it: on the publisher's management page
 (https://marketplace.visualstudio.com/manage/publishers/openspineconsortium) choose **+ New
-extension → Visual Studio Code**, drop `dist/release/4.0.0/beethoven-4.0.0.vsix` on the upload box,
+extension → Visual Studio Code**, drop `dist/release/5.0.0/beethoven-5.0.0.vsix` on the upload box
+(never the withdrawn 4.0.0 or an earlier package: they ask for an API key; `dist/release/README.md`),
 and wait for the validation (a few minutes; the page e-mails the result). From then on, updates go
 through the **…** menu → **Update** on the **Beethoven for VS Code** row, with the next integer
 version's VSIX. Never upload a Beethoven VSIX as an update of the Ashley row: its id
@@ -112,8 +116,9 @@ new integer.
 ## After publishing
 
 - Install from the Marketplace in the Windows Sandbox kit (`tools/sandbox/README.md`, `-Marketplace`)
-  and walk the first run once; then once more on a laptop that has Ashley 3.0.0 installed and set
-  up, to see the settings, the key and the grid folder carry over and the uninstall offer appear.
+  and walk the first run once; then once more on a laptop that already has Ashley 3.0.0 set up (do
+  not install it anew: it asks for an API key), to see the settings, the key and the grid folder
+  carry over and the uninstall offer appear.
 - Watch the listing's Q&A (the `qna` link points at the support site) and the access requests.
 - To pull a release: `vsce unpublish` removes the listing; a defective version is better replaced by
   publishing the next integer with the fix.

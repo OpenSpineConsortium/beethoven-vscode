@@ -30,9 +30,9 @@ python tools/sandbox/make_wsb.py
 
 writes `tools/sandbox/Beethoven-VirginWindows.wsb` with this checkout's absolute paths (so it is
 written per machine and not committed), reads it back to make sure it is well-formed, and prints
-which VSIX will be installed: the most recently modified `dist/beethoven-*.vsix` (the
-`ashley-*.vsix` beside it, the builds before the rename, are never picked). Package first if that is
-not the build you mean to test.
+which VSIX will be installed: the most recently modified `dist/beethoven-*.vsix`. Package first if
+that is not the build you mean to test, and never test 4.0.0 or an earlier package: they ask for an
+API key and were withdrawn (`dist/release/README.md`).
 
 Double-click the `.wsb`. A clean Windows desktop appears and a console window runs
 `bootstrap.cmd`, which:

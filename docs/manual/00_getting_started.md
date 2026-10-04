@@ -41,8 +41,9 @@ Two things are asked again, once: the agreement (a new version, shown in the sig
 your GitHub and Hugging Face tokens, because VS Code keeps each extension's stored tokens apart. Run
 the wizard: its GitHub step is one click in the browser and its Hugging Face step one copy.
 
-Then uninstall Ashley for VS Code (Beethoven offers to do it). While both are installed, each puts
-its own version of the grid scripts back into your grid account.
+Then uninstall Ashley for VS Code (Beethoven offers to do it), and do not install it again: it asks
+for an API key, which Beethoven never uses. While both are installed, each puts its own version of
+the grid scripts back into your grid account.
 
 ## The setup panel
 

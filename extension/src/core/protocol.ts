@@ -50,6 +50,8 @@ export interface BeethovenResult {
   session: string;
   session_id?: string;
   account?: string;
+  /** Claude Code's list-price estimate (total_cost_usd), kept on the v1 wire; never shown, because on the
+   *  student's subscription it is not a bill */
   cost_usd?: number;
   duration_ms?: number;
   num_turns?: number;

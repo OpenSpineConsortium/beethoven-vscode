@@ -53,7 +53,7 @@ cd extension
 npm run typecheck && npm run test:unit && npm run test:vscode     # 64 unit (7 skip on Windows), 17 VS Code
 python3 ../tools/diag_doc.py
 BEETHOVEN_VENDOR_DIR=~/.beethoven-vendor node ../tools/release.mjs    # needs the vendor folder
-code --install-extension ../dist/beethoven-4.0.0.vsix --force        # VS Code for Mac; the extension is cross-platform
+code --install-extension ../dist/beethoven-5.0.0.vsix --force        # VS Code for Mac; never 4.0.0 or older: they ask for an API key
 ```
 
 `tools/push_org.sh` pushes to `OpenSpineConsortium/beethoven-vscode` from any shell whose git can

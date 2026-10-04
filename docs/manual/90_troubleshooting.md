@@ -44,6 +44,7 @@ The steps are the ten in *Getting started*.
 | Beethoven view: *Waiting for lab access* | your request is pending | your lead approves it in Beethoven; nothing to do |
 | Worker shows PENDING for a long time | the `requeue` pool is busy | start it with the `secp`/`secondary` settings (`beethoven.worker.partition`, `beethoven.worker.qos`) |
 | A prompt returns *Claude is not signed in on the grid* | you have not done step 12, or the sign-in ended (about a month) | run **Beethoven: Sign in to Claude on the grid** |
+| A prompt or phone access says Claude on the grid is *signed in, but not with a Claude subscription* | Claude Code on the grid is using a Console key, a key helper, a token or a cloud provider | run **Beethoven: Sign in to Claude on the grid** and sign in with your Claude Pro or Max account |
 | Step 5 says *signed in through ..., not a Claude subscription* | Claude Code on your laptop is using a Console key, a key helper or a cloud provider | in Claude Code, sign out and sign in with your Claude Pro or Max account |
 | Beethoven refuses every command and says *license needed* | no key, an ended trial, or a key for someone else | **Beethoven: License**: enter your key, or ask your lead. A trial ends by itself and cannot be repeated |
 | Beethoven says the terms have not been accepted | the first-run dialog was closed with *Not now* | run any Beethoven command; the dialog returns |
