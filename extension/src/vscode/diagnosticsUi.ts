@@ -11,6 +11,7 @@ import { BeethovenStore, findClaudeExecutable } from './store';
 import { VsCodeUI } from './ui';
 import { run } from '../core/shell';
 import { withoutClaudeCredentials } from '../core/services';
+import { accountEnvironment } from '../core/accounts';
 import { localClaudeStatus } from '../core/wizard';
 
 export class Troubleshooter implements vscode.Disposable {
@@ -172,9 +173,10 @@ export class Troubleshooter implements vscode.Disposable {
   async investigate(): Promise<void> {
     if (!this.last || this.last.ok) return void vscode.window.showInformationMessage('Nothing is broken right now.');
     const causes = this.last.rootCauses.map((r: NodeReport) => ({ id: r.id, title: r.title, detail: r.detail, manual_fix: r.manualFix, repair_tried: r.repair }));
-    // only on the student's own subscription: an API key or token in VS Code's environment would bill it instead
+    // only on the student's own subscription: an API key or token in VS Code's environment would bill it instead;
+    // under the account beethoven.account names, like every Claude Code the edition starts on this laptop
     const exe = findClaudeExecutable();
-    const env = withoutClaudeCredentials();
+    const env = { ...withoutClaudeCredentials(), ...accountEnvironment(this.store.accountChoice()) };
     const lc = await localClaudeStatus(exe, env);
     if (!lc.subscription) return void vscode.window.showWarningMessage(`Investigating with Claude runs only on your own Claude Pro or Max subscription, and Claude Code on this laptop is ${lc.ok ? lc.detail : 'not ready'}. Sign in with your subscription (Beethoven: Sign in to Claude on this laptop), then try again.`);
     const prompt = [

@@ -80,12 +80,17 @@ export async function activate(context: vscode.ExtensionContext): Promise<{ _int
     } catch (e) {
       output.appendLine(`environment hydration failed: ${e}`);
     }
+    await warnAboutAccount(context);
   };
   await hydrate();
   context.subscriptions.push(
     license.onDidChange(() => {
       tree.refresh();
       void hydrate();
+    }),
+    // a changed beethoven.account reaches the next terminal without a reload
+    vscode.workspace.onDidChangeConfiguration((e) => {
+      if (e.affectsConfiguration('beethoven.account')) void hydrate().then(() => tree.refresh());
     }),
   );
 
@@ -181,8 +186,29 @@ export async function activate(context: vscode.ExtensionContext): Promise<{ _int
     if (license.allowed('beethoven.tokenCheck').ok) void checkTokensQuietly(context).catch((e) => output.appendLine(`token check: ${e}`));
   }, 20_000);
   output.appendLine(`license: ${license.check().status} (${license.check().detail})`);
+  const acct = store.accountChoice();
+  output.appendLine(`Claude account for the terminals: ${acct.kind === 'account' ? `${acct.label} (${acct.path})` : acct.kind === 'default' ? "the default (Claude Code's own sign-in)" : `"${acct.label}" is not applied`}`);
   output.appendLine(`Beethoven ${context.extension.packageJSON.version} active (build ${process.env.BEETHOVEN_BUILD ?? 'dev'})`);
   return { _internal };
+}
+
+/**
+ * beethoven.account names something the engine's list does not offer: the terminals keep the usual sign-in,
+ * and the student hears it once per label (the Beethoven view and the diagnostics say it every time).
+ */
+async function warnAboutAccount(context: vscode.ExtensionContext): Promise<void> {
+  const key = 'beethoven.accountWarned';
+  const choice = store.accountChoice();
+  if (choice.kind !== 'invalid') {
+    if (context.globalState.get(key) !== undefined) await context.globalState.update(key, undefined);
+    return;
+  }
+  output.appendLine(`account: ${choice.problem}`);
+  if (context.globalState.get<string>(key) === choice.label) return;
+  await context.globalState.update(key, choice.label);
+  void vscode.window.showWarningMessage(choice.problem, 'Open the setting').then((pick) => {
+    if (pick) void vscode.commands.executeCommand('workbench.action.openSettings', 'beethoven.account');
+  });
 }
 
 export function deactivate(): void {

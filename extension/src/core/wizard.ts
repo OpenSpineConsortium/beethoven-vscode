@@ -18,6 +18,7 @@ import { upsertBlock, hasBlock, SshTargets } from './sshConfig';
 import { run, ssh, scp, expandHome, isWindows, gridCli, gridCliLine, GRID_HOME_PICK } from './shell';
 import { parseSbatchId } from './slurm';
 import { KEY_PATTERN, LicenseCheck, Identity, describeLicense } from './license';
+import { accountEnvironment, asLabel, chooseAccount, ensureAccountDir } from './accounts';
 import * as crypto from 'node:crypto';
 
 export type StepStatus = 'done' | 'todo' | 'skipped' | 'failed';
@@ -44,6 +45,8 @@ export interface WizardSettings {
   gridScriptsDir: string;
   /** Path to a claude executable (for `claude auth status` and `auth login`), or 'claude' if on PATH. */
   claudeExecutable: string;
+  /** beethoven.account: the label of one of the student's own Claude accounts from the engine's list, or '' for Claude Code's own sign-in (core/accounts.ts). */
+  account: string;
 }
 
 export interface TokenAskOptions {
@@ -63,8 +66,8 @@ export interface WizardUI {
   ask(prompt: string, opts?: { password?: boolean; placeholder?: string; value?: string; validate?: (v: string) => string | null }): Promise<string | undefined>;
   confirm(message: string, yes: string, no: string): Promise<boolean>;
   openUrl(url: string): Promise<void>;
-  /** Run an interactive command in a terminal the student can type into. Resolves with the exit code when known. */
-  runInteractive(title: string, command: string, args: string[]): Promise<number | null>;
+  /** Run an interactive command in a terminal the student can type into, with `env` added to its environment. Resolves with the exit code when known. */
+  runInteractive(title: string, command: string, args: string[], env?: Record<string, string>): Promise<number | null>;
   progress(message: string): void;
   /** A token field that also watches the clipboard; falls back to ask() when not implemented. */
   askToken?(prompt: string, opts: TokenAskOptions): Promise<string | undefined>;
@@ -543,19 +546,30 @@ export const stepClaudeLocal: WizardStep = {
   title: 'Claude on this laptop',
   blurb: 'Claude Code here is signed in with your own Claude Pro or Max subscription (Beethoven only checks; it stores nothing).',
   async check(env) {
-    const s = await localClaudeStatus(env.settings.claudeExecutable);
+    // asked in the directory beethoven.account names, when it names a listed account: the one the terminals get
+    const choice = chooseAccount(env.settings.account);
+    if (choice.kind === 'invalid') return report(this.id, this.title, 'failed', choice.problem);
+    const s = await localClaudeStatus(env.settings.claudeExecutable, accountEnvironment(choice));
     if (!s.ok) return report(this.id, this.title, 'todo', s.detail);
-    if (!s.loggedIn) return report(this.id, this.title, 'todo', 'Claude Code on this laptop is not signed in');
-    if (!s.subscription) return report(this.id, this.title, 'failed', `${s.detail}; Beethoven needs Claude Pro or Max (the account made with your Wayne State e-mail)`);
-    return report(this.id, this.title, 'done', s.detail);
+    if (!s.loggedIn) return report(this.id, this.title, 'todo', `Claude Code on this laptop is not signed in${asLabel(choice)}`);
+    if (!s.subscription) return report(this.id, this.title, 'failed', `${s.detail}${asLabel(choice)}; Beethoven needs Claude Pro or Max (the account made with your Wayne State e-mail)`);
+    return report(this.id, this.title, 'done', s.detail + asLabel(choice));
   },
   async run(env) {
     const cur = await this.check(env);
     if (cur.status === 'done') return cur;
+    const choice = chooseAccount(env.settings.account);
+    if (choice.kind === 'invalid') return cur;
     const who = env.settings.accessId ? `${env.settings.accessId}@wayne.edu` : 'your Wayne State e-mail';
-    const go = await env.ui.confirm(`Sign in to Claude Code on this laptop with the Claude account you made with ${who} (Claude Pro at the minimum). Claude Code opens the browser and keeps its own sign-in; Beethoven never sees it.`, 'Sign in', 'Not now');
+    const message =
+      choice.kind === 'account'
+        ? `Sign in to Claude Code on this laptop under your account "${choice.label}", the one the Beethoven setting "account" names: one of your own Claude accounts (Claude Pro at the minimum). Claude Code opens the browser and keeps its own sign-in in that account's folder; Beethoven never sees it.`
+        : `Sign in to Claude Code on this laptop with the Claude account you made with ${who} (Claude Pro at the minimum). Claude Code opens the browser and keeps its own sign-in; Beethoven never sees it.`;
+    const go = await env.ui.confirm(message, 'Sign in', 'Not now');
     if (!go) return report(this.id, this.title, 'skipped', 'not signed in');
-    await env.ui.runInteractive('Claude sign-in', env.settings.claudeExecutable, ['auth', 'login']);
+    // a new account's folder exists, empty and private, before Claude Code writes its own files there
+    ensureAccountDir(choice);
+    await env.ui.runInteractive('Claude sign-in', env.settings.claudeExecutable, ['auth', 'login'], accountEnvironment(choice));
     return this.check(env);
   },
 };

@@ -9,7 +9,12 @@ replaces 4.0.0. The packages of 2.0.0, 3.0.0 and 4.0.0 ask for an API key and we
 tree on 2026-10-04, their records kept (`dist/release/README.md`), so pass 28's step "the maintainer
 uploads 4.0.0" no longer stands: the Marketplace upload is 5.0.0 (`docs/MARKETPLACE.md`). The
 withdrawal and the rest of that day's sweep for API keys are not committed: the maintainer reviews
-and commits. The pass 29 and pass 28 paragraphs that follow are kept as they were.
+and commits. Later that day, on the branch `wip/account` for the maintainer's review: the setting
+`beethoven.account` (one person, their own accounts; `docs/ARCHITECTURE.md`, "Several accounts of
+one person"), with the agreements and the privacy statement at version 7 and `TERMS_VERSION` 7; it
+ships in 5.0.0. Whether the Claude Code extension honours `CLAUDE_CONFIG_DIR` from the terminal
+environment is not yet measured and is on the pre-publish list in `docs/MARKETPLACE.md`. The pass
+29 and pass 28 paragraphs that follow are kept as they were.
 
 **As of pass 29 (2026-09-30, 16:55 UTC).** The newest entry is "What pass 29 changed" below: the
 browser edition's 8.0.0 is released and the site's history purged (both pushed by the maintainer);

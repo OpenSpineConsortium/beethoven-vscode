@@ -4,6 +4,24 @@ The format follows Keep a Changelog; versions follow Semantic Versioning.
 
 ## 5.0.0 (2026-10-04)
 
+### Added
+- The setting `beethoven.account`: which of your own Claude accounts the Claude Code terminals
+  Beethoven opens use, by its label in the account list the engine's `bee account add <label>`
+  keeps on this computer (`~/.beethoven/engine/accounts.json`; Beethoven reads it and never writes
+  it). Empty, the default, means Claude Code's own sign-in, as before. With a label, every Claude
+  Code terminal Beethoven opens or configures, **Beethoven: Sign in to Claude on this laptop** and
+  Investigate the failure with Claude get that account's sign-in folder (`CLAUDE_CONFIG_DIR`, with
+  the label as `BEE_ACCOUNT`), the same two variables `bee-use <label>` sets, so Beethoven and the
+  command line pick the same account (the maintainer, 2026-10-04: one person, their own accounts,
+  never pooled, never anyone else's, never a sign-in copied or moved). A label that is not in the
+  list, or is turned off there, changes nothing: Beethoven says so once, the Beethoven view's
+  *Claude on this laptop* row says so, and the troubleshooter has three checks for it (the account
+  list, the chosen account, the sign-in under it). The grid is not changed: grid scripts 8 still
+  sign in at `~/.beethoven/claude`, and which of your accounts a grid job uses is the engine's
+  decision. Not yet measured: whether the Claude Code extension for VS Code honours
+  `CLAUDE_CONFIG_DIR` from the terminal environment; the maintainer checks this on a real machine
+  before 5.0.0 ships.
+
 ### Removed
 - The optional Anthropic API key and the pay-per-use overflow onto it. Beethoven uses no API key and
   asks for no paid usage: the grid worker runs only on your own Claude subscription, and when its
@@ -27,11 +45,15 @@ The format follows Keep a Changelog; versions follow Semantic Versioning.
   (the worker asks Claude Code again before a request when its last answer is over a minute old);
   the Beethoven view, the setup, the troubleshooter and `beethoven doctor` say so too (grid scripts
   version 8).
-- New agreement texts (Trial and Full Edition version 6, privacy statement version 6): section 5(c)
+- New agreement texts (Trial and Full Edition version 7, privacy statement version 7): section 5(c)
   says Beethoven for VS Code asks for no API key and uses no paid usage, and asks you to keep extra
   usage (usage credits) off in your Claude account's settings, which Beethoven cannot see; the
   agreement no longer lists a key among what Beethoven stores, and says how to delete one an earlier
-  version left. The terms version is 6, so the signing dialog is shown once more.
+  version left. Sections 4(b) and 5(a) say that every Claude account you use is your own, that you
+  may hold several and choose in the settings which one the laptop's Claude Code terminals sign in
+  with, and that Beethoven never pools accounts or moves a sign-in between them; the privacy
+  statement lists the account list Beethoven reads. The terms version is 7, so the signing dialog
+  is shown once more.
 - Update every computer you use Beethoven on to 5.0.0 before you run the grid step again, and do not
   run the grid step of Ashley for VS Code: the grid step of an earlier version puts its own grid
   scripts back.

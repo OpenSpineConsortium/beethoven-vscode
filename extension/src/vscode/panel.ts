@@ -78,10 +78,11 @@ export class SetupPanel implements WizardUI, vscode.Disposable {
   async openUrl(url: string): Promise<void> {
     await vscode.env.openExternal(vscode.Uri.parse(url));
   }
-  async runInteractive(title: string, command: string, args: string[]): Promise<number | null> {
-    // Only the grid Claude sign-in still needs a terminal (Claude Code draws its own prompts there).
+  async runInteractive(title: string, command: string, args: string[], env?: Record<string, string>): Promise<number | null> {
+    // Only the Claude sign-ins still need a terminal (Claude Code draws its own prompts there); env carries
+    // the chosen account's directory for the laptop one (core/accounts.ts)
     const shellPath = resolveExecutable(command);
-    const term = vscode.window.createTerminal({ name: title, shellPath, shellArgs: args, isTransient: true });
+    const term = vscode.window.createTerminal({ name: title, shellPath, shellArgs: args, isTransient: true, env });
     term.show(false);
     this.post({ type: 'toast', message: `A terminal "${title}" opened below. Follow it: open the link it prints in any browser, paste the code back, come back here when it says Done.`, level: 'info' });
     const deadline = Date.now() + 15 * 60_000;

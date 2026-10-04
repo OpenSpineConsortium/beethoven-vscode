@@ -415,6 +415,13 @@
           "default": true,
           "description": "Put GITHUB_TOKEN and HF_TOKEN into every integrated terminal. ANTHROPIC_API_KEY is never injected: it would switch the local Claude Code from your subscription to pay-per-use."
         },
+        "beethoven.account": {
+          "type": "string",
+          "default": "",
+          "pattern": "^([a-z0-9-]{1,32})?$",
+          "patternErrorMessage": "An account label is lower-case letters, digits and hyphens, up to 32 characters. Empty means Claude Code's own sign-in.",
+          "markdownDescription": "Which of your own Claude accounts the Claude Code terminals Beethoven opens use, by its label in your account list: the list that `bee account add <label>` keeps on this computer (Beethoven reads it and never writes it). Empty: Claude Code's own sign-in on this laptop, as before. With a label, those terminals and **Beethoven: Sign in to Claude on this laptop** use that account's sign-in folder (`CLAUDE_CONFIG_DIR`, with the label as `BEE_ACCOUNT`), the same as `bee-use <label>` in a terminal, so Beethoven and the command line pick the same account. A label that is not in the list, or is turned off there, changes nothing and Beethoven says so once. Every account is your own; nothing is ever copied between them. Your grid worker's account is not changed by this setting."
+        },
         "beethoven.container": {
           "type": "string",
           "default": "auto",

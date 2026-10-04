@@ -20,7 +20,7 @@ import * as path from 'node:path';
 import { licenseDir } from './localDir';
 
 /** Bump when either agreement or PRIVACY.md changes in substance; every install re-accepts. Integer, never fractional. */
-export const TERMS_VERSION = 6;
+export const TERMS_VERSION = 7;
 export const TERMS_DATE = '2026-10-04';
 
 export type TermsEdition = 'trial' | 'full';

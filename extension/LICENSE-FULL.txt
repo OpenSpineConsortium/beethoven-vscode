@@ -1,6 +1,6 @@
 BEETHOVEN FOR VS CODE FULL EDITION LICENSE AGREEMENT
 
-Version 6, 2026-10-04. Applies to the Full Edition of Beethoven for VS Code 5.0.0 and later versions
+Version 7, 2026-10-04. Applies to the Full Edition of Beethoven for VS Code 5.0.0 and later versions
 that ship this text. You accept this agreement in the signing dialog Beethoven for VS Code shows
 when you register a Full Edition key; until you do, your use of Beethoven for VS Code is governed by
 the Beethoven for VS Code Trial Edition License Agreement. You can read, copy, save and print this
@@ -77,8 +77,9 @@ Acceptable Use of Information Technology Resources policy (UP 00-1), the HPC Gri
 student or employee rules that apply to you; in particular, no process may be run on a login node,
 and jobs must carry a wall-time limit;
 
-(b) Anthropic's Consumer Terms of Service, Usage Policy and the Claude Code terms, for your Claude
-account: one person, one account; no sharing of credentials; no use of another person's account;
+(b) Anthropic's Consumer Terms of Service, Usage Policy and the Claude Code terms, for each Claude
+account you use: every account is yours alone; no sharing of credentials; no use of another
+person's account;
 
 (c) GitHub's Terms of Service and Acceptable Use Policies, for your GitHub account and token;
 
@@ -99,8 +100,10 @@ This section describes the software as shipped, so that you can hold Licensor to
 sign in to Claude Code yourself, through Anthropic's own flow, on your laptop and, once, in a
 terminal inside your own grid account; Claude Code keeps its own credential there, and Beethoven for
 VS Code only starts Claude Code where that credential already is. Beethoven for VS Code reads Claude
-Code's yes-or-no answer about whether it is signed in, nothing more. You use one Claude account,
-your own.
+Code's yes-or-no answer about whether it is signed in, nothing more. Every Claude account you use
+is your own: you may hold several, and choose in the settings which one the Claude Code terminals
+Beethoven for VS Code opens on your laptop sign in with; Beethoven for VS Code never pools accounts,
+never uses another person's, and never copies or moves a sign-in between them.
 
 (b) GitHub and Hugging Face tokens. With your consent in each step, Beethoven for VS Code stores
 your GitHub token (obtained through Visual Studio Code's own GitHub sign-in) and your Hugging Face

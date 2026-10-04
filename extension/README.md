@@ -55,6 +55,11 @@ Read this before installing. It is the complete list.
 - **No Claude credential.** Beethoven never reads, stores or copies a Claude credential. You sign in
   to Claude Code yourself, on the laptop and once in a terminal on the grid; Beethoven only reads
   Claude Code's yes-or-no answer about whether it is signed in.
+- **Your own Claude accounts.** If the engine's `bee account add <label>` keeps an account list on
+  this computer (`~/.beethoven/engine/accounts.json`), Beethoven reads it and never writes it, so
+  the setting `beethoven.account` can pick which of your own accounts the Claude Code terminals it
+  opens use. Nothing is read inside a sign-in folder and nothing is copied between accounts; your
+  grid worker's account is not changed by the setting.
 - **Terminals and SSH.** Beethoven writes a managed block in `~/.ssh/config`, creates an SSH key,
   opens terminals that run `ssh` to your grid account, and installs its scripts there
   (`~/.beethoven/bin`). It starts Slurm jobs in your account: a persistent worker that runs the

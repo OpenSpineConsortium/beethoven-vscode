@@ -5,6 +5,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { RETIRED_SECRETS, SecretId, SERVICES, localEnvironment } from '../core/services';
 import { WizardEnv, WizardSettings, WizardUI, localClaudeStatus } from '../core/wizard';
+import { AccountChoice, accountEnvironment, chooseAccount } from '../core/accounts';
 import { installPublicKey } from '../core/sshInstall';
 import { isMcpRegistered, registerMcp } from './mcpRegister';
 import type { LicenseGate } from './licenseGate';
@@ -55,7 +56,13 @@ export class BeethovenStore {
       gridRoot: c.get<string>('gridRoot', ''),
       gridScriptsDir: path.join(this.context.extensionPath, 'dist', 'grid'),
       claudeExecutable: findClaudeExecutable(),
+      account: c.get<string>('account', ''),
     };
+  }
+
+  /** beethoven.account against the engine's account list, read afresh each time: the list is the engine's and changes under us. */
+  accountChoice(): AccountChoice {
+    return chooseAccount(this.config.get<string>('account', ''));
   }
 
   async saveSetting<K extends keyof WizardSettings>(key: K, value: WizardSettings[K]): Promise<void> {
@@ -121,14 +128,15 @@ export class BeethovenStore {
   }
 
   /**
-   * Integrated terminals get GITHUB_TOKEN / HF_TOKEN and a few harmless variables.
-   * ANTHROPIC_API_KEY is deliberately never injected: with it set, the local Claude Code
-   * would bill the key instead of the student's subscription.
+   * Integrated terminals get GITHUB_TOKEN / HF_TOKEN, a few harmless variables and, when beethoven.account
+   * names one of the student's own accounts, that account's sign-in directory as CLAUDE_CONFIG_DIR with the
+   * label as BEE_ACCOUNT (the same two `bee-use <label>` sets). ANTHROPIC_API_KEY is deliberately never
+   * injected: with it set, the local Claude Code would bill the key instead of the student's subscription.
    */
   async hydrateEnvironment(): Promise<string[]> {
     const col = this.context.environmentVariableCollection;
     col.persistent = true;
-    col.description = 'Beethoven: tokens and grid variables for this laptop';
+    col.description = 'Beethoven: tokens, grid variables and the chosen Claude account for this laptop';
     col.clear();
     const s = this.settings();
     const names: string[] = [];
@@ -147,6 +155,12 @@ export class BeethovenStore {
             names.push(name);
           }
       }
+    }
+    // a label the list does not offer sets nothing: the terminals keep the usual sign-in and the
+    // student is told (extension.ts, warnAboutAccount; the diagnostics node account.choice)
+    for (const [k, v] of Object.entries(accountEnvironment(this.accountChoice()))) {
+      col.replace(k, v);
+      names.push(k);
     }
     return names;
   }
@@ -275,7 +289,7 @@ export class BeethovenStore {
       extraRequirements: async () => {
         const m: string[] = [];
         if (!vscode.extensions.getExtension('anthropic.claude-code')) m.push('the Claude Code extension (signed in to Claude Pro or Max)');
-        const lc = await localClaudeStatus(s.claudeExecutable);
+        const lc = await localClaudeStatus(s.claudeExecutable, accountEnvironment(this.accountChoice()));
         if (!lc.subscription) m.push(`Claude Code on this laptop signed in with a Claude Pro or Max subscription (${lc.detail})`);
         if (!vscode.extensions.getExtension('ms-vscode-remote.remote-ssh')) m.push('the Remote-SSH extension');
         if (!(await isMcpRegistered())) {

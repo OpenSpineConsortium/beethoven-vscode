@@ -151,8 +151,8 @@ What happens instead:
   signed in is answered with the command that fixes it. Only a claude.ai sign-in billed by Anthropic
   itself counts, the laptop's rule: a sign-in through an API key, a token or a cloud provider is
   reported as not a Claude subscription, and the worker and phone access run nothing on it.
-- One person, one Claude account, and no other credential: no API key and no usage credits, by
-  anyone, ever (the maintainer, 2026-10-04). When the subscription window is spent the daemon
+- One person, their own accounts (the next section), and no other credential: no API key and no
+  usage credits, by anyone, ever (the maintainer, 2026-10-04). When the subscription window is spent the daemon
   answers `rate_limited` with the reset time in `retry_after`; nothing retries by itself, and the
   student sends the request again after the reset. The pay-per-use key overflow of 4.0.0 (grid
   scripts 7) is gone; a key it stored in `~/.beethoven/accounts/apikey/apikey` is never used or
@@ -172,6 +172,49 @@ What happens instead:
 
 The sign-in lasts about a month (a user report; Anthropic's docs give a three-day warning before
 expiry). The heartbeat notices when it ends; the extension asks for step 12 again.
+
+## Several accounts of one person: `beethoven.account`
+
+Decided by the maintainer on 2026-10-04 (the plan item *ACCOUNT_SWITCH_CLIENTS.md*, 2): a student
+may hold several Claude accounts of their own, and the engine (`bee`, the `beethoven-agents`
+repository, not installed with this edition) keeps the list of their sign-in directories. This
+edition reads that list and lets the student pick one for the laptop. "One person, one Claude
+account" became "one person, their own accounts": never pooled, never anyone else's.
+
+- **The list is the engine's file, read only.** `~/.beethoven/engine/accounts.json` holds `version`
+  and, per account, `label`, `path`, `enabled`, `order` and `hibernate_until`; nothing from inside a
+  sign-in directory. Sign-in directories are `~/.beethoven/accounts/<label>/claude`; the account
+  `main` is a link to the edition's own `~/.beethoven/claude`. Labels are lower-case letters, digits
+  and hyphens (`ACCOUNT_LABEL` in `core/accounts.ts`). Beethoven never writes the file, never reads
+  inside a sign-in directory (the one thing ever asked of one is `claude auth status`), and never
+  copies, moves or links a credential between two directories: the switch is which directory the
+  next Claude Code gets, nothing else. `usage/<label>.json` beside the list is not read by this
+  edition.
+- **What the terminals get.** With `beethoven.account` empty (the default) nothing changes: the
+  terminals and the Claude Code extension use Claude Code's own sign-in, as in every build before.
+  With a label that is listed and enabled, `hydrateEnvironment` (`vscode/store.ts`) puts
+  `CLAUDE_CONFIG_DIR=<that account's path>` and `BEE_ACCOUNT=<label>` into the persistent
+  `environmentVariableCollection`, so every integrated terminal gets them; the terminal the wizard
+  opens for `claude auth login` gets them explicitly as well (the `env` of `WizardUI.runInteractive`),
+  and so does *Investigate the failure with Claude* (`claude -p` on the laptop). These are the two
+  variables `bee-use <label>` sets, so the edition and the command line share one list and one
+  meaning. `Beethoven: Sign in to Claude on this laptop` keeps its flow and signs in under that
+  directory, creating it empty and mode 0700 when it does not exist yet (Claude Code writes its own
+  files there). A label that is not listed, is turned off, or is not a label at all sets nothing:
+  the terminals keep the usual sign-in, the student is told once per label (a warning with the two
+  fixes: pick a listed label, or `bee account add <label>` in a terminal), the Beethoven view's
+  *Claude on this laptop* row says so, and the diagnostics nodes `account.list`, `account.choice`
+  and `account.claude` say it every time. With a valid label the row and the wizard's step detail
+  carry "as <label>" beside the signed-in account.
+- **The grid is not changed.** A sign-in on the grid (`beethoven claude login` through the grid
+  scripts) and the worker still use `~/.beethoven/claude` (grid scripts 8). Which of the student's
+  accounts a grid job runs under, and the hand-over between them, is the engine's to choose
+  (`beethoven-research`, `BUILD_PLAN.md` section 17), not this setting's.
+- **Not yet measured:** whether the Claude Code extension for VS Code honours `CLAUDE_CONFIG_DIR`
+  from the terminal environment (Cloak's known limitation, named in the plan item). The integrated
+  terminals and the processes this edition starts get the variable; what the Claude Code extension's
+  own panel does with it has not been checked on a real machine. The maintainer checks before 5.0.0
+  ships (`docs/MARKETPLACE.md`, before the first publish).
 
 ## Secrets: where they are and where they are not
 

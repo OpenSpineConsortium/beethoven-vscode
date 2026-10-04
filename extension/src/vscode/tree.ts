@@ -3,6 +3,7 @@ import * as vscode from 'vscode';
 import { GridApi, GridStatus, GridClaudeStatus } from '../core/gridApi';
 import { BeethovenStore } from './store';
 import { testConnection, localClaudeStatus } from '../core/wizard';
+import { accountEnvironment, asLabel } from '../core/accounts';
 
 type Kind = 'root' | 'worker' | 'account' | 'token' | 'job' | 'info';
 
@@ -161,14 +162,18 @@ export class BeethovenTree implements vscode.TreeDataProvider<Item> {
     return items;
   }
 
-  /** Claude Code's own sign-in on this laptop (status only, the wizard's step "Claude on this laptop"). */
+  /** Claude Code's own sign-in on this laptop (status only, the wizard's step "Claude on this laptop"), under the account beethoven.account names when it names one. */
   private async claudeOnLaptop(claudeExecutable: string): Promise<Item> {
-    const lc = await localClaudeStatus(claudeExecutable);
-    const tooltip = 'Claude Code on this laptop, signed in with your own Claude Pro or Max subscription. Beethoven only checks; it stores nothing';
-    if (!lc.ok) return new Item('Claude on this laptop', 'account', { description: lc.detail, icon: 'warning', tooltip });
-    if (lc.loggedIn && lc.subscription) return new Item('Claude on this laptop', 'account', { description: lc.detail, icon: 'pass', tooltip });
+    const choice = this.store.accountChoice();
+    const tooltip = `Claude Code on this laptop, signed in with your own Claude Pro or Max subscription. Beethoven only checks; it stores nothing${choice.kind === 'account' ? `. The setting "account" picks ${choice.label}: the terminals Beethoven opens use that account's sign-in` : ''}`;
+    // a label the list does not offer: the row says so, and the click opens the setting
+    if (choice.kind === 'invalid') return new Item('Claude on this laptop', 'account', { description: `the account setting "${choice.label}" is not used: click to fix it`, icon: 'warning', tooltip: choice.problem, command: { command: 'workbench.action.openSettings', title: 'Open the setting', arguments: ['beethoven.account'] } });
+    const lc = await localClaudeStatus(claudeExecutable, accountEnvironment(choice));
+    const as = asLabel(choice);
+    if (!lc.ok) return new Item('Claude on this laptop', 'account', { description: lc.detail + as, icon: 'warning', tooltip });
+    if (lc.loggedIn && lc.subscription) return new Item('Claude on this laptop', 'account', { description: lc.detail + as, icon: 'pass', tooltip });
     return new Item('Claude on this laptop', 'account', {
-      description: `${lc.detail}: click to sign in`,
+      description: `${lc.detail}${as}: click to sign in`,
       icon: lc.loggedIn ? 'warning' : 'circle-outline',
       tooltip,
       command: { command: 'beethoven.claudeLocalSignIn', title: 'Sign in to Claude on this laptop' },

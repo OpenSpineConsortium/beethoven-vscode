@@ -49,6 +49,7 @@ function settings(): WizardSettings {
     gridRoot: '',
     gridScriptsDir: gridScripts,
     claudeExecutable: 'claude',
+    account: '',
   });
 }
 

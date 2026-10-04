@@ -8,6 +8,7 @@ import { DiagNode, CheckResult } from '../core/diagnostics';
 import { run, ssh, gridCli } from '../core/shell';
 import { WizardEnv, stepWsuSignIn, stepGithub, stepHuggingFace, stepSshKey, stepSshConfig, stepGridInstall, testConnection, pushTokens, licenseFingerprint, stepClaudeLocal } from '../core/wizard';
 import { GridRelay } from '../core/relay';
+import { ADD_COMMAND, readAccounts } from '../core/accounts';
 import { BeethovenStore, findClaudeExecutable } from './store';
 import { isMcpRegistered, registerMcp } from './mcpRegister';
 import { TERMS_VERSION } from '../core/terms';
@@ -257,9 +258,37 @@ export function buildGraph(): DiagNode<DiagCtx>[] {
   });
   add(tokenNode('account.github', stepGithub, 'GitHub token'));
   add(tokenNode('account.huggingface', stepHuggingFace, 'Hugging Face token'));
-  add({ id: 'account.claude', title: 'Claude on this laptop', layer: 'account', dependsOn: ['account.wsu', 'vscode.claude-binary'],
-    assumption: 'Claude Code on this laptop is signed in with the student\'s own Claude Pro or Max subscription (Beethoven reads status only)',
-    manualFix: 'sign in to Claude Code on this laptop (setup step "Claude on this laptop")', futureRisk: 'claude auth status changing its output; plan names changing', source: 'extension/src/core/wizard.ts (stepClaudeLocal)',
+  // the student's own Claude accounts (beethoven.account): the engine's list, read and never written, and the one label chosen from it
+  add({
+    id: 'account.list', title: 'Your Claude account list', layer: 'account', dependsOn: ['laptop.os'],
+    assumption: `the account list the engine's bee command keeps on this computer (~/.beethoven/engine/accounts.json) is absent, or present and readable; Beethoven reads it and never writes it`,
+    manualFix: `add an account with "${ADD_COMMAND} <label>" in a terminal; a list that does not read is the engine's to repair, never Beethoven's`,
+    futureRisk: 'the engine moving the list or changing its rows', source: 'extension/src/core/accounts.ts (readAccounts)',
+    async check(ctx) {
+      const list = readAccounts();
+      if (list.ok) return ok(list.accounts.length ? `${list.accounts.length}: ${list.accounts.map((a) => a.label + (a.enabled ? '' : ' (off)')).join(', ')}` : 'present, empty');
+      if (list.reason === 'unreadable') return fail(`${list.file} could not be read: ${list.detail}`);
+      return ctx.env.settings.account ? fail(`no account list on this computer (${list.file}), and the setting "account" names "${ctx.env.settings.account}"`) : skip('no account list on this computer; none is needed while the setting "account" is empty');
+    },
+  });
+  add({
+    id: 'account.choice', title: 'Claude account for the terminals', layer: 'account', dependsOn: ['laptop.os'],
+    assumption: `the setting beethoven.account is empty (Claude Code's own sign-in, as before) or names a listed, enabled account, whose directory every Claude Code terminal Beethoven opens or configures gets as CLAUDE_CONFIG_DIR (with BEE_ACCOUNT)`,
+    manualFix: `Settings > Beethoven > Account: pick a label from your account list, add the account with "${ADD_COMMAND} <label>" in a terminal, or leave the setting empty`,
+    fixCommand: { command: 'workbench.action.openSettings', title: 'Open the setting', arguments: ['beethoven.account'] },
+    futureRisk: 'the Claude Code VS Code extension not reading CLAUDE_CONFIG_DIR from the terminal environment (not yet measured on a real machine)',
+    source: 'extension/src/core/accounts.ts (chooseAccount), extension/src/vscode/store.ts (hydrateEnvironment)',
+    async check(ctx) {
+      const c = ctx.store.accountChoice();
+      if (c.kind === 'default') return ok("the default: Claude Code's own sign-in on this laptop");
+      if (c.kind === 'invalid') return fail(c.problem);
+      const resting = !!c.hibernateUntil && Date.parse(c.hibernateUntil) > Date.now();
+      return ok(`as ${c.label}: ${c.path}${resting ? ` (the engine rests this account until ${new Date(c.hibernateUntil!).toLocaleString()})` : ''}`, resting);
+    },
+  });
+  add({ id: 'account.claude', title: 'Claude on this laptop', layer: 'account', dependsOn: ['account.wsu', 'vscode.claude-binary', 'account.choice'],
+    assumption: 'Claude Code on this laptop, in the directory the account setting names, is signed in with the student\'s own Claude Pro or Max subscription (Beethoven reads status only)',
+    manualFix: 'sign in to Claude Code on this laptop (setup step "Claude on this laptop"; it signs in under the chosen account)', futureRisk: 'claude auth status changing its output; plan names changing', source: 'extension/src/core/wizard.ts (stepClaudeLocal)',
     fixCommand: { command: 'beethoven.claudeLocalSignIn', title: 'Sign in' },
     check: (ctx) => stepCheck(stepClaudeLocal, ctx) });
 

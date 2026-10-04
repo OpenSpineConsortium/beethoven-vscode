@@ -21,8 +21,12 @@ the Desktop folder is `ashley` until the maintainer renames it. The code is prop
 
 - **Beethoven never reads, stores or relays a Claude credential.** The student signs in through
   Claude Code's own flow, on the laptop and once on the grid (`beethoven claude login`); Claude Code
-  keeps its credential in `~/.beethoven/claude`; Beethoven reads only `claude auth status`. One
-  person, one Claude account; no pooling, no rotation of subscriptions (Anthropic's Consumer Terms).
+  keeps its credential in `~/.beethoven/claude` (on the laptop, in the folder of the account
+  `beethoven.account` names); Beethoven reads only `claude auth status`. One person, their own
+  accounts (the maintainer, 2026-10-04): several sign-in directories of the student's own, chosen by
+  `beethoven.account` from the engine's list (`~/.beethoven/engine/accounts.json`, read and never
+  written); never pooled, never anyone else's, never a credential read, copied or moved by Beethoven;
+  no sharing of an account and no rotation of subscriptions (Anthropic's Consumer Terms).
 - **Never usage credits, by anyone, ever** (the maintainer, 2026-10-04). No API key, no billing
   setting, nothing that asks for or relies on paid usage beyond the student's own flat-rate
   subscription. When the subscription window is spent the worker answers `rate_limited` with the

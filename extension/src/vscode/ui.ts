@@ -43,12 +43,13 @@ export class VsCodeUI implements WizardUI {
    * Runs `command args` as the terminal's own process (shellPath), so there is no shell
    * quoting at all and the exit code is exact. The student types into it (password, code).
    */
-  async runInteractive(title: string, command: string, args: string[]): Promise<number | null> {
+  async runInteractive(title: string, command: string, args: string[], env?: Record<string, string>): Promise<number | null> {
     const shellPath = resolveExecutable(command);
     const fullArgs = path.basename(shellPath).startsWith('ssh') ? ['-o', 'AddressFamily=inet', '-o', 'GSSAPIAuthentication=no', ...args] : args;
-    const term = vscode.window.createTerminal({ name: title, shellPath, shellArgs: fullArgs, isTransient: true });
+    const term = vscode.window.createTerminal({ name: title, shellPath, shellArgs: fullArgs, isTransient: true, env });
     term.show(false);
-    this.output.appendLine(`[terminal] ${shellPath} ${args.map((a) => (a.includes(' ') ? JSON.stringify(a) : a)).join(' ')}`);
+    // the variables' names only: the log never carries a value
+    this.output.appendLine(`[terminal] ${shellPath} ${args.map((a) => (a.includes(' ') ? JSON.stringify(a) : a)).join(' ')}${env && Object.keys(env).length ? ` (with ${Object.keys(env).join(', ')})` : ''}`);
     const deadline = Date.now() + 15 * 60_000;
     return new Promise<number | null>((resolve) => {
       const closed = vscode.window.onDidCloseTerminal((t) => {

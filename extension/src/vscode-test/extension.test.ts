@@ -36,6 +36,7 @@ suite('Beethoven for VS Code extension', () => {
     assert.equal(c.get('worker.partition'), 'reqp');
     assert.equal(c.get('worker.qos'), 'requeue');
     assert.equal(c.get('worker.hours'), 24);
+    assert.equal(c.get('account'), '', 'no account chosen: Claude Code\'s own sign-in, as before');
   });
 
   // the rename (Ashley for VS Code 3.0.0 -> Beethoven for VS Code 4.0.0): settings still set under the
@@ -87,7 +88,7 @@ suite('Beethoven for VS Code extension', () => {
     const g = (ext.exports as any)._internal.buildGraph();
     for (const n of g) if (n.fixCommand) assert.ok(all.includes(n.fixCommand.command) && n.fixCommand.title, `${n.id}: fix command ${n.fixCommand.command} is not registered`);
     const byId = Object.fromEntries(g.map((n: any) => [n.id, n]));
-    const want: Record<string, string> = { 'account.github': 'beethoven.renewToken', 'account.huggingface': 'beethoven.renewToken', 'account.claude': 'beethoven.claudeLocalSignIn', 'account.wsu': 'beethoven.wsuSignIn', 'account.license-identity': 'beethoven.wsuSignIn', 'laptop.license': 'beethoven.license', 'laptop.terms': 'beethoven.terms', 'grid.claude-login': 'beethoven.claudeSignIn' };
+    const want: Record<string, string> = { 'account.github': 'beethoven.renewToken', 'account.huggingface': 'beethoven.renewToken', 'account.claude': 'beethoven.claudeLocalSignIn', 'account.choice': 'workbench.action.openSettings', 'account.wsu': 'beethoven.wsuSignIn', 'account.license-identity': 'beethoven.wsuSignIn', 'laptop.license': 'beethoven.license', 'laptop.terms': 'beethoven.terms', 'grid.claude-login': 'beethoven.claudeSignIn' };
     for (const [id, cmd] of Object.entries(want)) assert.equal(byId[id]?.fixCommand?.command, cmd, `${id} has the fix button ${cmd}`);
   });
 
@@ -105,6 +106,7 @@ suite('Beethoven for VS Code extension', () => {
     accounts: ['grid.accounts'],
     licensing: ['laptop.terms', 'laptop.license', 'account.license-identity', 'grid.license'],
     claude_signin: ['account.claude', 'grid.claude-login'],
+    claude_account: ['account.list', 'account.choice', 'account.claude'],
     token_capture: ['vscode.shell-integration', 'vscode.secret-storage'],
     grid_etiquette: ['grid.login-tmp', 'grid.home-quota'],
   };
