@@ -10,6 +10,8 @@ import { buildGraph, makeCtx } from './diagNodes';
 import { BeethovenStore, findClaudeExecutable } from './store';
 import { VsCodeUI } from './ui';
 import { run } from '../core/shell';
+import { withoutClaudeCredentials } from '../core/services';
+import { localClaudeStatus } from '../core/wizard';
 
 export class Troubleshooter implements vscode.Disposable {
   private item: vscode.StatusBarItem;
@@ -170,6 +172,11 @@ export class Troubleshooter implements vscode.Disposable {
   async investigate(): Promise<void> {
     if (!this.last || this.last.ok) return void vscode.window.showInformationMessage('Nothing is broken right now.');
     const causes = this.last.rootCauses.map((r: NodeReport) => ({ id: r.id, title: r.title, detail: r.detail, manual_fix: r.manualFix, repair_tried: r.repair }));
+    // only on the student's own subscription: an API key or token in VS Code's environment would bill it instead
+    const exe = findClaudeExecutable();
+    const env = withoutClaudeCredentials();
+    const lc = await localClaudeStatus(exe, env);
+    if (!lc.subscription) return void vscode.window.showWarningMessage(`Investigating with Claude runs only on your own Claude Pro or Max subscription, and Claude Code on this laptop is ${lc.ok ? lc.detail : 'not ready'}. Sign in with your subscription (Beethoven: Sign in to Claude on this laptop), then try again.`);
     const prompt = [
       'You are helping a Wayne State University medical student whose research tool "Beethoven for VS Code" (a VS Code extension that connects a laptop to the Wayne State HPC grid,',
       'CentOS 7, Slurm, Apptainer, VS Code Remote-SSH with the C&IT glibc sysroot, and a Claude Code worker) reports these failing checks.',
@@ -181,7 +188,7 @@ export class Troubleshooter implements vscode.Disposable {
     const doc = await vscode.workspace.openTextDocument({ content: `# Investigating with Claude\n\n_Asking your Claude (web search only, no commands run)..._\n`, language: 'markdown' });
     const ed = await vscode.window.showTextDocument(doc, { preview: false });
     const r = await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: 'Claude is investigating the failure' }, () =>
-      run(findClaudeExecutable(), ['-p', prompt, '--output-format', 'text', '--allowedTools', 'WebSearch,WebFetch', '--max-turns', '12'], { timeoutMs: 6 * 60_000 }),
+      run(exe, ['-p', prompt, '--output-format', 'text', '--allowedTools', 'WebSearch,WebFetch', '--max-turns', '12'], { timeoutMs: 6 * 60_000, env }),
     );
     const text = r.code === 0 ? r.stdout.trim() : `Claude could not answer (exit ${r.code}): ${(r.stderr || r.stdout).trim().slice(0, 500)}`;
     await ed.edit((e) => e.replace(new vscode.Range(0, 0, doc.lineCount, 0), `# Investigating with Claude\n\n${text}\n\n---\nFailing checks: ${causes.map((c) => c.id).join(', ')}\n`));

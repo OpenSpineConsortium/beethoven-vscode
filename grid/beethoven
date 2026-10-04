@@ -23,7 +23,7 @@
 #   beethoven tail [--worker N] <id>
 #   beethoven sessions [--json]
 #   beethoven claude login|status|remote-consent|forget      your Claude sign-in on the grid (Claude Code's own flow)
-#   beethoven accounts list|add-key apikey|enable|disable|remove   your optional Anthropic Console key
+#   beethoven accounts list|remove --yes                          your Claude sign-in; remove deletes an old API key (none used since grid scripts 8)
 #   beethoven bootstrap [--resubmit] [--update]
 #   beethoven version
 set -uo pipefail
@@ -190,6 +190,7 @@ cmd_install() {
   migrate_home
   VERSION=$(cat "$BIN/VERSION" 2>/dev/null || echo "$VERSION")   # run from the old folder, the file is read again after the move
   mkdir -p "$BEETHOVEN_HOME"/{bin,log,accounts,workers,sessions} && chmod 700 "$BEETHOVEN_HOME" "$BEETHOVEN_HOME/accounts"
+  retire_apikey
   # scripts uploaded from a Windows checkout may carry CR line endings, which break bash and sbatch
   # (links are skipped: sed -i would put a copy in a link's place)
   for f in "$BIN"/beethoven "$BIN"/*.sbatch "$BIN"/*.tpl "$BIN"/*.js "$BIN"/*.block "$BIN"/*.sh; do [ -f "$f" ] && [ ! -L "$f" ] && sed -i 's/\r$//' "$f"; done
@@ -259,16 +260,11 @@ worker_json() { # $1 name
   local q; q=$(ls "$w/inbox" 2>/dev/null | grep -c '\.json$' || true)
   printf '{"name":%s,"job":%s,"job_state":%s,"node":%s,"alive":%s,"queued":%s,"state":%s}' "$(json_str "$1")" "$(json_str "$jid")" "$(json_str "${st:-none}")" "$(json_str "$node")" "$alive" "${q:-0}" "$state"
 }
-accounts_json() { # the sign-in (presence only) and the optional Console key
-  local first=1; printf '['
+accounts_json() { # the sign-in (presence only); an API key is never an account (grid scripts 8)
+  printf '['
   cooldown_of() { local c=""; [ -s "$1/state.json" ] && c=$(grep -o '"cooldown_until": *"[^"]*"' "$1/state.json" | head -1 | sed 's/.*"\([^"]*\)"$/\1/'); [ -n "$c" ] && printf '"%s"' "$c" || printf null; }
   if [ -s "$CLAUDE_HOME/.credentials.json" ]; then
-    printf '{"name":"claude","kind":"login","enabled":%s,"cooldown_until":%s}' "$([ -e "$CLAUDE_HOME/disabled" ] && echo false || echo true)" "$(cooldown_of "$CLAUDE_HOME")"; first=0
-  fi
-  local d="$BEETHOVEN_HOME/accounts/apikey"
-  if [ -s "$d/apikey" ]; then
-    [ $first -eq 1 ] || printf ','
-    printf '{"name":"apikey","kind":"api-key","enabled":%s,"cooldown_until":%s}' "$([ -e "$d/disabled" ] && echo false || echo true)" "$(cooldown_of "$d")"
+    printf '{"name":"claude","kind":"login","enabled":%s,"cooldown_until":%s}' "$([ -e "$CLAUDE_HOME/disabled" ] && echo false || echo true)" "$(cooldown_of "$CLAUDE_HOME")"
   fi
   printf ']'
 }
@@ -353,6 +349,7 @@ cmd_worker() {
       [ -s "$BEETHOVEN_HOME/license.key" ] || die "no Beethoven license on the grid yet: run the setup's grid step in VS Code (it copies your license here)"
       mkdir -p "$w"/{inbox,outbox,log}
       rm -f "$w/stop"
+      retire_apikey
       local jid st; jid=$(cat "$w/job.id" 2>/dev/null || echo ""); st=$(job_state "$jid")
       case "$st" in PENDING|RUNNING|CONFIGURING) echo "worker $name already has job $jid ($st) on $(cat "$w/node" 2>/dev/null || echo '?')"; return 0;; esac
       [[ "$hours" =~ ^[0-9]+$ ]] || die "--hours must be an integer"
@@ -475,7 +472,7 @@ cmd_sessions() {
   if [ $as_json -eq 1 ]; then printf '{"sessions":['; local first=1; for f in "$BEETHOVEN_HOME"/sessions/*.json; do [ -s "$f" ] || continue; [ $first -eq 1 ] || printf ','; first=0; tr -d '\n' < "$f"; done; printf ']}\n'
   else for f in "$BEETHOVEN_HOME"/sessions/*.json; do [ -s "$f" ] && { basename "$f" .json; sed 's/^/    /' "$f"; }; done; fi
 }
-share_transcripts() { # every account's projects/ links to one ~/.beethoven/projects (see beethovend.js)
+share_transcripts() { # the sign-in folder's projects/ links to ~/.beethoven/projects, the history every earlier account shared (see beethovend.js)
   local p="$1/projects" s="$BEETHOVEN_HOME/projects" proj f
   mkdir -p "$s" && chmod 700 "$s"
   [ -L "$p" ] && return 0
@@ -486,18 +483,30 @@ share_transcripts() { # every account's projects/ links to one ~/.beethoven/proj
   fi
   ln -s "$s" "$p"
 }
+# The Anthropic API key overflow (add-key and its switches, up to grid scripts 7) is gone: it was paid
+# usage beyond the student's subscription, which the maintainer ruled out for everyone on 2026-10-04.
+# The key is not read from stdin, so a laptop of 4.0.0 that still pipes one gets a refusal and stores nothing.
+# A key stored before is never used and never deleted by Beethoven; only `accounts remove --yes` removes it.
+# A worker started under grid scripts 7 keeps its old daemon until its job ends, and that daemon reads the
+# key on every request; the `disabled` marker beside it is the one switch it honours, so every install,
+# worker start and repair sets it. The marker deletes nothing and the key stays the student's.
+retire_apikey() {
+  local d="$BEETHOVEN_HOME/accounts/apikey"
+  [ -e "$d/apikey" ] && [ ! -e "$d/disabled" ] && touch "$d/disabled"
+  return 0
+}
 cmd_accounts() {
-  local sub="${1:-list}" name="${2:-apikey}"; local d="$BEETHOVEN_HOME/accounts/apikey"
+  local sub="${1:-list}" d="$BEETHOVEN_HOME/accounts/apikey"
   case "$sub" in
     list) accounts_json; echo;;
     add-token) die "Beethoven no longer stores Claude tokens. Sign in on the grid through Claude Code's own flow: beethoven claude login";;
-    add-key) [ "$name" = apikey ] || die "the Console key is stored as 'apikey' (accounts add-key apikey, key on stdin)"
-      umask 077; mkdir -p "$d"; head -1 | tr -d '\r\n' > "$d/apikey.part"; [ -s "$d/apikey.part" ] || { rm -f "$d/apikey.part"; die "empty key"; }
-      mv "$d/apikey.part" "$d/apikey"; rm -f "$d/disabled" "$d/state.json"; share_transcripts "$d"; echo "your Anthropic Console key is stored (used only when your subscription window is exhausted)";;
-    enable) [ -d "$d" ] || die "no Console key stored"; rm -f "$d/disabled" "$d/state.json"; echo "Console key enabled";;
-    disable) [ -d "$d" ] || die "no Console key stored"; touch "$d/disabled"; echo "Console key disabled";;
-    remove) [ -d "$d" ] || die "no Console key stored"; rm -rf "$d"; echo "Console key removed";;
-    *) die "accounts: list|add-key apikey|enable|disable|remove";;
+    add-key|enable|disable) die "Beethoven no longer uses an Anthropic API key: your worker runs only on your own Claude subscription and, when its window is spent, answers with the time it resets. A key an earlier version stored is never used; beethoven accounts remove --yes deletes it.";;
+    remove) # the student's own deliberate step; the key file only (the folder may hold session history kept aside by share_transcripts)
+      [ "${2:-}" = "--yes" ] || die "this deletes the API key an earlier version stored in $d (Beethoven never uses it; revoke the key itself in your Anthropic Console): beethoven accounts remove --yes"
+      refuse_destructive_from_agent "accounts remove"
+      [ -e "$d/apikey" ] || die "no API key is stored"
+      rm -f "$d/apikey"; echo "removed $d/apikey";;
+    *) die "accounts: list|remove --yes";;
   esac
 }
 
@@ -941,16 +950,23 @@ cmd_diag() {
   elif [ "$lj" != null ] && echo "$lj" | grep '"loggedIn": *false' >/dev/null; then diag_emit grid.claude-login false false false "Claude Code on the grid is not signed in: run Beethoven: Sign in to Claude on the grid"
   elif [ -s "$CLAUDE_HOME/.credentials.json" ]; then diag_emit grid.claude-login true true false "a sign-in is stored; a running worker will confirm it"
   else diag_emit grid.claude-login false false false "not signed in on the grid yet: run Beethoven: Sign in to Claude on the grid"; fi
-  # accounts: no stored Claude tokens (the tool stopped storing them before the rename), session history shared across accounts
+  # accounts: no stored Claude tokens (the tool stopped storing them before the rename), the sign-in's session history linked to ~/.beethoven/projects
   local legacy="" unshared="" fixed="" ad
   for ad in "$BEETHOVEN_HOME"/accounts/*/; do [ -d "$ad" ] || continue
     { [ -s "$ad/token" ] || [ -s "$ad/.credentials.json" ]; } && legacy="$legacy $(basename "$ad")"
   done
-  for ad in "$CLAUDE_HOME" "$BEETHOVEN_HOME/accounts/apikey"; do [ -d "$ad" ] && [ ! -L "$ad/projects" ] && unshared="$unshared $(basename "$ad")"; done
+  [ -d "$CLAUDE_HOME" ] && [ ! -L "$CLAUDE_HOME/projects" ] && unshared=" $(basename "$CLAUDE_HOME")"
+  # the API key an earlier version stored for its paid overflow: never read since grid scripts 8, and never
+  # deleted here (repair runs over ssh with no one at a terminal); only its presence is checked
+  local retired="" live=""; [ -e "$BEETHOVEN_HOME/accounts/apikey/apikey" ] && retired=1
+  [ -n "$retired" ] && [ ! -e "$BEETHOVEN_HOME/accounts/apikey/disabled" ] && live=1
   if [ -n "$legacy" ] && [ $repair = 1 ]; then for ad in $legacy; do rm -f "$BEETHOVEN_HOME/accounts/$ad/token" "$BEETHOVEN_HOME/accounts/$ad/minted_at" "$BEETHOVEN_HOME/accounts/$ad/.credentials.json"; rmdir "$BEETHOVEN_HOME/accounts/$ad" 2>/dev/null; done; fixed="removed stored Claude tokens of$legacy"; legacy=""; fi
-  if [ -n "$unshared" ] && [ $repair = 1 ]; then for ad in $unshared; do [ "$ad" = claude ] && share_transcripts "$CLAUDE_HOME" || share_transcripts "$BEETHOVEN_HOME/accounts/$ad"; done; fixed="${fixed:+$fixed; }linked the session history of$unshared"; unshared=""; fi
+  if [ -n "$unshared" ] && [ $repair = 1 ]; then share_transcripts "$CLAUDE_HOME"; fixed="${fixed:+$fixed; }linked the session history of$unshared"; unshared=""; fi
+  if [ -n "$live" ] && [ $repair = 1 ]; then retire_apikey; fixed="${fixed:+$fixed; }marked the stored API key disabled, so a worker of an earlier version cannot use it (nothing deleted)"; live=""; fi
   if [ -n "$legacy" ]; then diag_emit grid.accounts false false false "Claude tokens stored by an earlier version are still in accounts/:$legacy (repair deletes them; Beethoven no longer stores Claude credentials)"
   elif [ -n "$unshared" ]; then diag_emit grid.accounts false false false "session history is not shared for:$unshared (repair links it)"
+  elif [ -n "$live" ]; then diag_emit grid.accounts false false false "an Anthropic API key an earlier version stored is in ~/.beethoven/accounts/apikey and is not marked disabled, so a worker started by that version could still spend on it (repair marks it disabled and deletes nothing; beethoven accounts remove --yes deletes it)"
+  elif [ -n "$retired" ]; then diag_emit grid.accounts true true false "an Anthropic API key an earlier version stored is still in ~/.beethoven/accounts/apikey; Beethoven never uses or sends it (it is marked disabled). To delete it: beethoven accounts remove --yes (and revoke the key in your Anthropic Console)" "$fixed"
   else diag_emit grid.accounts true false false "no stored Claude tokens; session history shared" "$fixed"; fi
   # lab access and the container
   if is_admin; then diag_emit grid.lab-access true false false "you are the lab admin"

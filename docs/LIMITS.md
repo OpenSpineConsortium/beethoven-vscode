@@ -47,8 +47,8 @@ and V100-class nodes. Ask for a GPU only for that worker; CPU workers start soon
 | You cannot | Because |
 |---|---|
 | Run the worker or VS Code's server on the login node | C&IT kills processes on `warrior`; Beethoven only ever connects VS Code to a compute node and runs a half-second file poll on the login node |
-| Use someone else's Claude account, or pool accounts across students | Anthropic's consumer terms: an account is for the person who holds it. Beethoven rotates only *your* credentials (your subscription, then your own API key) |
-| Get more than your plan's window | A Pro/Max window is per account. When it is exhausted the worker reports `rate_limited` with the reset time and waits; an API key with a spending cap is the only overflow |
+| Use someone else's Claude account, or pool accounts across students | Anthropic's consumer terms: an account is for the person who holds it. Beethoven runs only on *your* own Claude sign-in |
+| Get more than your plan's window | A Pro/Max window is per account. When it is exhausted the worker answers `rate_limited` with the reset time; send the request again after it. There is no overflow: Beethoven never uses an API key or paid usage, and extra usage (usage credits) on your Claude account is yours to keep off, since Beethoven cannot see it |
 | Put patient data, PHI, survey CSVs or contact lists on the grid | The lab's IRB umbrella (HPR 2026-269) covers public, de-identified datasets only; anything else needs its own filing first (RECIPE.md, data rules) |
 | Push the grid Claude to `--dangerously-skip-permissions` for everything | It is available (`mode: bypassPermissions`) but the default `acceptEdits` lets it edit files and run tools while refusing destructive commands; use bypass only inside a project folder you can `git checkout` back |
 | Ask for interactive programs (ITK-SNAP, a GUI) through the worker | The worker is headless. Run GUI tools locally on rsynced results, or with `srun --x11` in your own shell |

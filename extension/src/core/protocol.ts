@@ -27,7 +27,7 @@ export interface BeethovenRequest {
   mode: PermissionMode;
   max_turns?: number;
   model?: string;
-  /** Force a particular credential (account directory name). */
+  /** Force a particular credential (account directory name); since grid scripts 8 the sign-in, "claude", is the only one. */
   account?: string;
   /** Restrict tools, e.g. ["Read","Grep","Bash(python *)"]. */
   allowed_tools?: string[];
@@ -36,6 +36,7 @@ export interface BeethovenRequest {
   created: string;
   from: string;
   attempt?: number;
+  /** rotation bookkeeping of grid scripts up to 7 (moving a limited request to the API key); kept on the v1 wire */
   exclude_accounts?: string[];
 }
 

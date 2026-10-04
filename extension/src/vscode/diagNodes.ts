@@ -182,7 +182,7 @@ export function buildGraph(): DiagNode<DiagCtx>[] {
   });
   add({
     id: 'network.internet', title: 'Internet from this laptop', layer: 'network', dependsOn: ['laptop.os'],
-    assumption: 'HTTPS to github.com, huggingface.co and anthropic.com', manualFix: 'check the Wi-Fi; some campus networks block token checks (the grid checks them instead)',
+    assumption: 'HTTPS to github.com and huggingface.co', manualFix: 'check the Wi-Fi; some campus networks block token checks (the grid checks them instead)',
     source: 'extension/src/core/wizard.ts (validateToken)',
     async check() {
       try {
@@ -341,7 +341,7 @@ export function buildGraph(): DiagNode<DiagCtx>[] {
     },
     repair: pushRepair,
   });
-  add(gridNode('grid.accounts', 'Claude accounts on the grid', ['grid.claude-login'], 'one subscription token per person, no copied logins, and every account shares one session history (so a conversation survives a move to your API key)', 'Troubleshoot and repair links the history; remove extra accounts with: ssh wsu-grid "beethoven accounts remove NAME"', 'Claude Code moving where --resume looks for transcripts', undefined));
+  add(gridNode('grid.accounts', 'Claude accounts on the grid', ['grid.claude-login'], 'your own Claude sign-in only (Beethoven keeps no Claude token and uses no API key), no copied logins, its session history in one shared folder, and an API key an earlier version stored marked disabled', 'Troubleshoot and repair links the history and marks an API key an earlier version stored disabled (it deletes nothing); ssh -t wsu-grid "beethoven accounts remove --yes" deletes the key', 'Claude Code moving where --resume looks for transcripts', undefined));
   add(gridNode('grid.lab-access', 'Lab access', ['account.claude', 'grid.token-github', 'grid.token-hf', 'grid.slurm'], 'the lab folder is readable (approved), or a request is pending', 'the last wizard step: Join the lab', 'the lab folder moving'));
   add(gridNode('grid.runtime', 'Container runtime (Apptainer)', ['grid.scripts'], 'the configured apptainer executable exists (repair switches to the current module)', 'ask your lead to republish the container', 'Wayne State upgrading or removing the apptainer module'));
   add(gridNode('grid.container', 'Lab Claude container', ['grid.lab-access', 'grid.runtime'], 'the lab container is adopted (repair runs beethoven adopt)', 'wait for lab access', 'a republished container at a new path'));

@@ -62,9 +62,9 @@ A request is a JSON file. Its life:
    `.part` then rename, so the daemon never reads a half-written file).
 2. `beethovend.js` polls the inbox every second, claims the file by renaming it to
    `<id>.json.claimed` (an atomic operation on the shared filesystem; two daemons cannot both win).
-3. It picks a credential (below), resolves the session, and spawns
+3. It checks that Claude Code is signed in (below), resolves the session, and spawns
    `claude -p <prompt> --output-format stream-json --verbose --permission-mode <mode> --max-turns N [--resume <sid> | --session-id <uuid>]`
-   in the session's working directory, with `CLAUDE_CONFIG_DIR=~/.beethoven/accounts/<account>`.
+   in the session's working directory, with `CLAUDE_CONFIG_DIR=~/.beethoven/claude`.
 4. Every stream-json line is appended to `outbox/<id>.events.jsonl` as it arrives. `beethoven wait
    --stream` tails that file to the laptop as `EVENT {…}` lines, so VS Code shows tool calls live.
 5. On exit, the daemon writes `outbox/<id>.json` (`.part` then rename): status, result text,
@@ -115,13 +115,12 @@ later turns pass `--resume <uuid>`. Claude Code keeps the transcript under
 `<CLAUDE_CONFIG_DIR>/projects/<encoded cwd>/<uuid>.jsonl`, which is why a session stays bound to
 its directory.
 
-`--resume` looks only in the running account's `projects/`. Measured on Claude Code 2.1.283: from a
-second config folder the resume answers "No conversation found"; with the transcript present it
-finds it. A turn moved to the student's API key after a limit would therefore start from nothing. So
-every account's `projects/` is a link to one `~/.beethoven/projects` (the daemon links it before
-each run; `beethoven accounts add-key` links it when an account is made; the diagnostics node
-`grid.accounts` finds and repairs an unlinked one). All accounts belong to one person, so this
-shares nothing between people.
+`--resume` looks only in the running config folder's `projects/`. Measured on Claude Code 2.1.283:
+from a second config folder the resume answers "No conversation found"; with the transcript present
+it finds it. Up to grid scripts 7 a turn could move to the student's API key after a limit, so every
+account's `projects/` became a link to one `~/.beethoven/projects`. The sign-in folder's link stays
+(the daemon links it before each run; the diagnostics node `grid.accounts` finds and repairs an
+unlinked one), so the sessions kept there still resume.
 
 ## Credentials
 
@@ -147,9 +146,19 @@ What happens instead:
   changes, and puts the answer (signed in or not, the e-mail Claude Code reports) in its heartbeat.
   The laptop shows it; the diagnostics node `grid.claude-login` reads it; a prompt sent while not
   signed in is answered with the command that fixes it.
-- One person, one Claude account. The only other credential is the student's own Anthropic Console
-  key (`~/.beethoven/accounts/apikey/apikey`, Commercial Terms), used only when the subscription
-  window is exhausted, and only in that process's environment.
+- One person, one Claude account, and no other credential: no API key and no usage credits, by
+  anyone, ever (the maintainer, 2026-10-04). When the subscription window is spent the daemon
+  answers `rate_limited` with the reset time in `retry_after`; nothing retries by itself, and the
+  student sends the request again after the reset. The pay-per-use key overflow of 4.0.0 (grid
+  scripts 7) is gone; a key it stored in `~/.beethoven/accounts/apikey/apikey` is never used or
+  sent and never deleted by Beethoven. A worker still running the grid scripts 7 daemon reads that
+  key on every request and honours only the `disabled` file beside it, so every grid command the
+  laptop runs (`GRID_CLI_PICK` in `shell.ts`) puts that file there first, and `beethoven install`,
+  `worker start`, the laptop's token push and `diag --repair` do as well (it deletes nothing). The
+  first contact of a laptop updated to 5.0.0 therefore stops such a worker before the grid step
+  replaces the scripts. A request already running on the key when the file appears finishes there. `grid.accounts` reports the key until the student runs `beethoven accounts remove --yes`
+  in a terminal. Extra usage (usage credits) on the student's Claude account is a setting Beethoven
+  cannot see or change; the texts tell the student to keep it off.
 - On the laptop, the wizard checks `claude auth status` of the student's own Claude Code and
   requires a subscription sign-in (Pro or Max), because the lab works on subscriptions; it stores
   nothing.
@@ -165,7 +174,7 @@ expiry). The heartbeat notices when it ends; the extension asks for step 12 agai
 |---|---|---|---|
 | GitHub, Hugging Face tokens | VS Code SecretStorage (OS keychain); injected into integrated terminals | `~/.beethoven/secrets.env` (mode 600), read by the daemon into the worker's environment | job logs, `sbatch --export`, command lines |
 | Claude sign-in | Claude Code's own store (Beethoven never reads it) | `~/.beethoven/claude`, written by Claude Code itself (700) | Beethoven's files, logs and command lines (since version 2) |
-| Anthropic API key | SecretStorage | `~/.beethoven/accounts/apikey/apikey` (600) | laptop terminals (it would silently switch the local Claude Code to pay-per-use) |
+| Anthropic API key | none asked for; a copy 4.0.0 stored is never used or sent, only its presence checked (Manage stored tokens and Reset delete it) | none written; `accounts/apikey/apikey` from 4.0.0 is never used, and marked `disabled` for workers of grid scripts 7 (`beethoven accounts remove --yes` deletes it) | laptop terminals and every Claude Code environment (`ANTHROPIC_API_KEY` is stripped: it would switch Claude Code to pay-per-use) |
 | Grid password / OTP | nowhere | nowhere | typed once, in a terminal, to install the SSH key |
 
 Files travel over ssh **stdin** (`cat > file` with `umask 077`), never as arguments.

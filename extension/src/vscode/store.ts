@@ -3,7 +3,7 @@
 import * as vscode from 'vscode';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { SecretId, SERVICES, localEnvironment } from '../core/services';
+import { RETIRED_SECRETS, SecretId, SERVICES, localEnvironment } from '../core/services';
 import { WizardEnv, WizardSettings, WizardUI, localClaudeStatus } from '../core/wizard';
 import { installPublicKey } from '../core/sshInstall';
 import { isMcpRegistered, registerMcp } from './mcpRegister';
@@ -22,7 +22,6 @@ export interface SecretSummary {
   id: SecretId;
   name: string;
   present: boolean;
-  optional: boolean;
   status: SecretStatus;
   /** why the service rejected it, when it did */
   detail?: string;
@@ -75,6 +74,21 @@ export class BeethovenStore {
     await this.recordTokenCheck(id, undefined);
   }
 
+  /**
+   * The secrets an earlier version stored that this one never uses (services.ts), present here.
+   * SecretStorage has no presence test, so get() is it; the value goes no further than the comparison.
+   */
+  async retiredSecrets(): Promise<Array<{ id: string; name: string }>> {
+    const out: Array<{ id: string; name: string }> = [];
+    for (const r of RETIRED_SECRETS) if ((await this.context.secrets.get(SECRET_PREFIX + r.id)) !== undefined) out.push(r);
+    return out;
+  }
+
+  /** Deletes one of them, on the student's own request (Manage stored tokens, Reset). */
+  async deleteRetiredSecret(id: string): Promise<void> {
+    if (RETIRED_SECRETS.some((r) => r.id === id)) await this.context.secrets.delete(SECRET_PREFIX + id);
+  }
+
   /** What the daily check (checkTokensQuietly) found for a token; the Beethoven view reads this instead of asking the service again. */
   tokenCheck(id: SecretId): TokenCheck | undefined {
     return this.context.globalState.get<Record<string, TokenCheck>>(TOKEN_CHECKS_KEY, {})[id];
@@ -101,7 +115,7 @@ export class BeethovenStore {
     for (const s of SERVICES) {
       const present = !!(await this.getSecret(s.id));
       const c = present ? this.tokenCheck(s.id) : undefined;
-      out.push({ id: s.id, name: s.name, present, optional: s.optional, status: !present ? 'missing' : c && !c.ok ? 'expired' : 'stored', detail: c && !c.ok ? c.detail : undefined });
+      out.push({ id: s.id, name: s.name, present, status: !present ? 'missing' : c && !c.ok ? 'expired' : 'stored', detail: c && !c.ok ? c.detail : undefined });
     }
     return out;
   }

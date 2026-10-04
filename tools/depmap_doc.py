@@ -11,6 +11,18 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 SRC = os.path.join(HERE, "..", "docs", "research", "dependency_map_2026-09-28.json")
 OUT = os.path.join(HERE, "..", "docs", "DEPENDENCY_MAP.md")
 
+# The study is a dated record and stays as it was read; where a later version changed an entry, the
+# change is said here, above the entry, instead of editing the record.
+SINCE = {
+    "account.anthropic-api-key": "Since 5.0.0 (2026-10-04) there is no API key: none is asked for, stored, copied or used. "
+    "A key 4.0.0 stored is never used or sent; on the grid an empty `disabled` file is put beside it, the switch a worker "
+    "still on grid scripts 7 honours, and `grid.accounts` reports it until `beethoven accounts remove --yes` deletes it; on "
+    "the laptop Manage stored tokens or Reset deletes it. The entry below describes 4.0.0.",
+    "account.claude-usage-window": "Since 5.0.0 there is no rotation and no overflow onto an API key: a spent window is "
+    "answered `rate_limited` with `retry_after`, and the request is sent again after the reset. \"Add an API key\" below is "
+    "withdrawn; extra usage (usage credits) on the Claude account is the student's to keep off.",
+}
+
 LAYERS = [
     ("laptop", "Laptop"), ("vscode", "VS Code"), ("network", "Network"), ("account", "Accounts"),
     ("grid-login", "Grid login node"), ("grid-slurm", "Slurm"), ("grid-node", "Compute node"),
@@ -70,6 +82,13 @@ def main():
         "still work as links, and the old settings and command ids are still read as aliases",
         "(`docs/ARCHITECTURE.md`, \"The names from before 4.0.0\").",
         "",
+        "Since 5.0.0 (2026-10-04) there is no API key: the entries about an Anthropic API key, the",
+        "`apikey` account, rotation onto it after a limit and `accounts add-key` describe a feature that",
+        "was removed (no usage credits, by anyone, ever). A spent subscription window is now answered",
+        "`rate_limited` with `retry_after`, and the request is sent again after the reset; a key an",
+        "earlier version stored is never used, only marked `disabled` for workers still on grid scripts 7",
+        "(`docs/ARCHITECTURE.md`, \"Credentials\").",
+        "",
     ]
     known = {k for k, _ in LAYERS}
     for key, title in LAYERS + [("", "Other")]:
@@ -81,6 +100,9 @@ def main():
         for n in group:
             out.append(f"### `{n['id']}` {one(n.get('title'))}")
             out.append("")
+            if n["id"] in SINCE:
+                out.append(f"> {SINCE[n['id']]}")
+                out.append("")
             if n.get("depends_on"):
                 out.append("Depends on: " + ", ".join(f"`{d}`" for d in n["depends_on"]))
                 out.append("")

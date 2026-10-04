@@ -446,10 +446,7 @@ export const stepInstallKey: WizardStep = {
 export async function validateToken(svc: ServiceConfig, token: string): Promise<{ ok: boolean; detail: string; network: boolean }> {
   if (!svc.validate) return { ok: true, detail: 'no online check for this service', network: false };
   try {
-    const headers: Record<string, string> = { 'User-Agent': 'beethoven-wsu' };
-    if (svc.validate.header === 'Authorization') headers.Authorization = `Bearer ${token}`;
-    else headers['X-Api-Key'] = token;
-    if (svc.id === 'anthropicApiKey') headers['anthropic-version'] = '2023-06-01';
+    const headers: Record<string, string> = { 'User-Agent': 'beethoven-wsu', Authorization: `Bearer ${token}` };
     Object.assign(headers, svc.validate.extraHeaders ?? {});
     const ctl = new AbortController();
     const t = setTimeout(() => ctl.abort(), 15_000);
@@ -519,22 +516,25 @@ function tokenStep(svc: ServiceConfig, blurb: string): WizardStep {
 }
 
 /** Claude Code's own account of its sign-in, on this laptop or (through the grid CLI) on the grid. Status only, never a credential. */
-export async function localClaudeStatus(exe: string): Promise<{ ok: boolean; loggedIn: boolean; subscription: boolean; detail: string }> {
-  const r = await run(exe, ['auth', 'status'], { timeoutMs: 60_000 });
+export async function localClaudeStatus(exe: string, env?: NodeJS.ProcessEnv): Promise<{ ok: boolean; loggedIn: boolean; subscription: boolean; detail: string }> {
+  const r = await run(exe, ['auth', 'status'], { timeoutMs: 60_000, env });
   if (r.code === 127 || /ENOENT/.test(r.stderr)) return { ok: false, loggedIn: false, subscription: false, detail: 'Claude Code is not installed on this laptop' };
-  let j: { loggedIn?: boolean; authMethod?: string; email?: string; subscriptionType?: string } = {};
+  let j: { loggedIn?: boolean; authMethod?: string; apiProvider?: string; email?: string; subscriptionType?: string } = {};
   try {
     j = JSON.parse(r.stdout.trim());
   } catch {
     return { ok: false, loggedIn: false, subscription: false, detail: `claude auth status did not answer (${(r.stderr || r.stdout).trim().slice(0, 100)})` };
   }
+  // only the claude.ai sign-in billed by Anthropic itself counts: an API key, a key helper or a cloud
+  // provider (Bedrock, Vertex, Foundry) bills by use
   const method = String(j.authMethod ?? '');
-  const subscription = !!j.loggedIn && !/api[_-]?key|console/i.test(method);
+  const provider = String(j.apiProvider ?? 'firstParty');
+  const subscription = !!j.loggedIn && method === 'claude.ai' && provider === 'firstParty';
   return {
     ok: true,
     loggedIn: !!j.loggedIn,
     subscription,
-    detail: !j.loggedIn ? 'not signed in' : subscription ? `signed in${j.email ? ` as ${j.email}` : ''}${j.subscriptionType ? ` (${j.subscriptionType})` : ''}` : `signed in with an API key (${method}), not a Claude subscription`,
+    detail: !j.loggedIn ? 'not signed in' : subscription ? `signed in${j.email ? ` as ${j.email}` : ''}${j.subscriptionType ? ` (${j.subscriptionType})` : ''}` : `signed in through ${provider === 'firstParty' ? method || 'an unknown method' : provider}, not a Claude subscription`,
   };
 }
 
@@ -592,7 +592,6 @@ export const stepClaudeGrid: WizardStep = {
 
 export const stepGithub = tokenStep(SERVICES.find((s) => s.id === 'github')!, 'Sign in to GitHub in the browser; the token arrives by itself.');
 export const stepHuggingFace = tokenStep(SERVICES.find((s) => s.id === 'huggingface')!, 'On the page that opens press Create token, then Copy; the panel takes it.');
-export const stepAnthropicKey = tokenStep(SERVICES.find((s) => s.id === 'anthropicApiKey')!, 'Optional pay-per-use overflow for the grid worker.');
 
 export function gridScriptFiles(dir: string): string[] {
   if (!fs.existsSync(dir)) return [];
@@ -618,18 +617,15 @@ export async function pushTokens(env: WizardEnv): Promise<{ ok: boolean; detail:
     const rev = env.license!.revocationTexts();
     if (rev.trim()) await ssh(alias, ['bash', '-c', `${GRID_HOME_PICK} umask 077; cat > $h/license.revoked`], { input: rev + '\n' });
   }
-  const apiKey = await env.getSecret('anthropicApiKey');
   const gh = await env.getSecret('github');
   const hf = await env.getSecret('huggingface');
   const secrets = [gh ? `GITHUB_TOKEN=${gh}\nGH_TOKEN=${gh}` : '', hf ? `HF_TOKEN=${hf}` : ''].filter(Boolean).join('\n') + '\n';
-  let r = await ssh(alias, ['bash', '-c', `${GRID_HOME_PICK} umask 077; mkdir -p $h; cat > $h/secrets.env`], { input: secrets });
+  const r = await ssh(alias, ['bash', '-c', `${GRID_HOME_PICK} umask 077; mkdir -p $h; cat > $h/secrets.env`], { input: secrets });
   if (r.code !== 0) return { ok: false, detail: `writing secrets.env: ${r.stderr.trim()}` };
-  // Beethoven stores no Claude credential and copies none: an earlier version's stored token is deleted
-  await ssh(alias, ['bash', '-c', `${GRID_HOME_PICK} rm -f $h/accounts/*/token $h/accounts/*/minted_at $h/accounts/*/.credentials.json 2>/dev/null; true`]);
-  if (apiKey) {
-    r = await ssh(alias, ['bash', '-c', `${GRID_HOME_PICK} if [ -x $h/bin/beethoven ]; then $h/bin/beethoven accounts add-key apikey; elif [ -x $h/bin/ashley ]; then $h/bin/ashley accounts add-key apikey; else umask 077; mkdir -p $h/accounts/apikey; cat > $h/accounts/apikey/apikey; fi`], { input: apiKey + '\n' });
-    if (r.code !== 0) return { ok: false, detail: `writing the API key: ${r.stderr.trim()}` };
-  }
+  // Beethoven stores no Claude credential and copies none: an earlier version's stored token is deleted.
+  // The API key builds up to 4.0.0 copied to accounts/apikey is left for the student, but marked disabled,
+  // the one switch a worker still running grid scripts 7 honours (grid/beethoven, retire_apikey).
+  await ssh(alias, ['bash', '-c', `${GRID_HOME_PICK} rm -f $h/accounts/*/token $h/accounts/*/minted_at $h/accounts/*/.credentials.json 2>/dev/null; [ ! -e $h/accounts/apikey/apikey ] || touch $h/accounts/apikey/disabled; true`]);
   return { ok: true, detail: 'tokens updated on the grid' };
 }
 
@@ -673,10 +669,8 @@ export const stepGridInstall: WizardStep = {
       if (want && String(j.version) !== want) return report(this.id, this.title, 'todo', `the grid has Beethoven v${j.version}; this extension brings v${want}`);
       const missing: string[] = [];
       const gridSecrets: string[] = Array.isArray(j.secrets) ? j.secrets : [];
-      const gridAccounts: string[] = Array.isArray(j.accounts) ? j.accounts.map((a: { name: string }) => a.name) : [];
       if ((await env.getSecret('github')) && !gridSecrets.includes('GITHUB_TOKEN')) missing.push('GitHub token');
       if ((await env.getSecret('huggingface')) && !gridSecrets.includes('HF_TOKEN')) missing.push('Hugging Face token');
-      if ((await env.getSecret('anthropicApiKey')) && !gridAccounts.includes('apikey')) missing.push('Anthropic API key');
       const lic = env.license?.key();
       if (lic && String(j.license ?? '') !== licenseFingerprint(lic)) missing.push('your license');
       if (missing.length) return report(this.id, this.title, 'todo', `grid is missing: ${missing.join(', ')}`);
@@ -760,7 +754,7 @@ export const stepLabAccess: WizardStep = {
     return report(this.id, this.title, 'todo', 'not requested yet');
   },
   async run(env) {
-    // every earlier step must be done (the optional API key excepted)
+    // every earlier step must be done
     const missing: string[] = [];
     for (const s of STEPS.slice(0, STEPS.findIndex((x) => x.id === 'labAccess'))) {
       const c = await s.check(env);

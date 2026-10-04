@@ -8,18 +8,18 @@
 //   inbox/<id>.json  ->  claim (rename to .claimed)  ->  claude -p ... --output-format stream-json
 //                    ->  outbox/<id>.events.jsonl (live)  ->  outbox/<id>.json (final)
 //
-// One credential per account directory (~/.beethoven/accounts/<name>/):
-//   .credentials.json  a copied Claude Code login (CLAUDE_CONFIG_DIR style)
-//   apikey             an Anthropic API key (pay-per-use overflow)
-//   disabled           present = hold this account out of rotation
+// One account: the student's own Claude sign-in (CLAUDE_HOME, Claude Code's own CLAUDE_CONFIG_DIR):
+//   disabled           present = hold the sign-in out of use
 //   state.json         written here: {"cooldown_until": iso|null, "last_error": ...}
-// Each account directory is also that account's CLAUDE_CONFIG_DIR, so sessions, settings and
-// caches never mix between accounts.
+// There is no second account to fall over to. The Anthropic API key overflow of builds up to 4.0.0
+// is gone: it was paid usage beyond the subscription, which the maintainer ruled out for everyone
+// on 2026-10-04; a key an earlier version stored under accounts/apikey is never read here (the
+// `disabled` file the beethoven command puts beside it is for daemons of grid scripts 7, which do).
 //
-// Rate limits: when Claude reports that a subscription window is exhausted, the account is
-// put on cooldown until the reset time it names (or 60 min), the request is re-queued for the
-// next enabled account, and if none is left the result is written with status rate_limited
-// and a retry_after so the laptop can wait instead of failing.
+// Rate limits: when Claude reports that the subscription window is exhausted, the sign-in is put
+// on cooldown until the reset time it names (or 60 min) and the result is written with status
+// rate_limited and a retry_after; requests that arrive before then get the same answer at once.
+// Nothing retries by itself: the student sends the request again after the reset.
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
@@ -49,12 +49,11 @@ const ACCOUNTS = path.join(BEETHOVEN_HOME, 'accounts');
 // `claude auth login` in the student's allocation). Beethoven never reads, copies or relays it; it
 // only points every Claude Code process it starts at this folder. One person, one login.
 const CLAUDE_HOME = envOf('CLAUDE_HOME') || path.join(BEETHOVEN_HOME, 'claude');
-const AUTH_VARS = ['CLAUDE_CODE_OAUTH_TOKEN', 'ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_BASE_URL', 'CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR', 'CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR'];
+const AUTH_VARS = ['CLAUDE_CODE_OAUTH_TOKEN', 'ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_BASE_URL', 'CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR', 'CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR', 'CLAUDE_CODE_USE_BEDROCK', 'CLAUDE_CODE_USE_VERTEX', 'CLAUDE_CODE_USE_FOUNDRY'];
 const SECRETS = path.join(BEETHOVEN_HOME, 'secrets.env');
 const STATE = path.join(WORKER_DIR, 'state.json');
 const STOP = path.join(WORKER_DIR, 'stop');
 const HARD_CAP_MS = 6 * 3600e3;
-const MAX_ATTEMPTS = 3;
 
 // ---- license ------------------------------------------------------------------------------
 // The worker runs only for the person the license names: the key the laptop copied to
@@ -261,8 +260,15 @@ function startRequest(req, claimedPath) {
     log(`refused ${req.id}: license ${license.status}`);
     return;
   }
-  const excluded = new Set(req.exclude_accounts || []);
-  const account = chooseAccount(req.account, excluded);
+  // a laptop of 4.0.0 may still name the API key account, or exclude the sign-in after a spent window
+  // (exclude_accounts): there is no other account to move to, so neither is honoured
+  if (req.account && req.account !== 'claude') {
+    writeResult(req, { status: 'error', result: '', error: 'this worker runs only on your own Claude sign-in; Beethoven no longer uses an API key or any other account', started: started.toISOString() });
+    fs.rmSync(claimedPath, { force: true });
+    log(`refused ${req.id}: account ${String(req.account).slice(0, 40)} is not the sign-in`);
+    return;
+  }
+  const account = chooseAccount();
   if (!account) {
     const cool = soonestCooldown();
     const status = cool ? 'rate_limited' : 'error';
@@ -306,16 +312,15 @@ function startRequest(req, claimedPath) {
     // the beethoven command and (when the worker job set it up) the host's Slurm client, for Claude's shell
     PATH: [path.dirname(CLAUDE), path.join(BEETHOVEN_HOME, 'bin'), SLURM.ok ? SLURM_BIN : '', process.env.PATH || ''].filter(Boolean).join(':'),
   });
-  // only the chosen account's credential: nothing from the job environment or secrets.env may
-  // override it (ANTHROPIC_AUTH_TOKEN) or send it elsewhere (ANTHROPIC_BASE_URL)
+  // only the sign-in Claude Code stored itself: nothing from the job environment or secrets.env may
+  // override it (ANTHROPIC_API_KEY, ANTHROPIC_AUTH_TOKEN) or send it elsewhere (ANTHROPIC_BASE_URL)
   for (const k of AUTH_VARS) delete env[k];
   shareTranscripts(account.dir);
-  if (account.kind === 'api-key') env.ANTHROPIC_API_KEY = account.secret; // the login kind: Claude Code uses what it stored itself
 
   const eventsPath = path.join(OUTBOX, `${req.id}.events.jsonl`);
   const events = fs.createWriteStream(eventsPath, { flags: 'a' });
   events.write(JSON.stringify({ type: 'beethoven', event: 'start', id: req.id, worker: WORKER, node, job, account: account.name, session: req.session, session_id: session.session_id, resume: session.resume, cwd, ts: started.toISOString() }) + '\n');
-  log(`start ${req.id} session=${req.session} sid=${session.session_id} resume=${session.resume} account=${account.name} cwd=${cwd} attempt=${req.attempt || 1}`);
+  log(`start ${req.id} session=${req.session} sid=${session.session_id} resume=${session.resume} account=${account.name} cwd=${cwd}`);
 
   const cc = claudeCommand(args);
   const child = spawn(cc.cmd, cc.args, { cwd, env, stdio: ['ignore', 'pipe', 'pipe'] });
@@ -355,16 +360,7 @@ function startRequest(req, claimedPath) {
       const until = parseResetTime(errText) || new Date(Date.now() + 60 * 60e3).toISOString();
       setCooldown(account, until, text || entry.stderr.slice(-500));
       log(`rate limited on ${account.name} until ${until} (${req.id})`);
-      const attempt = (req.attempt || 1) + 1;
-      const nextExcluded = [...excluded, account.name];
-      const another = chooseAccount(undefined, new Set(nextExcluded));
-      if (attempt <= MAX_ATTEMPTS && another) {
-        const requeued = Object.assign({}, req, { attempt, exclude_accounts: nextExcluded });
-        atomicWrite(path.join(INBOX, `${req.id}.json`), JSON.stringify(requeued));
-        fs.rmSync(claimedPath, { force: true });
-        log(`requeued ${req.id} for account ${another.name}`);
-        return;
-      }
+      // nowhere to move it: the request is answered with the reset time and sent again after it
       writeResult(req, { status: 'rate_limited', result: text, error: 'subscription window exhausted', retry_after: until, account: account.name, session_id: session.session_id, started: started.toISOString(), claude_rc: code, usage: result && result.usage, cost_usd: result && result.total_cost_usd, duration_ms: result && result.duration_ms, num_turns: result && result.num_turns });
       fs.rmSync(claimedPath, { force: true });
       return;
@@ -433,9 +429,9 @@ function peerNote() {
 
 // ---- accounts -------------------------------------------------------------------------
 // --resume finds a session only under <CLAUDE_CONFIG_DIR>/projects (measured on Claude Code
-// 2.1.283: "No conversation found" from another config folder), so a request moved to another of
-// the student's accounts would lose its conversation. Every account's projects/ is therefore a link
-// to one ~/.beethoven/projects. All accounts belong to one person, so this shares nothing between people.
+// 2.1.283: "No conversation found" from another config folder). Up to grid scripts 7 a request could
+// move to the student's API key account, so every account's projects/ became a link to one
+// ~/.beethoven/projects; the sign-in's link stays, so the sessions kept there still resume.
 const SHARED_PROJECTS = path.join(BEETHOVEN_HOME, 'projects');
 function shareTranscripts(dir) {
   const p = path.join(dir, 'projects');
@@ -471,19 +467,13 @@ function listAccounts() {
   };
   // the sign-in: present when Claude Code has stored its credential there (Beethoven checks presence, never content)
   if (fs.existsSync(path.join(CLAUDE_HOME, '.credentials.json'))) {
-    out.push({ name: 'claude', dir: CLAUDE_HOME, kind: 'login', secret: null, enabled: !fs.existsSync(path.join(CLAUDE_HOME, 'disabled')), cooldown_until: stateOf(CLAUDE_HOME) });
-  }
-  // the student's own Anthropic Console key (Commercial Terms), used only when the subscription window is exhausted
-  const keyDir = path.join(ACCOUNTS, 'apikey');
-  if (fs.existsSync(path.join(keyDir, 'apikey'))) {
-    out.push({ name: 'apikey', dir: keyDir, kind: 'api-key', secret: readFirstLine(path.join(keyDir, 'apikey')), enabled: !fs.existsSync(path.join(keyDir, 'disabled')), cooldown_until: stateOf(keyDir) });
+    out.push({ name: 'claude', dir: CLAUDE_HOME, kind: 'login', enabled: !fs.existsSync(path.join(CLAUDE_HOME, 'disabled')), cooldown_until: stateOf(CLAUDE_HOME) });
   }
   return out;
 }
-function chooseAccount(forced, excluded) {
+function chooseAccount() {
   const all = listAccounts().filter((a) => a.kind !== 'login' || claudeLogin.loggedIn || claudeLogin.checked === null);
-  if (forced) return all.find((a) => a.name === forced && a.enabled) || null;
-  return all.find((a) => a.enabled && !a.cooldown_until && !excluded.has(a.name)) || null;
+  return all.find((a) => a.enabled && !a.cooldown_until) || null;
 }
 function soonestCooldown() {
   const c = listAccounts()

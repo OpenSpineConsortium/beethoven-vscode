@@ -139,20 +139,23 @@ export class BeethovenTree implements vscode.TreeDataProvider<Item> {
     }
     items.push(await this.claudeOnLaptop(s.claudeExecutable));
     const secrets = await this.store.secretSummary();
+    const retired = await this.store.retiredSecrets();
     const manage = { command: 'beethoven.manageTokens', title: 'Manage' };
     items.push(
       new Item('Tokens on this laptop', 'root', {
         icon: 'lock',
-        children: secrets.map((x) => {
-          const name = x.name.split(' (')[0];
-          // the optional API key is not a sign-in and has no wizard step: it keeps the token manager
-          if (x.optional && x.status !== 'expired') return new Item(name, 'token', { description: x.present ? 'stored' : 'optional, not set', icon: x.present ? 'pass' : 'circle-outline', command: manage });
-          // a missing or rejected token starts the wizard's own step for it; "expired" is what the daily check found, not a new call to the service
-          const renew = { command: 'beethoven.renewToken', title: 'Renew', arguments: [x.id] };
-          if (x.status === 'missing') return new Item(name, 'token', { description: 'missing: click to sign in', icon: 'circle-outline', command: renew });
-          if (x.status === 'expired') return new Item(name, 'token', { description: 'expired: click to renew', icon: 'warning', tooltip: `no longer accepted (${x.detail ?? 'the service rejected it'}); renewing updates the grid copy too`, command: renew });
-          return new Item(name, 'token', { description: 'stored', icon: 'pass', command: manage });
-        }),
+        children: [
+          ...secrets.map((x) => {
+            const name = x.name.split(' (')[0];
+            // a missing or rejected token starts the wizard's own step for it; "expired" is what the daily check found, not a new call to the service
+            const renew = { command: 'beethoven.renewToken', title: 'Renew', arguments: [x.id] };
+            if (x.status === 'missing') return new Item(name, 'token', { description: 'missing: click to sign in', icon: 'circle-outline', command: renew });
+            if (x.status === 'expired') return new Item(name, 'token', { description: 'expired: click to renew', icon: 'warning', tooltip: `no longer accepted (${x.detail ?? 'the service rejected it'}); renewing updates the grid copy too`, command: renew });
+            return new Item(name, 'token', { description: 'stored', icon: 'pass', command: manage });
+          }),
+          // an earlier version's API key, never used now: shown until the student deletes it
+          ...retired.map((r) => new Item(r.name, 'token', { description: 'not used: click to delete', icon: 'info', command: manage })),
+        ],
       }),
     );
     return items;

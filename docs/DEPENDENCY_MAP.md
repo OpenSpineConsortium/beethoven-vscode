@@ -22,6 +22,13 @@ Command Palette, the `ashley_*` MCP tools are `beethoven_*`, `ashley-cli` is `be
 still work as links, and the old settings and command ids are still read as aliases
 (`docs/ARCHITECTURE.md`, "The names from before 4.0.0").
 
+Since 5.0.0 (2026-10-04) there is no API key: the entries about an Anthropic API key, the
+`apikey` account, rotation onto it after a limit and `accounts add-key` describe a feature that
+was removed (no usage credits, by anyone, ever). A spent subscription window is now answered
+`rate_limited` with `retry_after`, and the request is sent again after the reset; a key an
+earlier version stored is never used, only marked `disabled` for workers still on grid scripts 7
+(`docs/ARCHITECTURE.md`, "Credentials").
+
 ## Laptop (34)
 
 ### `laptop.os-platform` Laptop OS and architecture are supported
@@ -1746,6 +1753,8 @@ Depends on: `vscode.secret-storage`, `account.claude-subscription`
 
 ### `account.anthropic-api-key` Optional Anthropic API key (overflow)
 
+> Since 5.0.0 (2026-10-04) there is no API key: none is asked for, stored, copied or used. A key 4.0.0 stored is never used or sent; on the grid an empty `disabled` file is put beside it, the switch a worker still on grid scripts 7 honours, and `grid.accounts` reports it until `beethoven accounts remove --yes` deletes it; on the laptop Manage stored tokens or Reset deletes it. The entry below describes 4.0.0.
+
 Depends on: `vscode.secret-storage`
 
 - **Assumes:** An optional sk-ant-api key. Since wizard v2 it is no longer a wizard step; it is set through Manage tokens. GET /v1/models with X-Api-Key returns 200. On the grid it is stored at ~/.ashley/accounts/apikey/apikey (mode 600). It is never injected into laptop terminals, and the grid's verify-tokens does not check it.
@@ -1814,6 +1823,8 @@ Depends on: `grid-node.accounts-available`, `external.anthropic-api-from-node`, 
 - **Code:** grid/ashleyd.js:8-13,189-192,317-327; grid/ashley:647-658; extension/src/core/services.ts:59-71; docs/CHECKPOINT_2026-09-28.md:252,293
 
 ### `account.claude-usage-window` The subscription window is not exhausted
+
+> Since 5.0.0 there is no rotation and no overflow onto an API key: a spent window is answered `rate_limited` with `retry_after`, and the request is sent again after the reset. "Add an API key" below is withdrawn; extra usage (usage credits) on the Claude account is the student's to keep off.
 
 Depends on: `account.claude-grid-credential`
 

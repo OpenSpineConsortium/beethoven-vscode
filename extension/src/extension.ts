@@ -240,7 +240,7 @@ async function commandSetup(context: vscode.ExtensionContext): Promise<void> {
   p.setSteps(all, null);
   output.appendLine(format(reports));
   const failed = reports.find((r) => r.status === 'failed');
-  const skipped = reports.find((r) => r.status === 'skipped' && r.id !== 'anthropicApiKey');
+  const skipped = reports.find((r) => r.status === 'skipped');
   if (failed) p.finish(`Stopped at "${failed.title}": ${failed.detail}`, false);
   else if (skipped) p.finish(`Paused at "${skipped.title}". Run the wizard again to continue.`, false);
   else p.finish('Setup finished. The Beethoven view shows when the grid container is ready; then start a worker.', true);
@@ -280,8 +280,7 @@ async function commandTokenStep(context: vscode.ExtensionContext, id: SecretId):
 
 /**
  * A token row in the Beethoven view, the troubleshooter's Renew button, or the palette: the wizard's own
- * step for that token. Without an id (the palette), a picker; the optional API key has no step and stays
- * with Beethoven: Manage stored tokens.
+ * step for that token. Without an id (the palette), a picker.
  */
 async function commandRenewToken(context: vscode.ExtensionContext, arg?: unknown): Promise<void> {
   const renewable = SERVICES.filter((s) => STEPS.some((st) => st.id === s.id));
@@ -532,11 +531,24 @@ async function commandRegisterMcp(context: vscode.ExtensionContext, quiet = fals
 
 async function commandManageTokens(context: vscode.ExtensionContext): Promise<void> {
   const summary = await store.secretSummary();
+  const retired = await store.retiredSecrets();
   const pick = await vscode.window.showQuickPick(
-    summary.map((x) => ({ label: x.name, description: x.status === 'expired' ? 'no longer accepted' : x.present ? 'stored' : 'missing', id: x.id })),
+    [
+      ...summary.map((x) => ({ label: x.name, description: x.status === 'expired' ? 'no longer accepted' : x.present ? 'stored' : 'missing', id: x.id as string, retired: false })),
+      // stored by an earlier version and never used now: shown so the student can delete it, nothing else
+      ...retired.map((r) => ({ label: r.name, description: 'stored by an earlier version; Beethoven never uses it', id: r.id, retired: true })),
+    ],
     { title: 'Tokens in the OS keychain' },
   );
   if (!pick) return;
+  if (pick.retired) {
+    const del = await vscode.window.showQuickPick(['Delete', 'Cancel'], { title: `${pick.label}: delete the copy in the keychain? Revoke the key itself in your Anthropic Console.` });
+    if (del === 'Delete') {
+      await store.deleteRetiredSecret(pick.id);
+      tree.refresh();
+    }
+    return;
+  }
   const action = await vscode.window.showQuickPick(['Replace', 'Delete', 'Cancel'], { title: pick.label });
   if (action === 'Delete') {
     await store.setSecret(pick.id as SecretId, undefined);
@@ -549,8 +561,9 @@ async function commandManageTokens(context: vscode.ExtensionContext): Promise<vo
 
 async function commandReset(context: vscode.ExtensionContext): Promise<void> {
   const s = store.settings();
+  const retired = await store.retiredSecrets();
   const items: Array<vscode.QuickPickItem & { id: string }> = [
-    { id: 'tokens', label: 'Tokens in the OS keychain', description: 'GitHub, Hugging Face, Claude, API key', picked: true },
+    { id: 'tokens', label: 'Tokens in the OS keychain', description: retired.length ? `GitHub, Hugging Face and the ${retired.map((r) => r.name).join(', ')}` : 'GitHub and Hugging Face', picked: true },
     { id: 'ssh', label: 'SSH key and the config block', description: `${s.identityFile}, the Beethoven block in ~/.ssh/config`, picked: true },
     { id: 'settings', label: 'Beethoven settings', description: 'AccessID and preferences', picked: true },
     { id: 'mcp', label: 'MCP bridge registration', description: 'claude mcp remove beethoven', picked: true },
@@ -570,6 +583,7 @@ async function commandReset(context: vscode.ExtensionContext): Promise<void> {
   }
   if (ids.has('tokens')) {
     for (const svc of SERVICES) await store.setSecret(svc.id, undefined);
+    for (const r of retired) await store.deleteRetiredSecret(r.id);
     done.push('tokens deleted');
   }
   if (ids.has('mcp')) {

@@ -226,7 +226,7 @@
    "dependsOn": [
     "laptop.os"
    ],
-   "assumption": "HTTPS to github.com, huggingface.co and anthropic.com",
+   "assumption": "HTTPS to github.com and huggingface.co",
    "manualFix": "check the Wi-Fi; some campus networks block token checks (the grid checks them instead)",
    "futureRisk": "",
    "source": "extension/src/core/wizard.ts (validateToken)",
@@ -649,8 +649,8 @@
    "dependsOn": [
     "grid.claude-login"
    ],
-   "assumption": "one subscription token per person, no copied logins, and every account shares one session history (so a conversation survives a move to your API key)",
-   "manualFix": "Troubleshoot and repair links the history; remove extra accounts with: ssh wsu-grid \"beethoven accounts remove NAME\"",
+   "assumption": "your own Claude sign-in only (Beethoven keeps no Claude token and uses no API key), no copied logins, its session history in one shared folder, and an API key an earlier version stored marked disabled",
+   "manualFix": "Troubleshoot and repair links the history and marks an API key an earlier version stored disabled (it deletes nothing); ssh -t wsu-grid \"beethoven accounts remove --yes\" deletes the key",
    "futureRisk": "Claude Code moving where --resume looks for transcripts",
    "source": "grid/beethoven (cmd_diag)",
    "autoRepair": true,

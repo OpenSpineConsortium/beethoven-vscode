@@ -9,19 +9,15 @@
       .a{stroke:#333;stroke-width:1.3;fill:none;marker-end:url(#d)}
     </style>
   </defs>
-  <text x="20" y="26" font-size="15" font-weight="600" fill="#222">When a credential runs out: your own accounts only</text>
-  <rect class="b" x="20" y="60" width="200" height="64"/><text x="30" y="82" class="n">request arrives</text><text x="30" y="100" class="s">pick first enabled account</text><text x="30" y="114" class="s">not on cooldown, not excluded</text>
-  <rect class="g" x="260" y="60" width="200" height="64"/><text x="270" y="82" class="n">accounts/default</text><text x="270" y="100" class="s">subscription token (setup-token)</text><text x="270" y="114" class="s">tried first</text>
+  <text x="20" y="26" font-size="15" font-weight="600" fill="#222">When the subscription window is spent: wait for the reset</text>
+  <rect class="b" x="20" y="60" width="200" height="64"/><text x="30" y="82" class="n">request arrives</text><text x="30" y="100" class="s">Claude Code signed in?</text><text x="30" y="114" class="s">sign-in not on cooldown?</text>
+  <rect class="g" x="260" y="60" width="200" height="64"/><text x="270" y="82" class="n">~/.beethoven/claude</text><text x="270" y="100" class="s">Claude Code's own sign-in</text><text x="270" y="114" class="s">your subscription only</text>
   <rect class="w" x="260" y="170" width="200" height="64"/><text x="270" y="192" class="n">result says limit hit</text><text x="270" y="210" class="s">"hit your limit", 429, rate_limit</text><text x="270" y="224" class="s">cooldown_until = reset time or +60 min</text>
-  <rect class="g" x="520" y="60" width="200" height="64"/><text x="530" y="82" class="n">accounts/apikey</text><text x="530" y="100" class="s">your own API key, spend cap</text><text x="530" y="114" class="s">tried only after subscriptions</text>
-  <rect class="b" x="760" y="60" width="200" height="64"/><text x="770" y="82" class="n">answer written</text><text x="770" y="100" class="s">status ok, account named</text>
-  <rect class="w" x="520" y="170" width="440" height="64"/><text x="530" y="192" class="n">every account cooling</text><text x="530" y="210" class="s">status rate_limited, retry_after = soonest reset; worker heartbeat = blocked</text><text x="530" y="224" class="s">the laptop shows "resets at ..." and the request stays answerable later</text>
+  <rect class="b" x="520" y="60" width="200" height="64"/><text x="530" y="82" class="n">answer written</text><text x="530" y="100" class="s">status ok</text>
+  <rect class="w" x="520" y="170" width="440" height="64"/><text x="530" y="192" class="n">window spent</text><text x="530" y="210" class="s">status rate_limited, retry_after = reset time; worker heartbeat = blocked</text><text x="530" y="224" class="s">the laptop shows the reset time; send the request again after it</text>
   <path class="a" d="M220 92 L260 92"/>
   <path class="a" d="M360 124 L360 170"/>
-  <path class="a" d="M460 92 L760 92"/>
+  <path class="a" d="M460 92 L520 92"/>
   <path class="a" d="M460 202 L520 202"/>
-  <path class="a" d="M460 190 C 490 150, 500 120, 520 100"/>
-  <text x="470" y="150" class="s">re-queue</text>
-  <path class="a" d="M720 92 L760 92"/>
-  <text x="20" y="275" class="s">Never another student's account: the Consumer Terms bind an account to the person who holds it. One worker per account.</text>
+  <text x="20" y="275" class="s">Beethoven uses no API key and asks for no paid usage, and never another student's account: the Consumer Terms bind an account to its holder.</text>
 </svg>

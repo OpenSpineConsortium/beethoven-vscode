@@ -1,6 +1,6 @@
 # Beethoven for VS Code privacy statement
 
-Version 5, 2026-09-30. Part of the Beethoven for VS Code Trial Edition License Agreement
+Version 6, 2026-10-04. Part of the Beethoven for VS Code Trial Edition License Agreement
 (LICENSE.txt) and of the Beethoven for VS Code Full Edition License Agreement (LICENSE-FULL.txt).
 You can save and print this text; it is also on the Beethoven support page.
 
@@ -14,7 +14,7 @@ provided by or on behalf of any school, and Licensor is not acting for one.
 | Data | Where | Why | You control it by |
 |---|---|---|---|
 | Beethoven for VS Code settings (AccessID, hostnames, worker defaults) | VS Code settings | to reach your grid account | editing Settings, or Beethoven: Reset |
-| Your GitHub and Hugging Face tokens, and an optional Anthropic Console key | your operating system's credential store (VS Code SecretStorage) | so your own tools can use them on your laptop and, copied, in your grid account | Beethoven: Manage stored tokens; revoking the token at the service |
+| Your GitHub and Hugging Face tokens | your operating system's credential store (VS Code SecretStorage) | so your own tools can use them on your laptop and, copied, in your grid account | Beethoven: Manage stored tokens; revoking the token at the service |
 | Your license key and the institutional identity you signed in with (AccessID, e-mail) | `~/.beethoven-local` (on a computer that ran an earlier release: `~/.ashley-local`) and VS Code's state | to check that the license names you | Beethoven: License (remove the key); Beethoven: Reset |
 | Your acceptance of the agreement: its version and text hashes, the statements you ticked with their wording, your typed name, the time, and the exact texts shown | `terms.json` and `terms/<version>/` in the same folder; VS Code's state | to prove the agreement and its terms, for you and for Licensor | it is yours to read, copy and print; Beethoven: Reset removes it |
 | Copies of every error report Beethoven for VS Code prepared, sent or not | the extension's storage folder | so you can read exactly what left your laptop | Beethoven: Error reports |
@@ -24,10 +24,24 @@ Beethoven for VS Code never reads, stores, copies or relays a Claude credential.
 its own sign-in, on your laptop and in your grid account (`~/.beethoven/claude`); Beethoven for VS
 Code reads only Claude Code's yes-or-no answer about whether it is signed in.
 
+Beethoven for VS Code asks for no Anthropic API key and uses no paid usage. It cannot see or change
+the billing settings of your Claude account: if extra usage (usage credits) is turned on there,
+Claude Code may draw on it, so keep it off. An Anthropic Console key that Beethoven for VS Code
+4.0.0 stored in the credential store, or that an earlier version stored in your grid account
+(`~/.beethoven/accounts/apikey`), stays where it was and is never used or sent: Beethoven for VS Code
+only checks whether it is there, and the first time it reaches your grid account it puts an empty
+file named `disabled` beside the grid copy, so that a worker the earlier version started cannot use
+it. Beethoven: Manage stored tokens (or Beethoven: Reset)
+deletes the laptop copy, and `beethoven accounts remove --yes`, typed in a terminal on the grid, the
+other. If you used the command-line edition, its copy is in `~/.beethoven-local/secrets.json` (or
+`~/.ashley-local/secrets.json`); delete it there by hand. A key that Ashley for VS Code stored on
+your laptop is in Ashley's own storage, which Beethoven for VS Code cannot reach: delete it in Ashley
+for VS Code, or revoke the key in the Anthropic Console, which makes every copy useless.
+
 ## What goes to your own grid account
 
-With your consent in each step: your GitHub and Hugging Face tokens and optional Console key (a file
-readable only by you), your license key, and the settings needed for the worker. Everything there is
+With your consent in each step: your GitHub and Hugging Face tokens (a file readable only by you),
+your license key, and the settings needed for the worker. Everything there is
 in your own account under your institution's rules; Licensor has no access to it.
 
 ## What goes to services you already use
