@@ -3,7 +3,7 @@
 // ship: source maps, test fixtures, the test signing key, a missing licence or notices file, the
 // wrong licence field, a copyleft dependency, run-time code construction outside two known
 // dependency uses, or the old credential capture.
-// Usage: node tools/release_check.mjs dist/beethoven-4.0.0.vsix [--unpack dist/unpacked]
+// Usage: node tools/release_check.mjs dist/beethoven-5.0.0.vsix [--unpack dist/unpacked]
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as zlib from 'node:zlib';

@@ -126,6 +126,37 @@ test('every grid command first marks an API key a build up to 4.0.0 stored disab
   fs.rmSync(home, { recursive: true, force: true });
 });
 
+test('the grid doctor fails a sign-in that is not a Claude subscription, from the worker\'s heartbeat', { skip: process.platform !== 'linux' && 'needs bash and GNU stat, as on the grid' }, () => {
+  const repo = path.resolve(__dirname, '..', '..', '..', '..');
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'beethoven-doctor-'));
+  const bh = path.join(home, '.beethoven');
+  const wd = path.join(bh, 'workers', 'w1');
+  fs.mkdirSync(wd, { recursive: true });
+  fs.mkdirSync(path.join(bh, 'claude'), { recursive: true });
+  fs.writeFileSync(path.join(bh, 'claude', '.credentials.json'), '{"fake":true}\n');
+  fs.writeFileSync(path.join(wd, 'job.id'), '123\n');
+  // a Slurm that says the worker's job runs; nothing else of Slurm is called by the doctor
+  const fakeBin = path.join(home, 'fakebin');
+  fs.mkdirSync(fakeBin);
+  fs.writeFileSync(path.join(fakeBin, 'squeue'), '#!/bin/sh\necho RUNNING\n', { mode: 0o755 });
+  const checked = new Date().toISOString();
+  // the heartbeat as beethovend.js writes it (JSON.stringify(st, null, 1)), in the shapes its claude_login takes
+  const shapes: [string, Record<string, unknown>, RegExp][] = [
+    ['a token', { loggedIn: true, subscription: false, authMethod: 'oauth_token', apiProvider: null, email: 'ab1234@wayne.edu', subscriptionType: 'pro', checked, detail: 'signed in, but not with a Claude subscription' }, /^FAIL  Claude on the grid is signed in, but not with a Claude subscription/m],
+    ['a cloud provider', { loggedIn: true, subscription: false, authMethod: 'claude.ai', apiProvider: 'bedrock', email: null, subscriptionType: null, checked, detail: 'signed in, but not with a Claude subscription' }, /^FAIL  Claude on the grid is signed in, but not with a Claude subscription/m],
+    ['the subscription', { loggedIn: true, subscription: true, authMethod: 'claude.ai', apiProvider: null, email: 'ab1234@wayne.edu', subscriptionType: 'pro', checked, detail: 'signed in as ab1234@wayne.edu' }, /^PASS  Claude signed in on the grid/m],
+    ['no answer', { loggedIn: false, subscription: false, checked, detail: 'auth status did not answer (timeout)' }, /^PASS  Claude signed in on the grid/m],
+    ['a daemon from before the field', { loggedIn: true, authMethod: 'claude.ai', email: 'ab1234@wayne.edu', subscriptionType: 'pro', checked, detail: 'signed in as ab1234@wayne.edu' }, /^PASS  Claude signed in on the grid/m],
+  ];
+  for (const [what, login, want] of shapes) {
+    fs.writeFileSync(path.join(wd, 'state.json'), JSON.stringify({ v: 1, worker: 'w1', state: 'idle', claude_login: login }, null, 1));
+    const r = spawnSync('bash', [path.join(repo, 'grid', 'beethoven'), 'doctor'], { env: { ...process.env, HOME: home, BEETHOVEN_HOME: bh, PATH: `${fakeBin}:${process.env.PATH}` }, encoding: 'utf8' });
+    const line = r.stdout.split('\n').find((l) => /Claude (on the grid is signed in|signed in on the grid|not signed in on the grid)/.test(l));
+    assert.match(line ?? '', want, `${what}: ${line ?? r.stdout + r.stderr}`);
+  }
+  fs.rmSync(home, { recursive: true, force: true });
+});
+
 test('a token is captured whole: across chunks and across hard line wraps', () => {
   const pat = /sk-ant-oat[A-Za-z0-9_\-]{20,}/;
   const tok = 'sk-ant-oat01-' + 'A1b2C3d4E5'.repeat(9) + '-xY_z';

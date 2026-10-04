@@ -24,9 +24,12 @@ if (args[0] === '--version') {
 }
 const AUTH_VARS = ['CLAUDE_CODE_OAUTH_TOKEN', 'ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_BASE_URL', 'CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR', 'CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR', 'CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC'];
 if (args[0] === 'auth' && args[1] === 'status') {
-  // like Claude Code 2.1.283: JSON with loggedIn and authMethod; the e-mail when signed in
+  // like Claude Code 2.1.283: JSON with loggedIn and authMethod; the e-mail when signed in. fake_auth_method and
+  // fake_api_provider stand for a sign-in that is not a subscription (a token from the environment, a cloud provider)
   const on = fs.existsSync(path.join(cfg, 'fake_logged_in'));
-  console.log(JSON.stringify(on ? { loggedIn: true, authMethod: 'claude.ai', email: 'ab1234@wayne.edu', subscriptionType: 'pro' } : { loggedIn: false, authMethod: 'none' }));
+  const read = (f) => (fs.existsSync(path.join(cfg, f)) ? fs.readFileSync(path.join(cfg, f), 'utf8').trim() : undefined);
+  const provider = read('fake_api_provider');
+  console.log(JSON.stringify(on ? { loggedIn: true, authMethod: read('fake_auth_method') ?? 'claude.ai', ...(provider ? { apiProvider: provider } : {}), email: 'ab1234@wayne.edu', subscriptionType: 'pro' } : { loggedIn: false, authMethod: 'none' }));
   process.exit(0);
 }
 if (args[0] === 'auth' && args[1] === 'login') {

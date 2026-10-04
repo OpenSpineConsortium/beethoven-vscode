@@ -17,10 +17,28 @@ SINCE = {
     "account.anthropic-api-key": "Since 5.0.0 (2026-10-04) there is no API key: none is asked for, stored, copied or used. "
     "A key 4.0.0 stored is never used or sent; on the grid an empty `disabled` file is put beside it, the switch a worker "
     "still on grid scripts 7 honours, and `grid.accounts` reports it until `beethoven accounts remove --yes` deletes it; on "
-    "the laptop Manage stored tokens or Reset deletes it. The entry below describes 4.0.0.",
+    "the laptop Manage stored tokens or Reset deletes it. The entry below describes 4.0.0, except the step by hand, "
+    "which is today's.",
     "account.claude-usage-window": "Since 5.0.0 there is no rotation and no overflow onto an API key: a spent window is "
-    "answered `rate_limited` with `retry_after`, and the request is sent again after the reset. \"Add an API key\" below is "
-    "withdrawn; extra usage (usage credits) on the Claude account is the student's to keep off.",
+    "answered `rate_limited` with `retry_after`, and the request is sent again after the reset. No API key and no usage "
+    "credits, by anyone: extra usage (usage credits) on the Claude account is the student's to keep off. The assumption, "
+    "the repair and the step by hand below are today's; the study's text of 4.0.0 stays in the JSON record.",
+}
+
+# Where the study's text would tell a student to do what is ruled out since then, the rendering says what
+# holds now, field by field; the record itself is not edited (SINCE says so above the entry).
+NOW = {
+    "account.anthropic-api-key": {
+        "manual_fix": "Nothing to set up: Beethoven uses no API key. To delete a key 4.0.0 stored: Manage stored tokens or "
+        "Reset on the laptop, beethoven accounts remove --yes in a terminal on the grid; revoke the key itself in the "
+        "Anthropic Console.",
+    },
+    "account.claude-usage-window": {
+        "assumption": "Pro/Max five-hour and weekly windows have room. The worker runs only on the student's own "
+        "subscription: no API key, no usage credits, no other account, never another person's.",
+        "auto_repair": "None: the worker answers rate_limited with retry_after and starts nothing until the reset.",
+        "manual_fix": "Wait for the reset, then send the request again. No API key, no usage credits.",
+    },
 }
 
 LAYERS = [
@@ -56,7 +74,7 @@ def one(s):
 
 def main():
     raw = json.load(open(SRC, encoding="utf-8"))["nodes"]
-    nodes = merge(raw)
+    nodes = [dict(n, **NOW.get(n["id"], {})) for n in merge(raw)]
     out = [
         "# Dependency map",
         "",

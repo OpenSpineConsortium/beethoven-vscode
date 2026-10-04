@@ -527,9 +527,10 @@ withdrew reach installations through `/revoked`.
 | REPORTS | `rate:<install id>:<day>` | count | 2 days |
 | REPORTS | `sig:<signature>` | issue number, count | 365 days |
 
-The reports live in the GitHub issues, where the triage workflow reads them. The access requests live
-in KV (above) and in the maintainer's e-mail; they are filed as issues too only when `GITHUB_TOKEN` is
-set, which it is not today.
+The reports live in the GitHub issues, where the maintainer reads them (nothing on his side runs on an
+API key, and nothing runs Claude Code on them unattended). The access requests live in KV (above)
+and in the maintainer's e-mail; they are filed as issues too only when `GITHUB_TOKEN` is set, which it
+is not today.
 
 ## Limits and checks
 

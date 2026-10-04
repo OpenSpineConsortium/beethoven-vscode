@@ -82,6 +82,15 @@ test('without the student\'s own sign-in, phone access waits and says what to do
   assert.ok(!fs.existsSync(path.join(home, 'workers', 'wa', 'rc', 'login.log')), 'no sign-in was attempted by Beethoven');
 });
 
+test('signed in some other way than a Claude subscription, it waits and says so', { skip }, async () => {
+  fs.writeFileSync(path.join(cfg, 'fake_logged_in'), '');
+  fs.writeFileSync(path.join(cfg, 'fake_auth_method'), 'oauth_token'); // a token from the environment: the setup-token route the credential rule forbids
+  assert.ok(await tickUntil(A, () => /not with a Claude subscription/.test(status('wa').message ?? ''), 70000), `says so (${JSON.stringify(status('wa'))})`);
+  assert.equal(status('wa').phase, 'need_login');
+  assert.equal(fs.existsSync(path.join(cfg, 'fake_rc_env.json')), false, 'Remote Control was not started');
+  fs.rmSync(path.join(cfg, 'fake_auth_method'));
+});
+
 test('signed in but without the one-time Remote Control consent, it waits for the student\'s answer', { skip }, async () => {
   fs.writeFileSync(path.join(cfg, 'fake_logged_in'), '');
   fs.writeFileSync(path.join(cfg, '.credentials.json'), '{"fake":true}');

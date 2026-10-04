@@ -568,7 +568,9 @@ export const stepClaudeGrid: WizardStep = {
     const r = await ssh(env.settings.sshAlias, gridCli(['claude', 'status', '--json']), { timeoutMs: 60_000 });
     if (r.code !== 0) return report(this.id, this.title, 'todo', 'the grid did not answer (install on the grid first)');
     try {
-      const j = JSON.parse(r.stdout.trim().split('\n').pop() ?? '{}') as { dir_present?: boolean; consent?: boolean; login?: { loggedIn?: boolean; detail?: string; email?: string } | null };
+      const j = JSON.parse(r.stdout.trim().split('\n').pop() ?? '{}') as { dir_present?: boolean; consent?: boolean; login?: { loggedIn?: boolean; subscription?: boolean; detail?: string; email?: string } | null };
+      // the worker runs nothing on a sign-in through an API key, a token or a cloud provider
+      if (j.login && j.login.loggedIn && j.login.subscription === false) return report(this.id, this.title, 'failed', 'Claude on the grid is signed in, but not with a Claude subscription: sign in again with your own Claude subscription');
       if (j.login && j.login.loggedIn) return report(this.id, this.title, 'done', `signed in on the grid${j.login.email ? ` as ${j.login.email}` : ''}${j.consent ? '; phone access enabled' : ''}`);
       if (j.login && j.login.loggedIn === false && j.dir_present) return report(this.id, this.title, 'failed', 'the sign-in on the grid has ended (about a month): sign in again');
       if (j.dir_present) return report(this.id, this.title, 'done', 'signed in on the grid (a running worker will confirm it)');

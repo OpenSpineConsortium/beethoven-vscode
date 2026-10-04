@@ -285,9 +285,10 @@ in the signing dialog), and your GitHub and Hugging Face tokens, because
 VS Code keeps each extension’s stored tokens apart. Run the wizard: its
 GitHub step is one click in the browser and its Hugging Face step one
 copy.</p>
-<p>Then uninstall Ashley for VS Code (Beethoven offers to do it). While
-both are installed, each puts its own version of the grid scripts back
-into your grid account.</p>
+<p>Then uninstall Ashley for VS Code (Beethoven offers to do it), and do
+not install it again: it asks for an API key, which Beethoven never
+uses. While both are installed, each puts its own version of the grid
+scripts back into your grid account.</p>
 <h3 id="the-setup-panel">The setup panel</h3>
 <p>One panel: the steps on the left with their state, the current
 question on the right, a progress bar on top, the log one click away.
@@ -678,8 +679,10 @@ in the session’s working directory, with
 <code>EVENT {…}</code> lines, so VS Code shows tool calls live.</li>
 <li>On exit, the daemon writes <code>outbox/&lt;id&gt;.json</code>
 (<code>.part</code> then rename): status, result text, session id,
-account, cost, turns, duration, node, job. <code>beethoven wait</code>
-prints it as <code>RESULT {…}</code>.</li>
+account, turns, duration, node, job, and Claude Code’s list-price
+estimate (<code>cost_usd</code>, never shown: on the subscription it is
+not a bill). <code>beethoven wait</code> prints it as
+<code>RESULT {…}</code>.</li>
 </ol>
 <h4 id="how-a-prompt-travels-and-how-fast">How a prompt travels, and how
 fast</h4>
@@ -813,14 +816,19 @@ Code’s first-run settings.</li>
 <code>CLAUDE_CONFIG_DIR=~/.beethoven/claude</code> and an environment
 with every credential variable removed
 (<code>CLAUDE_CODE_OAUTH_TOKEN</code>, <code>ANTHROPIC_API_KEY</code>,
-<code>ANTHROPIC_AUTH_TOKEN</code>, <code>ANTHROPIC_BASE_URL</code> and
-the file-descriptor variants). Claude Code uses what it stored.</li>
+<code>ANTHROPIC_AUTH_TOKEN</code>, <code>ANTHROPIC_BASE_URL</code>, the
+file-descriptor variants and the Bedrock, Vertex and Foundry switches).
+Claude Code uses what it stored.</li>
 <li>The daemon asks <code>claude auth status</code> at start, every 30
-minutes and when the credential file changes, and puts the answer
-(signed in or not, the e-mail Claude Code reports) in its heartbeat. The
-laptop shows it; the diagnostics node <code>grid.claude-login</code>
-reads it; a prompt sent while not signed in is answered with the command
-that fixes it.</li>
+minutes, when the credential file changes and before a request when its
+last answer is over a minute old, and puts the answer (signed in or not,
+the e-mail Claude Code reports) in its heartbeat. The laptop shows it;
+the diagnostics node <code>grid.claude-login</code> reads it; a prompt
+sent while not signed in is answered with the command that fixes it.
+Only a claude.ai sign-in billed by Anthropic itself counts, the laptop’s
+rule: a sign-in through an API key, a token or a cloud provider is
+reported as not a Claude subscription, and the worker and phone access
+run nothing on it.</li>
 <li>One person, one Claude account, and no other credential: no API key
 and no usage credits, by anyone, ever (the maintainer, 2026-10-04). When
 the subscription window is spent the daemon answers
@@ -1174,10 +1182,12 @@ paths, hostnames, addresses, job numbers and token-shaped strings
 replaced. VS Code’s own telemetry setting is honoured; with no report
 address configured nothing is sent; every report is kept on the laptop
 for the student to read. On the maintainer’s side the service files it
-as a GitHub issue and the triage workflow
-(<code>.github/workflows/triage.yml</code>) has Claude Code, on the
-maintainer’s own API key, propose a reviewed draft pull request. Nothing
-in this path touches a student’s Claude account.</p>
+as a GitHub issue and the maintainer reads it. Nothing on the
+maintainer’s side runs on an API key, and nothing runs Claude Code
+unattended in GitHub Actions, because that would need a key or a token
+held as a secret; any help from Claude Code is the maintainer’s own
+interactive session on his own subscription. Nothing in this path
+touches a student’s Claude account.</p>
 <h3 id="diagnostics">Diagnostics</h3>
 <p>Every assumption Beethoven makes, from the laptop’s OpenSSH to the
 node’s pseudo-terminal, is a node in one dependency graph
@@ -1417,7 +1427,9 @@ Or, from a file your lead gives you (the repository’s
 <code>dist/release/5.0.0/beethoven-5.0.0.vsix</code>): Extensions view,
 the <code>...</code> menu at the top right, <strong>Install from
 VSIX…</strong>, pick the file; or from a terminal,
-<code>code --install-extension beethoven-5.0.0.vsix</code>.</li>
+<code>code --install-extension beethoven-5.0.0.vsix</code>. Do not
+install an earlier version (4.0.0 or before), nor Ashley for VS Code
+from the Marketplace: they ask for an API key.</li>
 <li>Command Palette (Ctrl/Cmd+Shift+P): <strong>Beethoven: Set up my
 research environment (wizard)</strong>.</li>
 </ol>
@@ -1714,6 +1726,14 @@ again</td>
 <td>run <strong>Beethoven: Sign in to Claude on the grid</strong></td>
 </tr>
 <tr>
+<td>A prompt or phone access says Claude on the grid is <em>signed in,
+but not with a Claude subscription</em></td>
+<td>Claude Code on the grid is using a Console key, a key helper, a
+token or a cloud provider</td>
+<td>run <strong>Beethoven: Sign in to Claude on the grid</strong> and
+sign in with your Claude Pro or Max account</td>
+</tr>
+<tr>
 <td>Step 5 says <em>signed in through …, not a Claude
 subscription</em></td>
 <td>Claude Code on your laptop is using a Console key, a key helper or a
@@ -1875,9 +1895,9 @@ integrated, and what the dependency study found and fixed.</li>
 makes (370 entries), with the check, what a failure looks like and how
 to fix it; search it for an error message the troubleshooter does not
 name.</li>
-<li><code>docs/research/claude_swap_notes.md</code>: what Beethoven took
-from claude-swap and cswap-desktop, and the plan for the next
-release.</li>
+<li><code>docs/research/claude_swap_notes.md</code>: a dated study
+(2026-09-28) of claude-swap and cswap-desktop; its plan of an API-key
+overflow was dropped in 5.0.0.</li>
 <li><code>docs/CHECKPOINT_2026-09-28.md</code>: the state of the project
 on the day this manual was built, including what was tested and what was
 not.</li>

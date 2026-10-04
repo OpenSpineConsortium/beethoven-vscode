@@ -322,7 +322,8 @@ cmd_doctor() {
   [ -n "$ROOT" ] && [ -w "$ROOT" ] && ok "ROOT $ROOT writable" || bad "ROOT not writable (${ROOT:-unset})"
   if is_ready; then ok "READY: $(cat "$BEETHOVEN_HOME/READY")"; else bad "not ready (bootstrap job ${BOOTSTRAP_JOB:-none}: $(job_state "$BOOTSTRAP_JOB"))"; fi
   [ -n "$RUNTIME" ] && [ -x "$RUNTIME" ] && ok "runtime $RUNTIME" || bad "runtime missing on this host (fine on the login node if the compute nodes have it)"
-  [ -s "$CLAUDE_HOME/.credentials.json" ] && ok "Claude signed in on the grid (Claude Code's own store in $CLAUDE_HOME)" || bad "Claude not signed in on the grid (beethoven claude login)"
+  if claude_login_other "$(claude_login_json)"; then bad "Claude on the grid is signed in, but not with a Claude subscription; Beethoven runs only on your own subscription (beethoven claude login)"
+  elif [ -s "$CLAUDE_HOME/.credentials.json" ]; then ok "Claude signed in on the grid (Claude Code's own store in $CLAUDE_HOME)"; else bad "Claude not signed in on the grid (beethoven claude login)"; fi
   [ -s "$BEETHOVEN_HOME/secrets.env" ] && ok "secrets.env present ($(stat -c %a "$BEETHOVEN_HOME/secrets.env")): $(cmd_verify_tokens 2>/dev/null | tr '\n' ';')" || bad "secrets.env missing (GitHub / Hugging Face tokens for the worker)"
   read -r used soft < <(home_quota); ok "home quota ${used:-?}/${soft:-?} GB"
   for w in $(worker_dirs); do echo "      worker $(worker_json "$w")"; done
@@ -519,12 +520,15 @@ claude_in_alloc() { # run Claude Code interactively inside the container, in a r
   # shellcheck disable=SC2016
   local seed='const fs=require("fs"),p=process.env.CLAUDE_CONFIG_DIR+"/.claude.json";let j={};try{j=JSON.parse(fs.readFileSync(p,"utf8"))}catch{};j.hasCompletedOnboarding=true;j.theme=j.theme||"dark";j.projects=j.projects||{};j.projects[process.cwd()]=Object.assign({},j.projects[process.cwd()]||{},{hasTrustDialogAccepted:true});fs.writeFileSync(p,JSON.stringify(j,null,1),{mode:0o600});'
   local inner="cd '$cwd' && node -e '$seed' && exec '$CLAUDE_BIN' $*"
+  # every variable that would put Claude Code on a key, a token, a gateway or a cloud provider instead of
+  # the sign-in it keeps (the daemon's AUTH_VARS, the same list)
+  local auth_unset=(-u CLAUDE_CODE_OAUTH_TOKEN -u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN -u ANTHROPIC_BASE_URL -u CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR -u CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR -u CLAUDE_CODE_USE_BEDROCK -u CLAUDE_CODE_USE_VERTEX -u CLAUDE_CODE_USE_FOUNDRY)
   # shellcheck disable=SC2086
   if [ -n "$jid" ]; then
-    srun --jobid="$jid" --overlap -N1 -n1 --pty "$RUNTIME" exec $BINDS "$SANDBOX" env -u CLAUDE_CODE_OAUTH_TOKEN -u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN -u ANTHROPIC_BASE_URL -u CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC HOME="$HOME" CLAUDE_CONFIG_DIR="$CLAUDE_HOME" TERM="${TERM:-xterm-256color}" BROWSER=/bin/false bash -c "$inner"
+    srun --jobid="$jid" --overlap -N1 -n1 --pty "$RUNTIME" exec $BINDS "$SANDBOX" env "${auth_unset[@]}" -u CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC HOME="$HOME" CLAUDE_CONFIG_DIR="$CLAUDE_HOME" TERM="${TERM:-xterm-256color}" BROWSER=/bin/false bash -c "$inner"
   else
     echo "(no worker is running: asking Slurm for a short session on a compute node; this can take a minute)"
-    srun -p secp -q secondary -t 00:30:00 -N1 -n1 --mem=2G -J beethoven_claude --pty "$RUNTIME" exec $BINDS "$SANDBOX" env -u CLAUDE_CODE_OAUTH_TOKEN -u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN -u ANTHROPIC_BASE_URL -u CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC HOME="$HOME" CLAUDE_CONFIG_DIR="$CLAUDE_HOME" TERM="${TERM:-xterm-256color}" BROWSER=/bin/false bash -c "$inner"
+    srun -p secp -q secondary -t 00:30:00 -N1 -n1 --mem=2G -J beethoven_claude --pty "$RUNTIME" exec $BINDS "$SANDBOX" env "${auth_unset[@]}" -u CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC HOME="$HOME" CLAUDE_CONFIG_DIR="$CLAUDE_HOME" TERM="${TERM:-xterm-256color}" BROWSER=/bin/false bash -c "$inner"
   fi
 }
 # The student's answer to Claude Code's one-time Remote Control question, when Claude Code has not
@@ -540,6 +544,11 @@ claude_login_json() { # what the newest running worker's Claude Code said about 
     [ "$(job_state "$(cat "$wd/job.id" 2>/dev/null)")" = RUNNING ] || continue
     local m; m=$(stat -c %Y "$wd/state.json" 2>/dev/null || echo 0); [ "$m" -gt "$bt" ] && { bt=$m; best="$wd"; }; done
   [ -n "$best" ] && tr -d '\n' < "$best/state.json" | grep -o '"claude_login": *{[^}]*}' | sed 's/^"claude_login": *//' | head -1 | grep . || echo null
+}
+# only a Claude subscription counts: a sign-in through an API key, a token or a cloud provider gets no
+# work (beethovend.js); a heartbeat without the subscription field (a daemon from before it) is not judged here
+claude_login_other() { # $1 what claude_login_json printed -> true when signed in, but not with a subscription
+  echo "$1" | grep '"subscription": *false' | grep '"loggedIn": *true' >/dev/null
 }
 cmd_claude() {
   local sub="${1:-status}"; shift || true
@@ -946,7 +955,8 @@ cmd_diag() {
   done
   # the Claude sign-in: Claude Code's own answer from a running worker; the file's presence otherwise
   local lj; lj=$(claude_login_json)
-  if echo "$lj" | grep '"loggedIn": *true' >/dev/null; then diag_emit grid.claude-login true false false "Claude Code on the grid is signed in$(echo "$lj" | grep -o '"email": *"[^"]*"' | cut -d'"' -f4 | sed 's/^/ as /')"
+  if claude_login_other "$lj"; then diag_emit grid.claude-login false false false "Claude Code on the grid is signed in, but not with a Claude subscription, and Beethoven runs only on your own subscription: sign in again with it (Beethoven: Sign in to Claude on the grid)"
+  elif echo "$lj" | grep '"loggedIn": *true' >/dev/null; then diag_emit grid.claude-login true false false "Claude Code on the grid is signed in$(echo "$lj" | grep -o '"email": *"[^"]*"' | cut -d'"' -f4 | sed 's/^/ as /')"
   elif [ "$lj" != null ] && echo "$lj" | grep '"loggedIn": *false' >/dev/null; then diag_emit grid.claude-login false false false "Claude Code on the grid is not signed in: run Beethoven: Sign in to Claude on the grid"
   elif [ -s "$CLAUDE_HOME/.credentials.json" ]; then diag_emit grid.claude-login true true false "a sign-in is stored; a running worker will confirm it"
   else diag_emit grid.claude-login false false false "not signed in on the grid yet: run Beethoven: Sign in to Claude on the grid"; fi

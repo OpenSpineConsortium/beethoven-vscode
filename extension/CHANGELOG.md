@@ -15,8 +15,18 @@ The format follows Keep a Changelog; versions follow Semantic Versioning.
 - Investigate the failure with Claude runs only when Claude Code on this laptop is signed in with
   your Claude subscription (not an API key, a key helper or a cloud provider), with the API key,
   token and provider variables removed from its environment.
+- The dollar figure after each request (Ask the grid Claude, the terminal tool and the tool Claude
+  Code calls). It was Claude Code's list-price estimate, and on your subscription it is not a bill.
+- The packages of 2.0.0 to 4.0.0 in the repository: they ask for an API key. Do not install them,
+  nor Ashley for VS Code 3.0.0 from the Marketplace.
 
 ### Changed
+- The grid worker and phone access run only on a Claude subscription sign-in, the same rule as on
+  this laptop: when Claude Code on the grid is signed in some other way (an API key, a token or a
+  cloud provider), they say so and run nothing on it until you sign in again with your subscription
+  (the worker asks Claude Code again before a request when its last answer is over a minute old);
+  the Beethoven view, the setup, the troubleshooter and `beethoven doctor` say so too (grid scripts
+  version 8).
 - New agreement texts (Trial and Full Edition version 6, privacy statement version 6): section 5(c)
   says Beethoven for VS Code asks for no API key and uses no paid usage, and asks you to keep extra
   usage (usage credits) off in your Claude account's settings, which Beethoven cannot see; the
@@ -39,7 +49,8 @@ The format follows Keep a Changelog; versions follow Semantic Versioning.
   the key itself in the Anthropic Console.
 - `ANTHROPIC_API_KEY` and the other credential variables are still removed from every Claude Code
   environment the worker starts, and still never put into laptop terminals; the switches to
-  Bedrock, Vertex and Foundry join them.
+  Bedrock, Vertex and Foundry join them, and the sign-in on the grid (`beethoven claude login`)
+  now has the whole list removed too.
 
 ## 4.0.0 (2026-09-30)
 

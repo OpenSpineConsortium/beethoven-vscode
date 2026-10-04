@@ -29,7 +29,7 @@ FOLDERS = [(DIST, DESKTOP + r"\beethoven-dist"), (HERE, DESKTOP + r"\sandbox")]
 
 def newest_vsix():
     """The VSIX bootstrap.ps1 will install: the most recently modified dist/beethoven-*.vsix (same rule there;
-    the ashley-*.vsix beside it are the builds before the rename and are never picked)."""
+    the packages before 5.0.0 ask for an API key and were withdrawn from dist/)."""
     found = glob.glob(os.path.join(DIST, "beethoven-*.vsix"))
     found.sort(key=lambda p: (os.path.getmtime(p), os.path.basename(p)), reverse=True)
     return found[0] if found else None

@@ -187,6 +187,7 @@ export class BeethovenTree implements vscode.TreeDataProvider<Item> {
     }
     if (!cs) return new Item('Claude on the grid', 'account', { description: 'the grid did not answer', icon: 'warning', tooltip });
     const phone = cs.consent ? '; phone access enabled' : '';
+    if (cs.login?.loggedIn && cs.login.subscription === false) return new Item('Claude on the grid', 'account', { description: 'signed in, but not with a Claude subscription: click to sign in again', icon: 'warning', tooltip, command: signIn });
     if (cs.login?.loggedIn) return new Item('Claude on the grid', 'account', { description: `signed in${cs.login.email ? ` as ${cs.login.email}` : ''}${phone}`, icon: 'pass', tooltip });
     if (cs.login && cs.login.loggedIn === false && cs.dir_present) return new Item('Claude on the grid', 'account', { description: 'sign-in ended: click to sign in', icon: 'warning', tooltip, command: signIn });
     if (cs.dir_present) return new Item('Claude on the grid', 'account', { description: `signed in (a running worker will confirm it)${phone}`, icon: 'pass', tooltip });

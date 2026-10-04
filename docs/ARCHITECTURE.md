@@ -68,7 +68,9 @@ A request is a JSON file. Its life:
 4. Every stream-json line is appended to `outbox/<id>.events.jsonl` as it arrives. `beethoven wait
    --stream` tails that file to the laptop as `EVENT {…}` lines, so VS Code shows tool calls live.
 5. On exit, the daemon writes `outbox/<id>.json` (`.part` then rename): status, result text,
-   session id, account, cost, turns, duration, node, job. `beethoven wait` prints it as `RESULT {…}`.
+   session id, account, turns, duration, node, job, and Claude Code's list-price estimate
+   (`cost_usd`, never shown: on the subscription it is not a bill). `beethoven wait` prints it as
+   `RESULT {…}`.
 
 ### How a prompt travels, and how fast
 
@@ -141,11 +143,14 @@ What happens instead:
 - Every Claude Code process Beethoven starts on the grid (the worker's `claude -p`, Remote Control)
   gets `CLAUDE_CONFIG_DIR=~/.beethoven/claude` and an environment with every credential variable
   removed (`CLAUDE_CODE_OAUTH_TOKEN`, `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`,
-  `ANTHROPIC_BASE_URL` and the file-descriptor variants). Claude Code uses what it stored.
-- The daemon asks `claude auth status` at start, every 30 minutes and when the credential file
-  changes, and puts the answer (signed in or not, the e-mail Claude Code reports) in its heartbeat.
+  `ANTHROPIC_BASE_URL`, the file-descriptor variants and the Bedrock, Vertex and Foundry switches).
+  Claude Code uses what it stored.
+- The daemon asks `claude auth status` at start, every 30 minutes, when the credential file
+  changes and before a request when its last answer is over a minute old, and puts the answer (signed in or not, the e-mail Claude Code reports) in its heartbeat.
   The laptop shows it; the diagnostics node `grid.claude-login` reads it; a prompt sent while not
-  signed in is answered with the command that fixes it.
+  signed in is answered with the command that fixes it. Only a claude.ai sign-in billed by Anthropic
+  itself counts, the laptop's rule: a sign-in through an API key, a token or a cloud provider is
+  reported as not a Claude subscription, and the worker and phone access run nothing on it.
 - One person, one Claude account, and no other credential: no API key and no usage credits, by
   anyone, ever (the maintainer, 2026-10-04). When the subscription window is spent the daemon
   answers `rate_limited` with the reset time in `retry_after`; nothing retries by itself, and the
@@ -373,8 +378,10 @@ versions, the checks' ids and verdicts, and the failing checks' messages with e-
 paths, hostnames, addresses, job numbers and token-shaped strings replaced. VS Code's own telemetry
 setting is honoured; with no report address configured nothing is sent; every report is kept on the
 laptop for the student to read. On the maintainer's side the service files it as a GitHub issue and
-the triage workflow (`.github/workflows/triage.yml`) has Claude Code, on the maintainer's own API
-key, propose a reviewed draft pull request. Nothing in this path touches a student's Claude account.
+the maintainer reads it. Nothing on the maintainer's side runs on an API key, and nothing runs Claude
+Code unattended in GitHub Actions, because that would need a key or a token held as a secret; any
+help from Claude Code is the maintainer's own interactive session on his own subscription. Nothing in
+this path touches a student's Claude account.
 
 ## Diagnostics
 

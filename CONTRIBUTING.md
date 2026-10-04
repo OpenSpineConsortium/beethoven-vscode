@@ -1,9 +1,9 @@
 # Contributing to Beethoven for VS Code
 
 Beethoven for VS Code (Ashley for VS Code until 3.0.0) is licensed software with a private source
-repository (`OpenSpineConsortium/beethoven-vscode`). Contributions come from the maintainer, from
-collaborators the maintainer has added, and from an automated pipeline that turns students' error
-reports into reviewed pull requests. All three follow the same rules.
+repository (`OpenSpineConsortium/beethoven-vscode`). Contributions come from the maintainer and from
+collaborators the maintainer has added; students' error reports arrive as GitHub issues, which the
+maintainer reads. Both follow the same rules.
 
 ## The rules
 
@@ -31,9 +31,10 @@ reports into reviewed pull requests. All three follow the same rules.
 
 ## AI-assisted changes
 
-Beethoven's maintenance pipeline and its maintainer both use Claude Code. The posture is disclose
-and own: an AI tool may draft a change, and the human who opens or approves the pull request is its
-author and answers for it.
+Beethoven's maintainer uses Claude Code, in his own interactive sessions on his own subscription.
+Nothing runs Claude Code unattended in GitHub Actions, because that would need an API key or a token
+held as a secret. The posture is disclose and own: an AI tool may draft a change, and the human who
+opens or approves the pull request is its author and answers for it.
 
 - Commits made with assistance carry the trailer `Assisted-by: Claude Code (<tool or action>)`. An
   AI agent never adds `Signed-off-by`.

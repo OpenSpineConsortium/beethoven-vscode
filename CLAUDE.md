@@ -31,7 +31,10 @@ the Desktop folder is `ashley` until the maintainer renames it. The code is prop
   by Beethoven (an Anthropic Console shows a key only once), only marked `disabled` on the grid for
   workers still on grid scripts 7, and the student removes it (Manage stored tokens or Reset;
   `beethoven accounts remove --yes` on the grid). Extra usage on the student's Claude account is
-  theirs to keep off; the texts say so.
+  theirs to keep off; the texts say so. The maintainer's rule of 2026-10-04 13:27Z, "the only
+  fundamental rule of this software": no API key anywhere, the maintainer's own tooling included
+  (no Console key, key helper, cloud provider or gateway, and no CI that runs Claude Code on a key
+  or a token held as a secret).
 - **Tokens never appear on command lines, in argv, in logs, in job files or in `sbatch --export`.**
   Never echo one. `ANTHROPIC_API_KEY` is never injected into laptop terminals.
 - **Every feature ships with diagnostic nodes** (`extension/src/vscode/diagNodes.ts`, the grid's

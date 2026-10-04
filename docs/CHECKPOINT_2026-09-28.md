@@ -2,6 +2,15 @@
 
 ## CURRENT STATE: read this first
 
+**As of pass 30 (2026-10-04).** Beethoven for VS Code 5.0.0 (no API key and no paid usage, grid
+scripts 8, terms version 6) was merged to `main` at 13:27 UTC (pull request #5) and is not yet built
+or signed: there is no `dist/release/5.0.0/` until the maintainer runs `tools/release.mjs`. It
+replaces 4.0.0. The packages of 2.0.0, 3.0.0 and 4.0.0 ask for an API key and were withdrawn from the
+tree on 2026-10-04, their records kept (`dist/release/README.md`), so pass 28's step "the maintainer
+uploads 4.0.0" no longer stands: the Marketplace upload is 5.0.0 (`docs/MARKETPLACE.md`). The
+withdrawal and the rest of that day's sweep for API keys are not committed: the maintainer reviews
+and commits. The pass 29 and pass 28 paragraphs that follow are kept as they were.
+
 **As of pass 29 (2026-09-30, 16:55 UTC).** The newest entry is "What pass 29 changed" below: the
 browser edition's 8.0.0 is released and the site's history purged (both pushed by the maintainer);
 the access service's afternoon work is deployed on both Worker names and framework 9 is published to

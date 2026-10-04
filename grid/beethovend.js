@@ -168,6 +168,12 @@ checkLicense();
 const licenseTimer = setInterval(checkLicense, LICENSE_RECHECK_MS);
 
 // What Claude Code says about the sign-in in CLAUDE_HOME (`claude auth status`): status only, never the credential.
+// Only a claude.ai sign-in billed by Anthropic itself is the student's subscription (the laptop's rule,
+// localClaudeStatus in wizard.ts): one through an API key or a cloud provider is paid by use, and a token from the
+// environment is the setup-token route the credential rule forbids, so the worker treats either as no sign-in and
+// runs nothing on it.
+const NOT_SUBSCRIPTION = 'Claude on the grid is signed in, but not with a Claude subscription, and Beethoven runs only on your own Claude subscription: sign in again with it: run "Beethoven: Sign in to Claude on the grid" (on the grid: beethoven claude login)';
+const isSubscription = (j) => !!j.loggedIn && j.authMethod === 'claude.ai' && (j.apiProvider ?? 'firstParty') === 'firstParty';
 let claudeLogin = { loggedIn: false, checked: null, detail: 'not checked yet' };
 function checkClaudeLogin() {
   const env = Object.assign({}, process.env, { CLAUDE_CONFIG_DIR: CLAUDE_HOME, DISABLE_AUTOUPDATER: '1' });
@@ -180,11 +186,11 @@ function checkClaudeLogin() {
   } catch {
     j = null;
   }
-  const before = claudeLogin.loggedIn;
+  const before = `${claudeLogin.loggedIn} ${claudeLogin.subscription}`;
   claudeLogin = j
-    ? { loggedIn: !!j.loggedIn, authMethod: j.authMethod || null, email: j.email || j.emailAddress || null, subscriptionType: j.subscriptionType || null, checked: new Date().toISOString(), detail: j.loggedIn ? `signed in${j.email ? ` as ${j.email}` : ''}` : 'not signed in on the grid' }
-    : { loggedIn: false, checked: new Date().toISOString(), detail: `auth status did not answer (${(r.stderr || r.stdout || String(r.error || '')).trim().slice(0, 120)})` };
-  if (before !== claudeLogin.loggedIn) log(`claude sign-in: ${claudeLogin.detail}`);
+    ? { loggedIn: !!j.loggedIn, subscription: isSubscription(j), authMethod: j.authMethod || null, apiProvider: j.apiProvider || null, email: j.email || j.emailAddress || null, subscriptionType: j.subscriptionType || null, checked: new Date().toISOString(), detail: !j.loggedIn ? 'not signed in on the grid' : isSubscription(j) ? `signed in${j.email ? ` as ${j.email}` : ''}` : 'signed in, but not with a Claude subscription' }
+    : { loggedIn: false, subscription: false, checked: new Date().toISOString(), detail: `auth status did not answer (${(r.stderr || r.stdout || String(r.error || '')).trim().slice(0, 120)})` };
+  if (before !== `${claudeLogin.loggedIn} ${claudeLogin.subscription}`) log(`claude sign-in: ${claudeLogin.detail}`);
 }
 checkClaudeLogin();
 const loginTimer = setInterval(checkClaudeLogin, 30 * 60_000);
@@ -268,14 +274,19 @@ function startRequest(req, claimedPath) {
     log(`refused ${req.id}: account ${String(req.account).slice(0, 40)} is not the sign-in`);
     return;
   }
+  // the watch sees only the credentials file, so a sign-in changed some other way (a key helper in the settings,
+  // say) would wait for the half-hourly check: ask again before work when the answer is older than a minute,
+  // the phone module's interval
+  if (!claudeLogin.checked || Date.now() - Date.parse(claudeLogin.checked) > 60_000) checkClaudeLogin();
   const account = chooseAccount();
   if (!account) {
-    const cool = soonestCooldown();
+    const other = claudeLogin.loggedIn && !claudeLogin.subscription;
+    const cool = other ? null : soonestCooldown();
     const status = cool ? 'rate_limited' : 'error';
     writeResult(req, {
       status,
       result: '',
-      error: cool ? `your Claude account is on cooldown until ${cool}` : 'Claude is not signed in on the grid: run "Beethoven: Sign in to Claude on the grid" (on the grid: beethoven claude login)',
+      error: other ? NOT_SUBSCRIPTION : cool ? `your Claude account is on cooldown until ${cool}` : 'Claude is not signed in on the grid: run "Beethoven: Sign in to Claude on the grid" (on the grid: beethoven claude login)',
       retry_after: cool || undefined,
       started: started.toISOString(),
     });
@@ -389,7 +400,8 @@ function startRequest(req, claimedPath) {
       claude_rc: code,
     });
     fs.rmSync(claimedPath, { force: true });
-    log(`done ${req.id} status=${status} turns=${result && result.num_turns} cost=${result && result.total_cost_usd} ${Math.round((finished - started) / 1000)}s`);
+    // no cost in the log: Claude Code's figure is a list-price estimate, and on a subscription it is not a bill
+    log(`done ${req.id} status=${status} turns=${result && result.num_turns} ${Math.round((finished - started) / 1000)}s`);
   });
 }
 
@@ -472,7 +484,7 @@ function listAccounts() {
   return out;
 }
 function chooseAccount() {
-  const all = listAccounts().filter((a) => a.kind !== 'login' || claudeLogin.loggedIn || claudeLogin.checked === null);
+  const all = listAccounts().filter((a) => a.kind !== 'login' || claudeLogin.subscription || claudeLogin.checked === null);
   return all.find((a) => a.enabled && !a.cooldown_until) || null;
 }
 function soonestCooldown() {

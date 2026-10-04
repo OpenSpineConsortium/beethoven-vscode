@@ -36,8 +36,10 @@ What the tool does
   after it. Extra usage on a student's own Claude account is a setting the tool cannot see; students
   are told to keep it off.
 - The tool itself requires a per-person license key. Students are never charged for Claude usage,
-  and I do not resell or intermediate Claude usage. The only automation on my side (triage of
-  students' opt-in error reports) runs on my own Console API key under the Commercial Terms.
+  and I do not resell or intermediate Claude usage. Nothing on my side runs on an API key either:
+  students' opt-in error reports arrive as GitHub issues and I read them myself, nothing runs Claude
+  Code unattended in GitHub Actions, and when Claude Code helps me it is my own interactive session
+  on my own subscription.
 
 Questions
 

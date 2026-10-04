@@ -283,7 +283,7 @@ async function main(argv: string[]): Promise<number> {
           else if (b.type === 'tool_use') process.stderr.write(`[${b.name}]\n`);
         },
       });
-      console.log(`\n[${r.status}] ${r.num_turns ?? '?'} turns, $${r.cost_usd ?? '?'}, account ${r.account ?? '?'}${r.error ? ' ' + r.error : ''}`);
+      console.log(`\n[${r.status}] ${r.num_turns ?? '?'} turns, account ${r.account ?? '?'}${r.error ? ' ' + r.error : ''}`);
       return r.status === 'ok' ? 0 : 2;
     }
     case 'help':

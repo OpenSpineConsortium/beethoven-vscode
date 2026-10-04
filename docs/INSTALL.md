@@ -11,7 +11,8 @@ up carries over (the manual's "Coming from Ashley for VS Code" says what, and wh
 2. Install **Beethoven for VS Code** (`openspineconsortium.beethoven`) from the Extensions view. Or,
    from a file your lead gives you (the repository's `dist/release/5.0.0/beethoven-5.0.0.vsix`):
    Extensions view, the `...` menu at the top right, **Install from VSIX...**, pick the file; or from
-   a terminal, `code --install-extension beethoven-5.0.0.vsix`.
+   a terminal, `code --install-extension beethoven-5.0.0.vsix`. Do not install an earlier version
+   (4.0.0 or before), nor Ashley for VS Code from the Marketplace: they ask for an API key.
 3. Command Palette (Ctrl/Cmd+Shift+P): **Beethoven: Set up my research environment (wizard)**.
 
 Before the wizard you need, once: a grid account (request it at

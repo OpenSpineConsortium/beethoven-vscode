@@ -33,8 +33,9 @@ const fs=require("fs"),p=process.env.CLAUDE_CONFIG_DIR+"/.claude.json";let j={};
 JS
     chmod 600 "$KEEP/seed.js"
     inner="cd '$ROOT/workspaces/phone' && node '$KEEP/seed.js' && exec '$CLAUDE_BIN' auth login"
+    # the key, token, gateway and cloud-provider variables are removed as in `beethoven claude login`
     # shellcheck disable=SC2086
-    cmd="$RUNTIME exec $BINDS '$SANDBOX' env -u CLAUDE_CODE_OAUTH_TOKEN -u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN -u ANTHROPIC_BASE_URL -u CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC HOME='$HOME' CLAUDE_CONFIG_DIR='$CLAUDE_HOME' TERM=xterm-256color BROWSER=/bin/false bash -c \"$inner\""
+    cmd="$RUNTIME exec $BINDS '$SANDBOX' env -u CLAUDE_CODE_OAUTH_TOKEN -u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN -u ANTHROPIC_BASE_URL -u CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR -u CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR -u CLAUDE_CODE_USE_BEDROCK -u CLAUDE_CODE_USE_VERTEX -u CLAUDE_CODE_USE_FOUNDRY -u CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC HOME='$HOME' CLAUDE_CONFIG_DIR='$CLAUDE_HOME' TERM=xterm-256color BROWSER=/bin/false bash -c \"$inner\""
     printf '%s\n' "$cmd" > "$KEEP/login_cmd.sh"; chmod 600 "$KEEP/login_cmd.sh"
     j=$(jid); [ -n "$j" ] || { echo "no running worker" >&2; exit 2; }
     # the tmux server lives inside a step of the worker's allocation; the step stays up while the session exists
