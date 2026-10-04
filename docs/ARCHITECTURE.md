@@ -120,9 +120,12 @@ its directory.
 `--resume` looks only in the running config folder's `projects/`. Measured on Claude Code 2.1.283:
 from a second config folder the resume answers "No conversation found"; with the transcript present
 it finds it. Up to grid scripts 7 a turn could move to the student's API key after a limit, so every
-account's `projects/` became a link to one `~/.beethoven/projects`. The sign-in folder's link stays
-(the daemon links it before each run; the diagnostics node `grid.accounts` finds and repairs an
-unlinked one), so the sessions kept there still resume.
+account's `projects/` became a link to one `~/.beethoven/projects`, and up to grid scripts 8 the
+daemon moved the sign-in folder's `projects/` there and linked it back before each run. Since grid
+scripts 9 nothing of ours moves, renames, links or deletes anything inside a sign-in folder, which
+is hpcworker's and the engine's too: a session resumes from the one sign-in it runs under, a link an
+earlier version made is left as it is (Claude Code writes through it), and `~/.beethoven/projects`
+is never touched.
 
 ## Credentials
 
@@ -351,13 +354,22 @@ own home), so one copy serves the whole lab. `/rs/rs_grp_oschome/shared/beethove
   student may ask again); each goes to `access/requests/decisions.log`. The student's own held job
   is cancelled once a decision exists.
 - **Approval is a read-only ACL** (CephFS honours POSIX ACLs; the admin owns the volume): `--x` on
-  the volume root, `r-x` plus a default ACL on `shared/`, and `r-X` recursively with default ACLs on
+  the volume root where the account has no entry there yet (hpcworker's `tools/grid_access.sh`
+  keeps `rwx` entries there for its approved list; Beethoven never lowers one, and a removal takes
+  away only an entry that is `--x`), `r-x` plus a default ACL on `shared/`, and `r-X` recursively with default ACLs on
   everything under it except `access/`, walking physically (links are never followed out of the
   folder). No unix-group change, no ticket. `beethoven access admin resync` re-applies grants after
   data is copied in with `cp -a` or `mv`; publishing a container resyncs automatically.
 - **Layout after `beethoven access init`:** volume root 2770 with a default ACL `o::---` (new entries
-  start closed); `shared/` and its contents 2750 (the group reads, only the admin writes); `access/`
-  and `access/status/` 2710; `access/requests/` 2700. Nothing is open to other grid users.
+  start closed); the root's `other::---` and its named entries are the gate. Below it, `shared/`
+  2755 and `shared/beethoven` with everything under it readable by other (since grid scripts 9:
+  hpcworker's shared copy and the lab's image live there, and the browser and desktop editions'
+  students reach them as other, through the gate; `library publish` keeps it so); every other
+  entry of `shared/` 2750 (the group reads, only the admin writes); nothing writable by group or
+  other; `access/` and `access/status/` 2710; `access/requests/` 2700. Nothing is open to grid users
+  outside the gate. So for `shared/beethoven` a VS Code approval adds nothing to an entry on the
+  root: whoever holds one reads it, and the per-user approvals decide only `shared/`'s other
+  entries. How the two approved lists are reconciled is not decided here (the maintainer's call).
 - **The request is refused until the environment works the way the lab works:** every earlier step
   done; the Claude Code and Remote-SSH extensions and the bridge present; and, checked on the grid
   by `beethoven access requirements`, a Claude subscription token the API accepts (`GET /v1/models`

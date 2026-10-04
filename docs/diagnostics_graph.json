@@ -518,7 +518,7 @@
     "grid.scripts"
    ],
    "assumption": "no container build leftovers (rootfs-*, build-temp-*, apptainer*) or files over 50 MB of yours under /tmp on the login node, which C&IT keeps free of user files; Beethoven builds containers only inside Slurm jobs with node-local temp and cache",
-   "manualFix": "ssh wsu-grid and remove your files under /tmp (repair removes the recognisable leftovers)",
+   "manualFix": "ssh wsu-grid and remove your files under /tmp yourself (Beethoven reports them and deletes nothing there)",
    "futureRisk": "a container command run by hand on the login node; a build job killed before its cleanup trap",
    "source": "grid/beethoven (cmd_diag)",
    "autoRepair": true,
@@ -655,7 +655,7 @@
     "grid.scripts",
     "account.claude"
    ],
-   "assumption": "Claude Code on the grid reports its own sign-in (made by the student with beethoven claude login; Beethoven never touches the credential)",
+   "assumption": "Claude Code on the grid reports its own sign-in with a Claude subscription and no API key behind it (made by the student with beethoven claude login; Beethoven never touches the credential, never deletes it and never signs it out)",
    "manualFix": "run Beethoven: Sign in to Claude on the grid (the sign-in lasts about a month)",
    "futureRisk": "Anthropic changing the login flow or its lifetime",
    "source": "grid/beethoven (cmd_diag)",
@@ -689,8 +689,8 @@
    "dependsOn": [
     "grid.claude-login"
    ],
-   "assumption": "your own Claude sign-in only (Beethoven keeps no Claude token and uses no API key), no copied logins, its session history in one shared folder, and an API key an earlier version stored marked disabled",
-   "manualFix": "Troubleshoot and repair links the history and marks an API key an earlier version stored disabled (it deletes nothing); ssh -t wsu-grid \"beethoven accounts remove --yes\" deletes the key",
+   "assumption": "your own Claude sign-in only (Beethoven keeps no Claude token and uses no API key), no copied logins, and an API key an earlier version stored marked disabled; nothing in a sign-in folder is moved, linked or deleted",
+   "manualFix": "Troubleshoot and repair marks an API key an earlier version stored disabled (it deletes nothing); ssh -t wsu-grid \"beethoven accounts remove --yes\" deletes the key, and Claude tokens an earlier version stored are yours to delete by hand",
    "futureRisk": "Claude Code moving where --resume looks for transcripts",
    "source": "grid/beethoven (cmd_diag)",
    "autoRepair": true,
@@ -768,7 +768,7 @@
    "dependsOn": [
     "grid.acl-tools"
    ],
-   "assumption": "the lab folder is closed to other users and requests go through Slurm",
+   "assumption": "the volume root is closed to other users (its list of approved accounts is the gate), nothing in shared/ is writable by others, and requests go through Slurm; shared/beethoven stays readable below the gate for the browser and desktop editions",
    "manualFix": "ssh wsu-grid \"beethoven access init\"",
    "futureRisk": "someone widening permissions by hand",
    "source": "grid/beethoven (cmd_diag)",

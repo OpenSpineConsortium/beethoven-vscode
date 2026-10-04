@@ -178,7 +178,7 @@ test('a request may name only the sign-in, and the heartbeat has the expected sh
   assert.ok(st.processed >= 5); // r1, r2, r3, r5, r6, r8 ran Claude Code (r4 and r7 never started it); the heartbeat may trail by one
 });
 
-test('after the window resets the same conversation resumes from the shared history', async () => {
+test('after the window resets the same conversation resumes, with the sign-in folder left as Claude Code made it', async () => {
   fs.rmSync(path.join(claudeHome, 'state.json'), { force: true }); // the reset time has come
   send({ v: 1, id: 'r20', prompt: 'continue after the reset', session: 's1', mode: 'acceptEdits', max_turns: 5, created: new Date().toISOString(), from: 'test' });
   assert.ok(await waitFor(() => !!result('r20')));
@@ -187,7 +187,9 @@ test('after the window resets the same conversation resumes from the shared hist
   assert.equal(r.account, 'claude');
   assert.match(r.result, /\(resumed\)/);
   assert.equal(r.session_id, result('r1').session_id, 'the same conversation');
-  assert.ok(fs.lstatSync(path.join(claudeHome, 'projects')).isSymbolicLink(), 'the sign-in folder links to the shared history');
+  // up to grid scripts 8 the daemon moved projects/ out and linked it back; nothing of ours moves anything in a sign-in folder now
+  assert.ok(fs.lstatSync(path.join(claudeHome, 'projects')).isDirectory(), 'the history stays where Claude Code wrote it');
+  assert.equal(fs.existsSync(path.join(home, 'projects')), false, 'no shared history folder is made');
   assert.equal(fs.existsSync(path.join(home, 'accounts', 'apikey', 'projects')), false, 'nothing is set up for the stored key');
   assert.equal(fs.readFileSync(path.join(home, 'accounts', 'apikey', 'apikey'), 'utf8'), 'sk-ant-api03-fake\n', 'the worker leaves the file alone');
 });
@@ -254,10 +256,11 @@ test('a sign-in that is not a Claude subscription gets no work, says so, and the
   let n = 2;
   const touch = () => fs.writeFileSync(path.join(claudeHome, '.credentials.json'), `{"fake":true,"changed":${++n}}\n`); // the daemon watches this file
   // a token taken from the environment (the setup-token route the credential rule forbids), then a cloud provider (paid by use)
-  for (const [file, field, value, id] of [['fake_auth_method', 'authMethod', 'oauth_token', 'r50'], ['fake_api_provider', 'apiProvider', 'bedrock', 'r51']] as const) {
-    fs.writeFileSync(path.join(claudeHome, file), value);
+  // and a claude.ai sign-in with an API key behind it (Claude Code then names the key's source; Beethoven notes only that there is one)
+  for (const [file, field, value, id] of [['fake_auth_method', 'authMethod', 'oauth_token', 'r50'], ['fake_api_provider', 'apiProvider', 'bedrock', 'r51'], ['fake_api_key_source', 'apiKey', true, 'r53']] as const) {
+    fs.writeFileSync(path.join(claudeHome, file), file === 'fake_api_key_source' ? 'ANTHROPIC_API_KEY' : String(value));
     touch();
-    assert.ok(await waitFor(() => state().claude_login?.[field] === value, 20000), `the heartbeat has the new answer (${value})`);
+    assert.ok(await waitFor(() => state().claude_login?.[field] === value, 20000), `the heartbeat has the new answer (${field} ${value})`);
     assert.equal(state().claude_login.subscription, false, 'not a subscription');
     assert.equal(state().claude_login.loggedIn, true, 'what Claude Code said is kept');
     send({ v: 1, id, prompt: 'not on a key', session: `s-${id}`, mode: 'acceptEdits', max_turns: 5, created: new Date().toISOString(), from: 'test' });

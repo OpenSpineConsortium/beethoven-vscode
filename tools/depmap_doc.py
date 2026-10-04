@@ -23,6 +23,23 @@ SINCE = {
     "answered `rate_limited` with `retry_after`, and the request is sent again after the reset. No API key and no usage "
     "credits, by anyone: extra usage (usage credits) on the Claude account is the student's to keep off. The assumption, "
     "the repair and the step by hand below are today's; the study's text of 4.0.0 stays in the JSON record.",
+    "grid-login.uninstall-clean": "Since grid scripts 9 (5.0.0) `beethoven uninstall --yes`, at a terminal, removes only "
+    "what install made (bin/, config.env, READY, log/, workers/, the bashrc block, the links it made) and keeps the Claude "
+    "sign-in, accounts/, engine/, projects/, sessions/ and the work folder; `--purge-root` is refused, and so is any run "
+    "under an agent marker or without a terminal. The assumption and the check below are today's.",
+    "container.claude-transcript-layout": "Since grid scripts 9 (5.0.0) nothing of ours moves, renames or links anything in "
+    "a sign-in folder: the daemon no longer moves projects/ to ~/.beethoven/projects and links it back, and grid.accounts "
+    "no longer relinks it. A session resumes from the one sign-in it runs under. The repair and the step by hand below "
+    "are today's.",
+    "container.claude-env-contract": "Since grid scripts 9 (5.0.0) the variables taken away are hpcworker's list, the same "
+    "in five places (extension/src/core/services.ts, grid/beethovend.js and grid/phone.js AUTH_VARS, claude_in_alloc in "
+    "grid/beethoven, grid/login_relay.sh); src/core/credentialEnv.test.ts fails when they differ.",
+    "lab-folder.permission-layout": "Since grid scripts 9 (5.0.0) `access init` leaves shared/ at 2755 and keeps other's "
+    "read and enter on shared/beethoven and below (hpcworker's shared copy and the lab's image; the volume root's "
+    "other::--- and its named list are the gate); every other entry of shared/ stays 2750, and an rwx entry on the "
+    "volume root is never lowered to --x.",
+    "lab-folder.library-publish": "Since grid scripts 9 (5.0.0) a publish takes away group and other write only and "
+    "keeps other's read and enter, so the folder stays 2755.",
 }
 
 # Where the study's text would tell a student to do what is ruled out since then, the rendering says what
@@ -32,6 +49,18 @@ NOW = {
         "manual_fix": "Nothing to set up: Beethoven uses no API key. To delete a key 4.0.0 stored: Manage stored tokens or "
         "Reset on the laptop, beethoven accounts remove --yes in a terminal on the grid; revoke the key itself in the "
         "Anthropic Console.",
+    },
+    "grid-login.uninstall-clean": {
+        "assumption": "`beethoven uninstall --yes` cancels worker jobs, removes the bashrc block and what install made in "
+        "~/.beethoven, and removes ~/.beethoven itself (and a ~/.ashley link to it) only when nothing else is left. It does "
+        "NOT cancel a held access job and does not touch the admin-side status file or ACLs, so a reinstalled account can "
+        "reappear as filed, pending or approved.",
+        "check": "login node, after uninstall: `test ! -e ~/.beethoven/bin && ! grep -q '# >>> beethoven' ~/.bashrc`, and "
+        "~/.beethoven/claude, accounts/, engine/ and the work folder unchanged.",
+    },
+    "container.claude-transcript-layout": {
+        "auto_repair": "None: nothing of ours moves or links anything in a sign-in folder.",
+        "manual_fix": "Update fake-claude.js to the new layout.",
     },
     "account.claude-usage-window": {
         "assumption": "Pro/Max five-hour and weekly windows have room. The worker runs only on the student's own "

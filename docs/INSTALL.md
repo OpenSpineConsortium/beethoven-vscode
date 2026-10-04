@@ -36,14 +36,17 @@ Claude container is the lab's shared one; nothing large is stored in your space.
 
 To undo: remove the block from `~/.ssh/config`, delete the key, run **Beethoven: Manage stored
 tokens** to delete tokens, uninstall the extension; on the grid, `~/.beethoven/bin/beethoven
-uninstall` from a terminal (it removes `~/.beethoven`, the `~/.ashley` link and the block in
-`~/.bashrc`).
+uninstall --yes` from a terminal (it stops your workers and removes what install put in place: the
+scripts, settings, logs, worker folders, the block in `~/.bashrc` and the links it made; your Claude
+sign-in, your other accounts, your session history and your work folder stay, and it lists what it
+left).
 
 ## Emulating a from-scratch install
 
 `Beethoven: Reset this laptop (emulate a fresh install)` forgets tokens, key and config block,
-settings, the Claude Code registration, and optionally Beethoven on the grid (`beethoven uninstall`,
-with `--purge-root` for the container). For a brand-new VS Code as well:
+settings, the Claude Code registration, and optionally Beethoven on the grid (`beethoven uninstall
+--yes`, in a terminal; the Claude sign-in, the work folder and the container stay). For a brand-new
+VS Code as well:
 
 ```powershell
 code --user-data-dir $env:TEMP\fresh-vscode --extensions-dir $env:TEMP\fresh-ext

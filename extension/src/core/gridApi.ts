@@ -30,8 +30,10 @@ export interface GridClaudeStatus {
   /** the student answered Claude Code's Remote Control question (phone access) */
   consent: boolean;
   /** what the newest running worker's Claude Code reported about the sign-in; null when no worker runs.
-   *  subscription is false when it is signed in some other way (grid scripts 8; absent before) */
-  login: { loggedIn?: boolean; subscription?: boolean; detail?: string; email?: string } | null;
+   *  subscription is false when it is signed in some other way (grid scripts 8; absent before), an API
+   *  key behind the sign-in included (grid scripts 9, which also report apiKey; a worker without it
+   *  judged by the earlier rule until it restarts) */
+  login: { loggedIn?: boolean; subscription?: boolean; apiKey?: boolean; detail?: string; email?: string } | null;
 }
 
 export interface AskEvents {

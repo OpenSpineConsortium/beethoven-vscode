@@ -679,8 +679,7 @@ async function commandReset(context: vscode.ExtensionContext): Promise<void> {
     { id: 'ssh', label: 'SSH key and the config block', description: `${s.identityFile}, the Beethoven block in ~/.ssh/config`, picked: true },
     { id: 'settings', label: 'Beethoven settings', description: 'AccessID, the Claude account for the terminals, and preferences', picked: true },
     { id: 'mcp', label: 'MCP bridge registration', description: 'claude mcp remove beethoven (Claude Code\'s own sign-in and the account the setting names)', picked: true },
-    { id: 'grid', label: 'Beethoven on the grid', description: 'stop workers, remove ~/.beethoven and the bashrc block (the container stays)', picked: false },
-    { id: 'gridRoot', label: 'The container and workspaces on the grid storage', description: 'rebuilt by the next install (7 min)', picked: false },
+    { id: 'grid', label: 'Beethoven on the grid', description: 'stop workers; remove Beethoven\'s scripts, settings, logs and the bashrc block (your Claude sign-in, your work and the container stay)', picked: false },
   ];
   const picks = await vscode.window.showQuickPick(items, { canPickMany: true, title: 'Beethoven: reset. What should be forgotten?' });
   if (!picks || picks.length === 0) return;
@@ -688,10 +687,11 @@ async function commandReset(context: vscode.ExtensionContext): Promise<void> {
   if (!sure) return;
   const ids = new Set(picks.map((p) => p.id));
   const done: string[] = [];
-  if (ids.has('grid') || ids.has('gridRoot')) {
-    const g = new GridApi(s.sshAlias, (l) => output.appendLine(l));
-    const r = await g.beethoven(['uninstall', ...(ids.has('gridRoot') ? ['--purge-root'] : [])], { timeoutMs: 180_000 });
-    done.push(`grid: ${(r.stdout + r.stderr).trim().split('\n').pop()}`);
+  if (ids.has('grid')) {
+    // in a terminal the student sees: the grid refuses an uninstall without one, and it never deletes the
+    // Claude sign-in, the accounts, the history or the work folder (grid scripts 9)
+    const code = await new SetupPanelFreeUI(output).runInteractive('Beethoven on the grid: uninstall', 'ssh', ['-t', s.sshAlias, gridCliLine(['uninstall', '--yes'])]);
+    done.push(code === 0 ? 'grid: Beethoven uninstalled there (your Claude sign-in and your work stay)' : 'grid: not uninstalled (the terminal says why)');
   }
   if (ids.has('tokens')) {
     for (const svc of SERVICES) await store.setSecret(svc.id, undefined);

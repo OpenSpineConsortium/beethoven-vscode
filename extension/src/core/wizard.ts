@@ -526,20 +526,23 @@ export async function localClaudeStatus(exe: string, env?: NodeJS.ProcessEnv): P
   if (r.code === 127 || /ENOENT/.test(r.stderr)) return { ok: false, loggedIn: false, subscription: false, detail: 'Claude Code is not installed on this laptop' };
   let j: { loggedIn?: boolean; authMethod?: string; apiProvider?: string; email?: string; subscriptionType?: string } = {};
   try {
-    j = JSON.parse(r.stdout.trim());
+    j = JSON.parse(r.stdout.trim()) ?? {};
   } catch {
     return { ok: false, loggedIn: false, subscription: false, detail: `claude auth status did not answer (${(r.stderr || r.stdout).trim().slice(0, 100)})` };
   }
   // only the claude.ai sign-in billed by Anthropic itself counts: an API key, a key helper or a cloud
-  // provider (Bedrock, Vertex, Foundry) bills by use
+  // provider (Bedrock, Vertex, Foundry) bills by use. apiKeySource is there only when a key is behind the
+  // sign-in (the Console's own key is reported as authMethod "claude.ai" beside it), so its presence alone
+  // rules it out and its value is never read: hpcworker's rule (hpcw_claude_signin), and the grid's
+  const keyBehind = Object.prototype.hasOwnProperty.call(j, 'apiKeySource');
   const method = String(j.authMethod ?? '');
   const provider = String(j.apiProvider ?? 'firstParty');
-  const subscription = !!j.loggedIn && method === 'claude.ai' && provider === 'firstParty';
+  const subscription = !!j.loggedIn && !keyBehind && method === 'claude.ai' && provider === 'firstParty';
   return {
     ok: true,
     loggedIn: !!j.loggedIn,
     subscription,
-    detail: !j.loggedIn ? 'not signed in' : subscription ? `signed in${j.email ? ` as ${j.email}` : ''}${j.subscriptionType ? ` (${j.subscriptionType})` : ''}` : `signed in through ${provider === 'firstParty' ? method || 'an unknown method' : provider}, not a Claude subscription`,
+    detail: !j.loggedIn ? 'not signed in' : subscription ? `signed in${j.email ? ` as ${j.email}` : ''}${j.subscriptionType ? ` (${j.subscriptionType})` : ''}` : 'signed in, but not with a Claude subscription',
   };
 }
 
@@ -648,10 +651,11 @@ export async function pushTokens(env: WizardEnv): Promise<{ ok: boolean; detail:
   const secrets = [gh ? `GITHUB_TOKEN=${gh}\nGH_TOKEN=${gh}` : '', hf ? `HF_TOKEN=${hf}` : ''].filter(Boolean).join('\n') + '\n';
   const r = await ssh(alias, ['bash', '-c', `${GRID_HOME_PICK} umask 077; mkdir -p $h; cat > $h/secrets.env`], { input: secrets });
   if (r.code !== 0) return { ok: false, detail: `writing secrets.env: ${r.stderr.trim()}` };
-  // Beethoven stores no Claude credential and copies none: an earlier version's stored token is deleted.
+  // Beethoven stores no Claude credential and copies none, and deletes nothing in accounts/: the engine keeps
+  // the student's other sign-ins there (an earlier version's stored token is only reported, by beethoven diag).
   // The API key builds up to 4.0.0 copied to accounts/apikey is left for the student, but marked disabled,
   // the one switch a worker still running grid scripts 7 honours (grid/beethoven, retire_apikey).
-  await ssh(alias, ['bash', '-c', `${GRID_HOME_PICK} rm -f $h/accounts/*/token $h/accounts/*/minted_at $h/accounts/*/.credentials.json 2>/dev/null; [ ! -e $h/accounts/apikey/apikey ] || touch $h/accounts/apikey/disabled; true`]);
+  await ssh(alias, ['bash', '-c', `${GRID_HOME_PICK} [ ! -f $h/accounts/apikey/apikey ] || touch $h/accounts/apikey/disabled; true`]);
   return { ok: true, detail: 'tokens updated on the grid' };
 }
 

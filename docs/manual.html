@@ -1630,16 +1630,20 @@ your space.</p>
 <p>To undo: remove the block from <code>~/.ssh/config</code>, delete the
 key, run <strong>Beethoven: Manage stored tokens</strong> to delete
 tokens, uninstall the extension; on the grid,
-<code>~/.beethoven/bin/beethoven uninstall</code> from a terminal (it
-removes <code>~/.beethoven</code>, the <code>~/.ashley</code> link and
-the block in <code>~/.bashrc</code>).</p>
+<code>~/.beethoven/bin/beethoven uninstall --yes</code> from a terminal
+(it stops your workers and removes what install put in place: the
+scripts, settings, logs, worker folders, the block in
+<code>~/.bashrc</code> and the links it made; your Claude sign-in, your
+other accounts, your session history and your work folder stay, and it
+lists what it left).</p>
 <h3 id="emulating-a-from-scratch-install">Emulating a from-scratch
 install</h3>
 <p><code>Beethoven: Reset this laptop (emulate a fresh install)</code>
 forgets tokens, key and config block, settings, the Claude Code
 registration, and optionally Beethoven on the grid
-(<code>beethoven uninstall</code>, with <code>--purge-root</code> for
-the container). For a brand-new VS Code as well:</p>
+(<code>beethoven uninstall --yes</code>, in a terminal; the Claude
+sign-in, the work folder and the container stay). For a brand-new VS
+Code as well:</p>
 <div class="sourceCode" id="cb3"><pre class="sourceCode powershell"><code class="sourceCode powershell"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>code <span class="op">--</span>user-data-dir <span class="va">$env</span><span class="op">:</span><span class="va">TEMP</span>\fresh-vscode <span class="op">--</span>extensions-dir <span class="va">$env</span><span class="op">:</span><span class="va">TEMP</span>\fresh-ext</span></code></pre></div>
 <p>install Claude Code, Remote - SSH and the Beethoven VSIX in that
 window, and run the wizard. Delete the two folders afterwards. For a
@@ -2015,9 +2019,13 @@ phone access <code>rc/session.log</code> in the worker’s folder.</li>
 <code>config.beethoven.bak</code> is kept), delete
 <code>~/.ssh/id_ed25519_wsu*</code>, <strong>Beethoven: Manage stored
 tokens</strong> to delete tokens, uninstall the extension. Grid:
-<code>~/.beethoven/bin/beethoven uninstall</code> stops your workers and
-removes <code>~/.beethoven</code>, the <code>~/.ashley</code> link and
-the block in <code>~/.bashrc</code>. <strong>Beethoven: Reset</strong>
+<code>~/.beethoven/bin/beethoven uninstall --yes</code> stops your
+workers and removes what install put in place (the scripts, settings,
+logs, worker folders, the block in <code>~/.bashrc</code> and the links
+it made); your Claude sign-in, your other accounts, your session history
+and your work folder stay. Beethoven never deletes or signs out a Claude
+sign-in: to sign out, run <code>claude auth logout</code> yourself on a
+compute node. <strong>Beethoven: Reset</strong>
 does this for you: you pick what to forget, and it asks once before
 doing it.</p>
 <h1 id="appendix">Appendix</h1>

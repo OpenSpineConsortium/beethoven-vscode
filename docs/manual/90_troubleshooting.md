@@ -77,6 +77,9 @@ The steps are the ten in *Getting started*.
 
 Laptop: remove the block from `~/.ssh/config` (a `config.beethoven.bak` is kept), delete
 `~/.ssh/id_ed25519_wsu*`, **Beethoven: Manage stored tokens** to delete tokens, uninstall the
-extension. Grid: `~/.beethoven/bin/beethoven uninstall` stops your workers and removes
-`~/.beethoven`, the `~/.ashley` link and the block in `~/.bashrc`.
+extension. Grid: `~/.beethoven/bin/beethoven uninstall --yes` stops your workers and removes what
+install put in place (the scripts, settings, logs, worker folders, the block in `~/.bashrc` and the
+links it made); your Claude sign-in, your other accounts, your session history and your work folder
+stay. Beethoven never deletes or signs out a Claude sign-in: to sign out, run `claude auth logout`
+yourself on a compute node.
 **Beethoven: Reset** does this for you: you pick what to forget, and it asks once before doing it.

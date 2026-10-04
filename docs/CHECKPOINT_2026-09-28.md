@@ -11,10 +11,17 @@ uploads 4.0.0" no longer stands: the Marketplace upload is 5.0.0 (`docs/MARKETPL
 withdrawal and the rest of that day's sweep for API keys are not committed: the maintainer reviews
 and commits. Later that day, on the branch `wip/account` for the maintainer's review: the setting
 `beethoven.account` (one person, their own accounts; `docs/ARCHITECTURE.md`, "Several accounts of
-one person"), with the agreements and the privacy statement at version 8 and `TERMS_VERSION` 8 (a
-review of the first draft, version 7, which never shipped, found that the texts promised the
-account only to the terminals Beethoven opens, while every integrated terminal of a local window
-gets it); it ships in 5.0.0. The bundled manual (`extension/media/manual.html`, `docs/manual.html`)
+one person"), with the agreements and the privacy statement at version 7 and `TERMS_VERSION` 7
+(the texts say that every integrated terminal of a local window gets the account); it ships in
+5.0.0. On the same branch, grid scripts 9, a safety fix that ships in 5.0.0 too: `beethoven
+uninstall --yes` removes only what install made and keeps `claude/`, `accounts/`, `engine/`,
+`projects/` and the work folder (`--purge-root` refused), `beethoven claude forget` refuses, Reset
+offers nothing more and runs the uninstall in a terminal, the troubleshooter reports where it used to
+delete, the worker no longer moves `projects/`; a sign-in with `apiKeySource` is not a subscription
+anywhere (hpcworker's rule; workers started before 9 need a restart to apply it); the five strip
+lists equal hpcworker's; `access init` and `library publish` keep other's read and enter on
+`shared/beethoven`. The texts at version 7 say so. Not run here: `tools/grid_tests.sh` on the grid
+and the VS Code integration suite. The bundled manual (`extension/media/manual.html`, `docs/manual.html`)
 was edited by hand for that section, since pandoc was not at hand: `docs/manual.pdf` and a pandoc
 rebuild (`python -X utf8 docs/manual/build_manual.py`) wait on the maintainer. The diagnostics
 graph (`docs/diagnostics_graph.json`, `docs/DIAGNOSTICS.md`) was regenerated without VS Code, from

@@ -22,11 +22,13 @@ the Desktop folder is `ashley` until the maintainer renames it. The code is prop
 - **Beethoven never reads, stores or relays a Claude credential.** The student signs in through
   Claude Code's own flow, on the laptop and once on the grid (`beethoven claude login`); Claude Code
   keeps its credential in `~/.beethoven/claude` (on the laptop, in the folder of the account
-  `beethoven.account` names); Beethoven reads only `claude auth status`. One person, their own
-  accounts (the maintainer, 2026-10-04): several sign-in directories of the student's own, chosen by
-  `beethoven.account` from the engine's list (`~/.beethoven/engine/accounts.json`, read and never
-  written); never pooled, never anyone else's, never a credential read, copied or moved by Beethoven;
-  no sharing of an account and no rotation of subscriptions (Anthropic's Consumer Terms).
+  `beethoven.account` names); Beethoven reads only `claude auth status`, and a sign-in counts only
+  with `authMethod` `claude.ai`, `apiProvider` `firstParty` or absent, and no `apiKeySource`
+  (hpcworker's `hpcw_claude_signin`; `src/core/signin.test.ts` holds every judge to it). One person,
+  their own accounts (the maintainer, 2026-10-04): several sign-in directories of the student's own,
+  chosen by `beethoven.account` from the engine's list (`~/.beethoven/engine/accounts.json`, read
+  and never written); never pooled, never anyone else's, never a credential read, copied or moved by
+  Beethoven; no sharing of an account and no rotation of subscriptions (Anthropic's Consumer Terms).
 - **Never usage credits, by anyone, ever** (the maintainer, 2026-10-04). No API key, no billing
   setting, nothing that asks for or relies on paid usage beyond the student's own flat-rate
   subscription. When the subscription window is spent the worker answers `rate_limited` with the
@@ -39,6 +41,21 @@ the Desktop folder is `ashley` until the maintainer renames it. The code is prop
   fundamental rule of this software": no API key anywhere, the maintainer's own tooling included
   (no Console key, key helper, cloud provider or gateway, and no CI that runs Claude Code on a key
   or a token held as a secret).
+- **Nothing of ours deletes what it did not make** (grid scripts 9). `~/.beethoven` is not only
+  Beethoven's: `claude/` is the sign-in hpcworker's workers, the browser and desktop editions and
+  the engine's account `main` use, `accounts/` and `engine/` are the engine's, `projects/` and
+  `sessions/` are history, and on 2026-09-28 the whole folder, sign-in included, vanished while a
+  Remote Control session was open. So nothing here removes, moves, renames or links anything in a
+  sign-in folder, `accounts/`, `engine/`, `projects/` or the work folder (`ROOT`); `beethoven
+  uninstall --yes` removes only what install made (`bin/`, `config.env`, `READY`, `log/`,
+  `workers/`, the bashrc block, the links) and refuses `--purge-root`; `claude auth logout` is never
+  run and `beethoven claude forget` only says so; Reset offers nothing more. The one move kept is
+  the old one of a whole `~/.ashley` folder to `~/.beethoven` (by name, deleting nothing, refused
+  while a worker runs from it). A destructive subcommand refuses under `CLAUDECODE`,
+  `BEETHOVEN_REQUEST_ID`, `BEETHOVEN_WORKER` (or their `ASHLEY_` names) and without a terminal
+  (`src/core/uninstall.test.ts`). The credential variables stripped are hpcworker's list, the same
+  in five places (`src/core/credentialEnv.test.ts`); `GITHUB_TOKEN`, `GH_TOKEN` and `HF_TOKEN` pass
+  on purpose.
 - **Tokens never appear on command lines, in argv, in logs, in job files or in `sbatch --export`.**
   Never echo one. `ANTHROPIC_API_KEY` is never injected into laptop terminals.
 - **Every feature ships with diagnostic nodes** (`extension/src/vscode/diagNodes.ts`, the grid's
@@ -50,9 +67,11 @@ the Desktop folder is `ashley` until the maintainer renames it. The code is prop
   trap; IPC under `/dev/shm`; every job has a wall time.
 - **Terms:** the first-run agreement is `extension/LICENSE.txt` (Trial Edition); `LICENSE-FULL.txt`
   is shown only when a non-trial key is registered. Change the texts and `TERMS_VERSION` together
-  (integer; 8 since 5.0.0 allowed several Claude accounts of one person and said that every
-  integrated terminal of a local window gets the chosen one, after 6 when it dropped the API key and
-  7, never shipped). Never pre-tick a box; the button label is part of the record.
+  (integer; 7 since 5.0.0, which dropped the API key, allowed several Claude accounts of one person,
+  said that every integrated terminal of a local window gets the chosen one, and said that only a
+  subscription with no API key behind it counts and that a sign-in, the accounts, the history and
+  the work folder are never deleted; 5 in 4.0.0). Never pre-tick a box; the button label is part of
+  the record.
 - **The old names are aliases, never silent breaks.** Installed builds still use them: Ashley for VS
   Code 3.0.0 reads `https://openspineconsortium.com/ashley/services.json` and accepts only `ASHLEY1.`
   keys and `ASHLEYREV1` lists; grid scripts before 7 and the browser edition up to 7.0.0 name

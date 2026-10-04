@@ -2346,10 +2346,12 @@ Depends on: `grid-login.sshd-pubkey-batchmode`
 
 ### `grid-login.uninstall-clean` ashley uninstall leaves a fresh account
 
+> Since grid scripts 9 (5.0.0) `beethoven uninstall --yes`, at a terminal, removes only what install made (bin/, config.env, READY, log/, workers/, the bashrc block, the links it made) and keeps the Claude sign-in, accounts/, engine/, projects/, sessions/ and the work folder; `--purge-root` is refused, and so is any run under an agent marker or without a terminal. The assumption and the check below are today's.
+
 Depends on: `grid-login.ashley-cli-runs`
 
-- **Assumes:** `ashley uninstall [--purge-root]` cancels worker jobs, removes the bashrc block and deletes ~/.ashley. It does NOT cancel a held ashley_access job and does not touch the admin-side status file or ACLs, so a reinstalled account can reappear as filed, pending or approved.
-- **Check:** login node, after uninstall: `test ! -e ~/.ashley && ! grep -q '# >>> ashley' ~/.bashrc && [ -z "$(squeue -h -u $USER -n ashley_access -o %i)" ]`.
+- **Assumes:** `beethoven uninstall --yes` cancels worker jobs, removes the bashrc block and what install made in ~/.beethoven, and removes ~/.beethoven itself (and a ~/.ashley link to it) only when nothing else is left. It does NOT cancel a held access job and does not touch the admin-side status file or ACLs, so a reinstalled account can reappear as filed, pending or approved.
+- **Check:** login node, after uninstall: `test ! -e ~/.beethoven/bin && ! grep -q '# >>> beethoven' ~/.bashrc`, and ~/.beethoven/claude, accounts/, engine/ and the work folder unchanged.
 - **Looks like:** `reinstalled account shows 'filed' or 'pending' from before`; `ashley_* jobs left in squeue`
 - **Repair:** `scancel` any of the user's jobs named ashley_* left after uninstall.
 - **By hand:** Ask the lead for `ashley access admin reset <id>` if a clean request is wanted.
@@ -3784,6 +3786,8 @@ Depends on: `container.claude-version-supported`
 
 ### `container.claude-env-contract` Claude Code environment variables
 
+> Since grid scripts 9 (5.0.0) the variables taken away are hpcworker's list, the same in five places (extension/src/core/services.ts, grid/beethovend.js and grid/phone.js AUTH_VARS, claude_in_alloc in grid/beethoven, grid/login_relay.sh); src/core/credentialEnv.test.ts fails when they differ.
+
 Depends on: `container.claude-version-supported`
 
 - **Assumes:** Claude Code honours these variables. CLAUDE_CONFIG_DIR sets the account directory. CLAUDE_CODE_OAUTH_TOKEN and ANTHROPIC_API_KEY select the credential. DISABLE_AUTOUPDATER=1 prevents writes to the read-only shared prefix. CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC and DISABLE_TELEMETRY also apply. The six auth and redirect variables are the complete set that can override the credential.
@@ -3795,13 +3799,15 @@ Depends on: `container.claude-version-supported`
 
 ### `container.claude-transcript-layout` Transcript path and --resume scope
 
+> Since grid scripts 9 (5.0.0) nothing of ours moves, renames or links anything in a sign-in folder: the daemon no longer moves projects/ to ~/.beethoven/projects and links it back, and grid.accounts no longer relinks it. A session resumes from the one sign-in it runs under. The repair and the step by hand below are today's.
+
 Depends on: `container.claude-version-supported`
 
 - **Assumes:** Transcripts live at <CLAUDE_CONFIG_DIR>/projects/<cwd with non-alphanumerics as ->/<uuid>.jsonl, and --resume searches only there (measured on 2.1.283). Claude Code follows the projects symlink to ~/.ashley/projects.
 - **Check:** grid (in the worker): after a run, the transcript exists under ~/.ashley/projects/<encoded cwd>/<sid>.jsonl, and a --resume in a second account dir finds it.
 - **Looks like:** `No conversation found with session ID`; `transcript written into accounts/<n>/projects.before-sharing.*`
-- **Repair:** Relink projects/ (share_transcripts, already in grid.accounts repair).
-- **By hand:** Update fake-claude.js and shareTranscripts to the new layout.
+- **Repair:** None: nothing of ours moves or links anything in a sign-in folder.
+- **By hand:** Update fake-claude.js to the new layout.
 - **Could break when:** Claude Code changing the storage path or its symlink handling.
 - **Code:** grid/ashleyd.js:321-346; extension/test-fixtures/fake-claude.js
 
@@ -3875,6 +3881,8 @@ Depends on: `lab-folder.volume-mounted`
 - **Code:** grid/ashley:467, 472, 475-497; docs/CHECKPOINT_2026-09-28.md:50-52
 
 ### `lab-folder.permission-layout` Volume/shared/access modes as `access init` sets them
+
+> Since grid scripts 9 (5.0.0) `access init` leaves shared/ at 2755 and keeps other's read and enter on shared/beethoven and below (hpcworker's shared copy and the lab's image; the volume root's other::--- and its named list are the gate); every other entry of shared/ stays 2750, and an rwx entry on the volume root is never lowered to --x.
 
 Depends on: `lab-folder.admin-identity`, `lab-folder.acl-support`
 
@@ -3968,6 +3976,8 @@ Depends on: `lab-folder.library-json`, `lab-folder.acl-grant`, `grid-node.runtim
 - **Code:** grid/ashley:85-103
 
 ### `lab-folder.library-publish` An admin publish merges the entry and leaves the tree group-readable
+
+> Since grid scripts 9 (5.0.0) a publish takes away group and other write only and keeps other's read and enter, so the folder stays 2755.
 
 Depends on: `lab-folder.admin-identity`, `grid-slurm.partition-secp-secondary`, `grid-slurm.export-environment`, `container.sandbox-build`, `grid-slurm.bootstrap-job`
 

@@ -1,6 +1,6 @@
 # Beethoven for VS Code privacy statement
 
-Version 8, 2026-10-04. Part of the Beethoven for VS Code Trial Edition License Agreement
+Version 7, 2026-10-04. Part of the Beethoven for VS Code Trial Edition License Agreement
 (LICENSE.txt) and of the Beethoven for VS Code Full Edition License Agreement (LICENSE-FULL.txt).
 You can save and print this text; it is also on the Beethoven support page.
 
@@ -24,8 +24,11 @@ provided by or on behalf of any school, and Licensor is not acting for one.
 Beethoven for VS Code never reads, stores, copies or relays a Claude credential. Claude Code keeps
 its own sign-in, on your laptop (in its own folder, or in the folder of the one of your own accounts
 you chose in the setting `beethoven.account`) and in your grid account (`~/.beethoven/claude`);
-Beethoven for VS Code reads only Claude Code's yes-or-no answer about whether it is signed in, and
-never copies or moves a sign-in between your accounts.
+Beethoven for VS Code reads only Claude Code's own report of it (whether it is signed in; whether
+with a Claude subscription, a token, a cloud provider or an API key behind it, never the key itself;
+the e-mail and plan it names, to show them to you), counts only your own Claude subscription with no
+API key behind it, never copies or moves a sign-in between your accounts, and never deletes a
+sign-in or signs one out (to sign out, run `claude auth logout` yourself).
 
 Beethoven for VS Code asks for no Anthropic API key and uses no paid usage. It cannot see or change
 the billing settings of your Claude account: if extra usage (usage credits) is turned on there,
@@ -45,7 +48,12 @@ for VS Code, or revoke the key in the Anthropic Console, which makes every copy 
 
 With your consent in each step: your GitHub and Hugging Face tokens (a file readable only by you),
 your license key, and the settings needed for the worker. Everything there is
-in your own account under your institution's rules; Licensor has no access to it.
+in your own account under your institution's rules; Licensor has no access to it. Beethoven: Reset
+(Beethoven on the grid), or `beethoven uninstall --yes` typed in a terminal there, removes what
+Beethoven for VS Code installed in your grid account (its scripts, settings, logs, worker folders and
+its block in `~/.bashrc`) and nothing else: your Claude sign-ins, your other accounts, your session
+history and your work folder stay, as do the copies of your tokens and license key until you delete
+them.
 
 ## What goes to services you already use
 

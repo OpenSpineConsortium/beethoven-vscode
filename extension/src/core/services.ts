@@ -14,11 +14,14 @@ export type SecretId = 'github' | 'huggingface';
 export const RETIRED_SECRETS: ReadonlyArray<{ id: string; name: string }> = [{ id: 'anthropicApiKey', name: 'Anthropic API key (no longer used)' }];
 
 /**
- * The variables that make Claude Code use an API key, a token or another endpoint instead of the sign-in
- * it keeps for the student's subscription. The grid daemon removes the same list from the worker
- * (grid/beethovend.js, AUTH_VARS); a Claude Code run Beethoven starts on the laptop gets them unset too.
+ * The variables that make Claude Code use an API key, a token, a gateway or a cloud provider instead of the
+ * sign-in it keeps for the student's subscription: hpcworker's list (CLEAN_ENV in its worker template,
+ * framework 17). The grid removes the same list (grid/beethovend.js and grid/phone.js AUTH_VARS, the
+ * beethoven command and grid/login_relay.sh), and credentialEnv.test.ts fails when the five differ; a Claude
+ * Code run Beethoven starts on the laptop gets them unset too. GITHUB_TOKEN, GH_TOKEN and HF_TOKEN are not
+ * on it: Beethoven passes those on purpose.
  */
-export const CLAUDE_CREDENTIAL_ENV = ['CLAUDE_CODE_OAUTH_TOKEN', 'ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_BASE_URL', 'CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR', 'CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR', 'CLAUDE_CODE_USE_BEDROCK', 'CLAUDE_CODE_USE_VERTEX', 'CLAUDE_CODE_USE_FOUNDRY'] as const;
+export const CLAUDE_CREDENTIAL_ENV = ['ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_BASE_URL', 'CLAUDE_CODE_OAUTH_TOKEN', 'CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR', 'CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR', 'CLAUDE_CODE_USE_BEDROCK', 'CLAUDE_CODE_USE_VERTEX', 'CLAUDE_CODE_USE_FOUNDRY', 'CLAUDE_CODE_USE_ANTHROPIC_AWS', 'CLAUDE_CODE_USE_ANTHROPIC_GOOGLE_CLOUD', 'CLAUDE_CODE_USE_MANTLE', 'CLAUDE_CODE_USE_GATEWAY', 'CLAUDE_CODE_OAUTH_REFRESH_TOKEN', 'CLAUDE_CODE_OAUTH_SCOPES'] as const;
 
 /** Overrides for run(): spawn() leaves out a variable whose value is undefined. */
 export function withoutClaudeCredentials(): Record<string, undefined> {

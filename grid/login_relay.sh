@@ -7,7 +7,8 @@
 #
 #   login_relay.sh start            start the sign-in (prints the link once it appears)
 #   login_relay.sh screen           show the current screen of the sign-in
-#   login_relay.sh send <file>      paste the code in <file> into the sign-in, then delete the file
+#   login_relay.sh send <file>      paste the code in <file> into the sign-in; the file is deleted only when
+#                                   it is in ~/.beethoven/tmp, this script's own folder
 #   login_relay.sh stop             end the session
 set -euo pipefail
 BEETHOVEN="$(dirname "$0")/beethoven"; [ -r "$BEETHOVEN" ] || BEETHOVEN="$HOME/.beethoven/bin/beethoven"
@@ -33,9 +34,11 @@ const fs=require("fs"),p=process.env.CLAUDE_CONFIG_DIR+"/.claude.json";let j={};
 JS
     chmod 600 "$KEEP/seed.js"
     inner="cd '$ROOT/workspaces/phone' && node '$KEEP/seed.js' && exec '$CLAUDE_BIN' auth login"
-    # the key, token, gateway and cloud-provider variables are removed as in `beethoven claude login`
+    # the key, token, gateway and cloud-provider variables are removed as in `beethoven claude login` (the
+    # same list as there, beethovend.js and phone.js; a test compares them), and the two Remote Control switches
+    auth_unset="-u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN -u ANTHROPIC_BASE_URL -u CLAUDE_CODE_OAUTH_TOKEN -u CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR -u CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR -u CLAUDE_CODE_USE_BEDROCK -u CLAUDE_CODE_USE_VERTEX -u CLAUDE_CODE_USE_FOUNDRY -u CLAUDE_CODE_USE_ANTHROPIC_AWS -u CLAUDE_CODE_USE_ANTHROPIC_GOOGLE_CLOUD -u CLAUDE_CODE_USE_MANTLE -u CLAUDE_CODE_USE_GATEWAY -u CLAUDE_CODE_OAUTH_REFRESH_TOKEN -u CLAUDE_CODE_OAUTH_SCOPES"
     # shellcheck disable=SC2086
-    cmd="$RUNTIME exec $BINDS '$SANDBOX' env -u CLAUDE_CODE_OAUTH_TOKEN -u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN -u ANTHROPIC_BASE_URL -u CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR -u CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR -u CLAUDE_CODE_USE_BEDROCK -u CLAUDE_CODE_USE_VERTEX -u CLAUDE_CODE_USE_FOUNDRY -u CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC HOME='$HOME' CLAUDE_CONFIG_DIR='$CLAUDE_HOME' TERM=xterm-256color BROWSER=/bin/false bash -c \"$inner\""
+    cmd="$RUNTIME exec $BINDS '$SANDBOX' env $auth_unset -u CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC -u DISABLE_GROWTHBOOK HOME='$HOME' CLAUDE_CONFIG_DIR='$CLAUDE_HOME' TERM=xterm-256color BROWSER=/bin/false bash -c \"$inner\""
     printf '%s\n' "$cmd" > "$KEEP/login_cmd.sh"; chmod 600 "$KEEP/login_cmd.sh"
     j=$(jid); [ -n "$j" ] || { echo "no running worker" >&2; exit 2; }
     # the tmux server lives inside a step of the worker's allocation; the step stays up while the session exists
@@ -52,7 +55,10 @@ JS
     tm capture-pane -p -J -t "$SESSION" -S -200 | sed -e 's/[[:space:]]*$//' | awk 'NF{blank=0} !NF{blank++} blank<2';;
   send)
     f="${2:?file with the code}"; [ -s "$f" ] || { echo "no code in $f" >&2; exit 2; }
-    tr -d '\r\n' < "$f" > "$KEEP/code.buf"; chmod 600 "$KEEP/code.buf"; rm -f "$f"
+    tr -d '\r\n' < "$f" > "$KEEP/code.buf"; chmod 600 "$KEEP/code.buf"
+    # the caller's file is removed only from this script's own folder: a path anywhere else (a workspace, a
+    # sign-in folder) is never deleted from here
+    case "$(readlink -f -- "$f")" in "$(readlink -f -- "$KEEP")"/*) rm -f -- "$f";; *) echo "(left $f where it is: delete it yourself once the sign-in is done)" >&2;; esac
     tm load-buffer -b code "$KEEP/code.buf"; rm -f "$KEEP/code.buf"
     tm paste-buffer -b code -d -t "$SESSION"; sleep 1; tm send-keys -t "$SESSION" Enter
     sleep 6; exec "$0" screen;;

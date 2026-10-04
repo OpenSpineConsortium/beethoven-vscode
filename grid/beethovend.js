@@ -49,7 +49,10 @@ const ACCOUNTS = path.join(BEETHOVEN_HOME, 'accounts');
 // `claude auth login` in the student's allocation). Beethoven never reads, copies or relays it; it
 // only points every Claude Code process it starts at this folder. One person, one login.
 const CLAUDE_HOME = envOf('CLAUDE_HOME') || path.join(BEETHOVEN_HOME, 'claude');
-const AUTH_VARS = ['CLAUDE_CODE_OAUTH_TOKEN', 'ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_BASE_URL', 'CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR', 'CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR', 'CLAUDE_CODE_USE_BEDROCK', 'CLAUDE_CODE_USE_VERTEX', 'CLAUDE_CODE_USE_FOUNDRY'];
+// The key, token, gateway and cloud-provider variables: hpcworker's list (CLEAN_ENV in its worker template,
+// framework 17), the same in phone.js, the beethoven command, login_relay.sh and the laptop's
+// CLAUDE_CREDENTIAL_ENV; a test compares the five.
+const AUTH_VARS = ['ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_BASE_URL', 'CLAUDE_CODE_OAUTH_TOKEN', 'CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR', 'CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR', 'CLAUDE_CODE_USE_BEDROCK', 'CLAUDE_CODE_USE_VERTEX', 'CLAUDE_CODE_USE_FOUNDRY', 'CLAUDE_CODE_USE_ANTHROPIC_AWS', 'CLAUDE_CODE_USE_ANTHROPIC_GOOGLE_CLOUD', 'CLAUDE_CODE_USE_MANTLE', 'CLAUDE_CODE_USE_GATEWAY', 'CLAUDE_CODE_OAUTH_REFRESH_TOKEN', 'CLAUDE_CODE_OAUTH_SCOPES'];
 const SECRETS = path.join(BEETHOVEN_HOME, 'secrets.env');
 const STATE = path.join(WORKER_DIR, 'state.json');
 const STOP = path.join(WORKER_DIR, 'stop');
@@ -173,7 +176,11 @@ const licenseTimer = setInterval(checkLicense, LICENSE_RECHECK_MS);
 // environment is the setup-token route the credential rule forbids, so the worker treats either as no sign-in and
 // runs nothing on it.
 const NOT_SUBSCRIPTION = 'Claude on the grid is signed in, but not with a Claude subscription, and Beethoven runs only on your own Claude subscription: sign in again with it: run "Beethoven: Sign in to Claude on the grid" (on the grid: beethoven claude login)';
-const isSubscription = (j) => !!j.loggedIn && j.authMethod === 'claude.ai' && (j.apiProvider ?? 'firstParty') === 'firstParty';
+// apiKeySource is there only when a key is behind the sign-in (Claude Code reports the Console's own key as
+// authMethod "claude.ai" beside it), so its presence alone rules a sign-in out and its value is never read:
+// hpcworker's rule (hpcw_claude_signin)
+const keyBehind = (j) => Object.prototype.hasOwnProperty.call(j, 'apiKeySource');
+const isSubscription = (j) => !!j.loggedIn && !keyBehind(j) && j.authMethod === 'claude.ai' && (j.apiProvider ?? 'firstParty') === 'firstParty';
 let claudeLogin = { loggedIn: false, checked: null, detail: 'not checked yet' };
 function checkClaudeLogin() {
   const env = Object.assign({}, process.env, { CLAUDE_CONFIG_DIR: CLAUDE_HOME, DISABLE_AUTOUPDATER: '1' });
@@ -188,7 +195,7 @@ function checkClaudeLogin() {
   }
   const before = `${claudeLogin.loggedIn} ${claudeLogin.subscription}`;
   claudeLogin = j
-    ? { loggedIn: !!j.loggedIn, subscription: isSubscription(j), authMethod: j.authMethod || null, apiProvider: j.apiProvider || null, email: j.email || j.emailAddress || null, subscriptionType: j.subscriptionType || null, checked: new Date().toISOString(), detail: !j.loggedIn ? 'not signed in on the grid' : isSubscription(j) ? `signed in${j.email ? ` as ${j.email}` : ''}` : 'signed in, but not with a Claude subscription' }
+    ? { loggedIn: !!j.loggedIn, subscription: isSubscription(j), authMethod: j.authMethod || null, apiProvider: j.apiProvider || null, apiKey: keyBehind(j), email: j.email || j.emailAddress || null, subscriptionType: j.subscriptionType || null, checked: new Date().toISOString(), detail: !j.loggedIn ? 'not signed in on the grid' : isSubscription(j) ? `signed in${j.email ? ` as ${j.email}` : ''}` : 'signed in, but not with a Claude subscription' }
     : { loggedIn: false, subscription: false, checked: new Date().toISOString(), detail: `auth status did not answer (${(r.stderr || r.stdout || String(r.error || '')).trim().slice(0, 120)})` };
   if (before !== `${claudeLogin.loggedIn} ${claudeLogin.subscription}`) log(`claude sign-in: ${claudeLogin.detail}`);
 }
@@ -326,7 +333,6 @@ function startRequest(req, claimedPath) {
   // only the sign-in Claude Code stored itself: nothing from the job environment or secrets.env may
   // override it (ANTHROPIC_API_KEY, ANTHROPIC_AUTH_TOKEN) or send it elsewhere (ANTHROPIC_BASE_URL)
   for (const k of AUTH_VARS) delete env[k];
-  shareTranscripts(account.dir);
 
   const eventsPath = path.join(OUTBOX, `${req.id}.events.jsonl`);
   const events = fs.createWriteStream(eventsPath, { flags: 'a' });
@@ -441,31 +447,11 @@ function peerNote() {
 
 // ---- accounts -------------------------------------------------------------------------
 // --resume finds a session only under <CLAUDE_CONFIG_DIR>/projects (measured on Claude Code
-// 2.1.283: "No conversation found" from another config folder). Up to grid scripts 7 a request could
-// move to the student's API key account, so every account's projects/ became a link to one
-// ~/.beethoven/projects; the sign-in's link stays, so the sessions kept there still resume.
-const SHARED_PROJECTS = path.join(BEETHOVEN_HOME, 'projects');
-function shareTranscripts(dir) {
-  const p = path.join(dir, 'projects');
-  try {
-    fs.mkdirSync(SHARED_PROJECTS, { recursive: true, mode: 0o700 });
-    const st = fs.lstatSync(p, { throwIfNoEntry: false });
-    if (st && st.isSymbolicLink()) return;
-    if (st && st.isDirectory()) {
-      for (const proj of fs.readdirSync(p)) {
-        const src = path.join(p, proj);
-        const dst = path.join(SHARED_PROJECTS, proj);
-        if (!fs.statSync(src).isDirectory()) continue;
-        fs.mkdirSync(dst, { recursive: true });
-        for (const f of fs.readdirSync(src)) if (!fs.existsSync(path.join(dst, f))) fs.renameSync(path.join(src, f), path.join(dst, f));
-      }
-      fs.renameSync(p, `${p}.before-sharing.${Date.now()}`); // anything left (a name clash) is kept, not deleted
-    }
-    fs.symlinkSync(SHARED_PROJECTS, p, process.platform === 'win32' ? 'junction' : 'dir');
-  } catch (e) {
-    if (e.code !== 'EEXIST') log(`could not share transcripts for account ${path.basename(dir)}: ${e.message}`);
-  }
-}
+// 2.1.283: "No conversation found" from another config folder). Up to grid scripts 8 the sign-in's
+// projects/ was made a link to ~/.beethoven/projects, its transcripts moved there first, for the API key
+// account that is gone. Since grid scripts 9 nothing here moves, renames or links anything inside a
+// sign-in folder: a link made then stays, so the sessions kept behind it still resume, and a projects/
+// Claude Code made itself is left as it is.
 function listAccounts() {
   const out = [];
   const stateOf = (dir) => {
