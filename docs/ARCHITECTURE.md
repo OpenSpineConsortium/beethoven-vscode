@@ -182,15 +182,18 @@ edition reads that list and lets the student pick one for the laptop. "One perso
 account" became "one person, their own accounts": never pooled, never anyone else's.
 
 - **The list is the engine's file, read only.** `~/.beethoven/engine/accounts.json` (or
-  `$BEE_REGISTRY_DIR/accounts.json`, else `$BEETHOVEN_HOME/engine/accounts.json`: the engine's own
-  lookup, `accountsFile` in `core/accounts.ts`) holds `version` and, per account, `label`, `path`,
-  `enabled`, `order` and `hibernate_until`; nothing from inside a sign-in directory. Sign-in
-  directories are `~/.beethoven/accounts/<label>/claude`; the account `main` is a link to the
-  edition's own `~/.beethoven/claude`; a `path` of `null` (`bee account add <label>
-  --default-location`) is Claude Code's default place, where `CLAUDE_CONFIG_DIR` stays unset. A row
-  the engine would refuse (a label that breaks its rule, a folder that is missing, empty or not
-  absolute) is dropped. Labels are lower-case letters, digits and hyphens, not starting with a
-  hyphen, at most 32 (`ACCOUNT_LABEL`, the engine's `AccountRecord` pattern). `enabled` is the
+  `$BEE_REGISTRY_DIR/accounts.json`, else `$BEETHOVEN_HOME/engine/accounts.json`, each taken as
+  written, without `~`: the engine's own lookup, `accountsFile` in `core/accounts.ts`) holds
+  `version` and, per account, `label`, `path`, `enabled`, `order` and `hibernate_until`; nothing from
+  inside a sign-in directory. Sign-in directories are `~/.beethoven/accounts/<label>/claude`; the
+  account `main` is a link to the edition's own `~/.beethoven/claude`; a `path` of `null` (`bee
+  account add <label> --default-location`) is Claude Code's default place, where `CLAUDE_CONFIG_DIR`
+  stays unset. A file the engine refuses (a field its model does not know, a row without its order, a
+  folder that is not a full path, `~` included, a label or a folder twice) is refused whole here too,
+  with the reason, as `bee` refuses it: `readAccounts` follows the engine's `RegistryFile` model and
+  its lax values, so the setting never applies an account `bee-use` would not. Labels are lower-case
+  letters, digits and hyphens, not starting with a hyphen, at most 32 (`ACCOUNT_LABEL`, the engine's
+  `AccountRecord` pattern). `enabled` is the
   engine's rotation only: `bee-use` and `bee account login` take an account that is out of it, and
   so does this edition, which is also how the student signs one in again after the engine set it
   aside. Beethoven never writes the file, never reads inside a sign-in directory (what it asks of
@@ -210,16 +213,24 @@ account" became "one person, their own accounts": never pooled, never anyone els
   (`claude -p` on the laptop), every `claude auth status` the wizard, the view and the
   troubleshooter ask, and the bridge's registration (`claude mcp`, which Claude Code keeps per
   sign-in folder: a newly chosen account gets the bridge once it is signed in, `followAccountWithMcp`
-  in `extension.ts`). The two variables carry no token, so they follow the setting whatever the
-  license says, and a cleared setting clears them even while the license keeps the tokens out.
+  in `extension.ts`; a folder that is not there yet waits for its sign-in, the bridge never makes it).
+  For an account at the default place these processes also have `CLAUDE_CONFIG_DIR` taken away, as
+  `bee-use` takes it away (`accountProcessEnv`), so a folder VS Code was started with is never signed
+  in or given the bridge under that label. The two variables carry no token, so they follow the
+  setting whatever the license says, and a cleared setting clears them even while the license keeps
+  the tokens out. *Beethoven: Reset* forgets the setting with the other settings, and an error report
+  carries neither the list's place, its folders and labels, the setting's label, nor a
+  `CLAUDE_CONFIG_DIR` or `BEE_ACCOUNT` VS Code was started with (`accountValues`, replaced by
+  placeholders).
 - **The terminals follow the list as well as the setting.** Every read of the choice, by the view,
   the wizard or the diagnostics, re-reads the list and brings the two variables in line before it
   reports, so what is reported is what the next terminal gets; a watcher on the list (VS Code's file
-  watcher, and a once-a-minute look at the file for a folder that does not exist yet) does the same
-  when the engine changes it. A terminal already open keeps the environment it started with (VS
+  watcher or, while the folder does not exist yet, a once-a-minute look at the file that then hands
+  over to it, never both) does the same when the engine changes it. A terminal already open keeps the environment it started with (VS
   Code marks it for a relaunch). A `CLAUDE_CONFIG_DIR` VS Code itself was started with (from a
   shell after `bee-use`) reaches every terminal unless the choice replaces it, since the collection
-  can give a variable but never take one away: `account.choice` and the view's tooltip say so.
+  can give a variable but never take one away: `account.choice`, the wizard's step and the view's
+  tooltip say so.
 - **A remote window is left alone.** In a Remote-SSH, WSL or container window the terminals run on
   another computer, where the laptop's sign-in folders mean nothing: neither variable is applied
   there, Beethoven's checks in that window use the laptop's usual sign-in, and the view's *Claude
@@ -229,10 +240,12 @@ account" became "one person, their own accounts": never pooled, never anyone els
   before (its detail says why the label is not used, and it does not sign the usual place in on
   the label's behalf), the student is told once per label (a warning with the two fixes: pick a
   listed label, or `bee account add <label>` in a terminal), the Beethoven view's *Claude on this
-  laptop* row says so, and the diagnostics nodes `account.list` and `account.choice` warn every
-  time without blocking `account.claude` or anything on the grid. A changed setting or list checks
-  those nodes again when the last report had something to say about them
-  (`Troubleshooter.recheckAfterAccountChange`). With a listed label the row and the wizard's step
+  laptop* row says so, and the diagnostics node `account.choice` warns every time without blocking
+  `account.claude` or anything on the grid (`account.list` warns about a list that cannot be read
+  only when no label in the setting already makes `account.choice` say it). A changed setting or
+  list checks those nodes again, quickly and quietly, when one of them failed or warned in the last
+  report (`Troubleshooter.recheckAfterAccountChange`): the status bar shows the result, and an open
+  troubleshooter panel keeps its full report and says to check again. With a listed label the row and the wizard's step
   detail carry `as <label>` beside the signed-in account.
 - **The grid is not changed.** A sign-in on the grid (`beethoven claude login` through the grid
   scripts) and the worker still use `~/.beethoven/claude` (grid scripts 8). Which of the student's

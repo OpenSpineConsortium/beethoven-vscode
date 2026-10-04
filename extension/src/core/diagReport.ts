@@ -13,6 +13,12 @@ export interface ScrubContext {
   home?: string;
   /** extra words that identify the person or their machines (hostnames, job ids) */
   words?: string[];
+  /**
+   * values of the person's own, replaced whole wherever they stand, the longest first (core/accounts.ts,
+   * accountValues: the Claude accounts' labels and folders, and the environment values VS Code was started with);
+   * whole, so that an account called "main" leaves "domain" alone
+   */
+  values?: string[];
 }
 
 export interface SharedReport {
@@ -50,6 +56,10 @@ export function scrub(text: string, ctx: ScrubContext = {}): string {
   s = s.replace(EMAIL, '<email>');
   s = s.replace(WIN_PATH, '<path>');
   s = s.replace(POSIX_PATH, '<path>');
+  for (const v of [...(ctx.values ?? [])].filter((x) => !!x).sort((a, b) => b.length - a.length)) {
+    const literal = v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    s = s.replace(new RegExp('(?<![A-Za-z0-9-])' + literal + '(?![A-Za-z0-9-])', 'g'), '<id>');
+  }
   if (ctx.home) s = s.split(ctx.home).join('<home>');
   s = s.replace(IPV4, '<ip>');
   s = s.replace(JOB_ID, 'job <n>');

@@ -5,7 +5,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { RETIRED_SECRETS, SecretId, SERVICES, localEnvironment } from '../core/services';
 import { WizardEnv, WizardSettings, WizardUI, localClaudeStatus } from '../core/wizard';
-import { ACCOUNT_VARS, AccountChoice, accountEnvironment, chooseAccount, readAccounts } from '../core/accounts';
+import { ACCOUNT_VARS, AccountChoice, accountEnvironment, accountProcessEnv, chooseAccount, readAccounts } from '../core/accounts';
 import { installPublicKey } from '../core/sshInstall';
 import { isMcpRegistered, registerMcp } from './mcpRegister';
 import type { LicenseGate } from './licenseGate';
@@ -313,7 +313,7 @@ export class BeethovenStore {
       extraRequirements: async () => {
         const m: string[] = [];
         if (!vscode.extensions.getExtension('anthropic.claude-code')) m.push('the Claude Code extension (signed in to Claude Pro or Max)');
-        const env = accountEnvironment(this.accountChoice());
+        const env = accountProcessEnv(this.accountChoice());
         const lc = await localClaudeStatus(s.claudeExecutable, env);
         if (!lc.subscription) m.push(`Claude Code on this laptop signed in with a Claude Pro or Max subscription (${lc.detail})`);
         if (!vscode.extensions.getExtension('ms-vscode-remote.remote-ssh')) m.push('the Remote-SSH extension');

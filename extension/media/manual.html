@@ -875,8 +875,9 @@ never anyone else’s.</p>
 <li><strong>The list is the engine’s file, read only.</strong>
 <code>~/.beethoven/engine/accounts.json</code> (or
 <code>$BEE_REGISTRY_DIR/accounts.json</code>, else
-<code>$BEETHOVEN_HOME/engine/accounts.json</code>: the engine’s own
-lookup, <code>accountsFile</code> in <code>core/accounts.ts</code>)
+<code>$BEETHOVEN_HOME/engine/accounts.json</code>, each taken as
+written, without <code>~</code>: the engine’s own lookup,
+<code>accountsFile</code> in <code>core/accounts.ts</code>)
 holds <code>version</code> and, per account, <code>label</code>,
 <code>path</code>, <code>enabled</code>, <code>order</code> and
 <code>hibernate_until</code>; nothing from inside a sign-in directory.
@@ -887,8 +888,13 @@ Sign-in directories are
 <code>null</code>
 (<code>bee account add &lt;label&gt; --default-location</code>) is
 Claude Code’s default place, where <code>CLAUDE_CONFIG_DIR</code> stays
-unset. A row the engine would refuse (a label that breaks its rule, a
-folder that is missing, empty or not absolute) is dropped. Labels are
+unset. A file the engine refuses (a field its model does not know, a
+row without its order, a folder that is not a full path, <code>~</code>
+included, a label or a folder twice) is refused whole here too, with the
+reason, as <code>bee</code> refuses it: <code>readAccounts</code>
+follows the engine’s <code>RegistryFile</code> model and its lax values,
+so the setting never applies an account <code>bee-use</code> would not.
+Labels are
 lower-case letters, digits and hyphens, not starting with a hyphen, at
 most 32 (<code>ACCOUNT_LABEL</code>, the engine’s
 <code>AccountRecord</code> pattern). <code>enabled</code> is the
@@ -923,23 +929,33 @@ so do <em>Investigate the failure with Claude</em>
 troubleshooter ask, and the bridge’s registration
 (<code>claude mcp</code>, which Claude Code keeps per sign-in folder: a
 newly chosen account gets the bridge once it is signed in,
-<code>followAccountWithMcp</code> in <code>extension.ts</code>). The two
-variables carry no token, so they follow the setting whatever the
-license says, and a cleared setting clears them even while the license
-keeps the tokens out.</li>
+<code>followAccountWithMcp</code> in <code>extension.ts</code>; a folder
+that is not there yet waits for its sign-in, the bridge never makes it).
+For an account at the default place these processes also have
+<code>CLAUDE_CONFIG_DIR</code> taken away, as <code>bee-use</code> takes
+it away (<code>accountProcessEnv</code>), so a folder VS Code was
+started with is never signed in or given the bridge under that label.
+The two variables carry no token, so they follow the setting whatever
+the license says, and a cleared setting clears them even while the
+license keeps the tokens out. <em>Beethoven: Reset</em> forgets the
+setting with the other settings, and an error report carries neither
+the list’s place, its folders and labels, the setting’s label, nor a
+<code>CLAUDE_CONFIG_DIR</code> or <code>BEE_ACCOUNT</code> VS Code was
+started with (<code>accountValues</code>, replaced by
+placeholders).</li>
 <li><strong>The terminals follow the list as well as the
 setting.</strong> Every read of the choice, by the view, the wizard or
 the diagnostics, re-reads the list and brings the two variables in line
 before it reports, so what is reported is what the next terminal gets; a
-watcher on the list (VS Code’s file watcher, and a once-a-minute look at
-the file for a folder that does not exist yet) does the same when the
-engine changes it. A terminal already open keeps the environment it
+watcher on the list (VS Code’s file watcher or, while the folder does
+not exist yet, a once-a-minute look at the file that then hands over to
+it, never both) does the same when the engine changes it. A terminal already open keeps the environment it
 started with (VS Code marks it for a relaunch). A
 <code>CLAUDE_CONFIG_DIR</code> VS Code itself was started with (from a
 shell after <code>bee-use</code>) reaches every terminal unless the
 choice replaces it, since the collection can give a variable but never
-take one away: <code>account.choice</code> and the view’s tooltip say
-so.</li>
+take one away: <code>account.choice</code>, the wizard’s step and the
+view’s tooltip say so.</li>
 <li><strong>A remote window is left alone.</strong> In a Remote-SSH, WSL
 or container window the terminals run on another computer, where the
 laptop’s sign-in folders mean nothing: neither variable is applied
@@ -955,11 +971,15 @@ the usual place in on the label’s behalf), the student is told once per
 label (a warning with the two fixes: pick a listed label, or
 <code>bee account add &lt;label&gt;</code> in a terminal), the Beethoven
 view’s <em>Claude on this laptop</em> row says so, and the diagnostics
-nodes <code>account.list</code> and <code>account.choice</code> warn
-every time without blocking <code>account.claude</code> or anything on
-the grid. A changed setting or list checks those nodes again when the
-last report had something to say about them
-(<code>Troubleshooter.recheckAfterAccountChange</code>). With a listed
+node <code>account.choice</code> warns every time without blocking
+<code>account.claude</code> or anything on the grid
+(<code>account.list</code> warns about a list that cannot be read only
+when no label in the setting already makes <code>account.choice</code>
+say it). A changed setting or list checks those nodes again, quickly and
+quietly, when one of them failed or warned in the last report
+(<code>Troubleshooter.recheckAfterAccountChange</code>): the status bar
+shows the result, and an open troubleshooter panel keeps its full report
+and says to check again. With a listed
 label the row and the wizard’s step detail carry
 <code>as &lt;label&gt;</code> beside the signed-in account.</li>
 <li><strong>The grid is not changed.</strong> A sign-in on the grid

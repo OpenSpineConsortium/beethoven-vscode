@@ -11,7 +11,7 @@ import { BeethovenStore, findClaudeExecutable } from './store';
 import { VsCodeUI } from './ui';
 import { run } from '../core/shell';
 import { withoutClaudeCredentials } from '../core/services';
-import { accountEnvironment } from '../core/accounts';
+import { accountProcessEnv } from '../core/accounts';
 import { localClaudeStatus } from '../core/wizard';
 
 /** the fix that only opens the Settings editor: a person changes the value, and the change starts the check */
@@ -180,13 +180,15 @@ export class Troubleshooter implements vscode.Disposable {
 
   /**
    * The account setting or the engine's list changed. When the last report had something to say about the
-   * account, check again quietly (no repairs, no node probe), so neither the status bar nor an open panel keeps,
-   * until the next hourly sweep, a state the change has just fixed. Overlapping calls are dropped by run().
+   * account (one of its checks failed or warned; blocked and skipped ones wait on something else, which the
+   * change cannot fix), check again quietly (no repairs, no node probe), so the status bar does not keep, until
+   * the next hourly sweep, a state the change has just fixed. An open panel keeps its full report, which a quick
+   * one would turn half into skipped rows, and is told to check again. Overlapping calls are dropped by run().
    */
   async recheckAfterAccountChange(): Promise<void> {
-    if (!this.last?.reports.some((r) => ACCOUNT_NODES.includes(r.id) && r.status !== 'ok')) return;
+    if (!this.last?.reports.some((r) => ACCOUNT_NODES.includes(r.id) && (r.status === 'fail' || r.status === 'warn'))) return;
     const rep = await this.run({ repair: false, quick: true, quiet: true });
-    if (rep) this.panel?.webview.postMessage({ type: 'done', rep });
+    if (rep) this.panel?.webview.postMessage({ type: 'note', text: `Your Claude account changed; the status bar shows the new result (${rep.ok ? 'everything works' : rep.rootCauses.map((r) => r.title).join(', ')}). Press "Check and repair again" to see every check here.` });
   }
 
   private async openReport(rep: DiagReport): Promise<void> {
@@ -201,7 +203,7 @@ export class Troubleshooter implements vscode.Disposable {
     // only on the student's own subscription: an API key or token in VS Code's environment would bill it instead;
     // under the account beethoven.account names, like every Claude Code the edition starts on this laptop
     const exe = findClaudeExecutable();
-    const env = { ...withoutClaudeCredentials(), ...accountEnvironment(this.store.accountChoice()) };
+    const env = { ...withoutClaudeCredentials(), ...accountProcessEnv(this.store.accountChoice()) };
     const lc = await localClaudeStatus(exe, env);
     if (!lc.subscription) return void vscode.window.showWarningMessage(`Investigating with Claude runs only on your own Claude Pro or Max subscription, and Claude Code on this laptop is ${lc.ok ? lc.detail : 'not ready'}. Sign in with your subscription (Beethoven: Sign in to Claude on this laptop), then try again.`);
     const prompt = [
@@ -249,6 +251,7 @@ let layer='';
 function row(r){ if(r.layer!==layer){layer=r.layer;$('list').insertAdjacentHTML('beforeend','<h2>'+esc(layer)+'</h2>')}
  $('list').insertAdjacentHTML('beforeend','<div class="row"><span class="i '+r.status+'">'+icon[r.status]+'</span><span>'+esc(r.title)+'</span><span>'+esc(r.detail)+(r.rootCause?' <i>(because of '+esc(r.rootCause)+')</i>':'')+(r.repair?' <b>repair:</b> '+esc(r.repair):'')+'</span></div>')}
 window.addEventListener('message',e=>{const m=e.data;
+ if(m.type==='note'){$('sub').textContent=m.text}
  if(m.type==='node'){row(m.r);$('bar').style.width=Math.round(100*m.done/m.total)+'%';$('sub').textContent='Checked '+m.done+' of '+m.total}
  if(m.type==='done'){const rep=m.rep;$('bar').style.width='100%';$('sub').textContent='Finished '+new Date(rep.finished).toLocaleTimeString();
   $('ok').style.display=rep.ok?'block':'none';

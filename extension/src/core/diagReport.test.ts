@@ -52,3 +52,14 @@ test('the shared report carries verdicts and scrubbed details, and only failures
   assert.equal(worthSending(rep), true);
   assert.equal(worthSending({ ...rep, ok: true, rootCauses: [], reports: rep.reports.map((r) => ({ ...r, status: 'ok' as const })) }), false);
 });
+
+test('the Claude accounts\' labels and folders and the variables VS Code was started with are replaced whole', () => {
+  // what account.choice says when VS Code came from a shell after `bee-use`, outside the paths the patterns know
+  const detail = 'as laptop: Claude Code\'s default place; VS Code itself was started with CLAUDE_CONFIG_DIR set to /data/claude/jsmith-personal (the account jsmith-personal), so Claude Code in its terminals uses that folder; the domain remains, and so does the account main.';
+  const s = scrub(detail, { ...ctx, values: ['jsmith-personal', '/data/claude/jsmith-personal', 'laptop', 'main'] });
+  for (const bad of ['/data/claude', 'jsmith', 'laptop']) assert.ok(!s.includes(bad), `${bad} must not survive: ${s}`);
+  assert.match(s, /set to <id> \(the account <id>\)/, 'the folder is replaced whole before the label inside it');
+  assert.match(s, /as <id>: Claude Code's default place/);
+  assert.match(s, /the account <id>\.$/);
+  assert.match(s, /the domain remains/, 'whole values only: the label main leaves "domain" and "remains" alone');
+});

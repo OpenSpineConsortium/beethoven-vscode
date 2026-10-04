@@ -12,6 +12,7 @@ import * as path from 'node:path';
 import * as crypto from 'node:crypto';
 import type { DiagReport } from '../core/diagnostics';
 import { buildSharedReport, worthSending, REPORT_FIELDS, SharedReport } from '../core/diagReport';
+import { accountValues } from '../core/accounts';
 import { settings } from './settings';
 
 const INSTALL_KEY = 'beethoven.installId';
@@ -56,7 +57,7 @@ export class DiagSharer {
     const report = buildSharedReport(
       rep,
       { installId: this.installId(), product: 'beethoven-vscode', version: this.context.extension.packageJSON.version, gridScriptsVersion, vscode: vscode.version, os: `${os.platform()} ${os.release()}`, arch: os.arch(), errorLines },
-      { accessId: id?.accessId, email: id?.email, home: os.homedir(), words: [os.hostname(), os.userInfo().username] },
+      { accessId: id?.accessId, email: id?.email, home: os.homedir(), words: [os.hostname(), os.userInfo().username], values: accountValues(this.cfg().get<string>('account', '')) },
     );
     fs.writeFileSync(path.join(this.dir(), `${report.when.replace(/[:.]/g, '-')}-${report.signature}.json`), JSON.stringify(report, null, 1));
     return report;

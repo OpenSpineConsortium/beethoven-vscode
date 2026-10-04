@@ -24,7 +24,10 @@ The format follows Keep a Changelog; versions follow Semantic Versioning.
   says so once, the Beethoven view's *Claude on this laptop* row says so, the troubleshooter warns
   (the account list, the chosen account) without holding up any other check, and the setup carries
   on with Claude Code's usual sign-in. An account the engine took out of its rotation is still used,
-  as `bee-use` does, and can be signed in again from VS Code. The grid is not changed: grid scripts
+  as `bee-use` does, and can be signed in again from VS Code. A list that `bee` itself refuses (a
+  folder written with `~`, a row without its order, a label twice) is refused whole here too, and the
+  troubleshooter says why; Beethoven: Reset forgets the setting with the other settings; error reports
+  leave out your accounts' labels and folders. The grid is not changed: grid scripts
   8 still sign in at `~/.beethoven/claude`, and which of your accounts a grid job uses is the
   engine's decision. Not yet measured: whether the Claude Code extension for VS Code honours
   `CLAUDE_CONFIG_DIR` from the terminal environment; the maintainer checks this on a real machine

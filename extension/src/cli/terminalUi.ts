@@ -66,7 +66,7 @@ export class TerminalUI implements WizardUI {
       /* the URL is printed anyway */
     }
   }
-  runInteractive(title: string, command: string, args: string[], env?: Record<string, string>): Promise<number | null> {
+  runInteractive(title: string, command: string, args: string[], env?: Record<string, string | undefined>): Promise<number | null> {
     console.log(`\n== ${title}\n$ ${command} ${args.join(' ')}\n`);
     return new Promise((resolve) => {
       const child = spawn(command, args, { stdio: 'inherit', env: env ? { ...process.env, ...env } : process.env });

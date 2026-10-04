@@ -44,11 +44,17 @@ async function accountVariablesFollow(licensed: boolean): Promise<void> {
     await c.update('account', 'laptop', vscode.ConfigurationTarget.Global);
     await until('the label alone', () => col.get('BEE_ACCOUNT')?.value === 'laptop');
     assert.equal(col.get('CLAUDE_CONFIG_DIR'), undefined);
-    // a label the list does not offer: nothing, and one warning recorded for that label
+    // a label the list does not offer: nothing, and one warning for that label, however often it is looked at again
+    const shown = internal.accountWarnings();
     await c.update('account', 'third', vscode.ConfigurationTarget.Global);
     await until('nothing for an unlisted label', () => col.get('BEE_ACCOUNT') === undefined);
     assert.equal(col.get('CLAUDE_CONFIG_DIR'), undefined);
-    await until('the warning recorded once for that label', () => store.context.globalState.get('beethoven.accountWarned') === 'third');
+    await until('the warning recorded for that label', () => store.context.globalState.get('beethoven.accountWarned') === 'third');
+    write(moved);
+    for (let i = 0; i < 3; i++) await internal.warnAboutAccount();
+    await c.update('account', 'third', vscode.ConfigurationTarget.Global);
+    await new Promise((r) => setTimeout(r, 1500)); // past the list watcher's half second
+    assert.equal(internal.accountWarnings() - shown, 1, 'one warning for the label, not one per look (the list changed, three looks, the same value written again)');
     await c.update('account', 'second', vscode.ConfigurationTarget.Global);
     await until('the folder again', () => col.get('CLAUDE_CONFIG_DIR')?.value === moved);
     await until('the warning record cleared by a valid label', () => store.context.globalState.get('beethoven.accountWarned') === undefined);

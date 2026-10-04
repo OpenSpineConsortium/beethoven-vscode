@@ -3,7 +3,7 @@ import * as vscode from 'vscode';
 import { GridApi, GridStatus, GridClaudeStatus } from '../core/gridApi';
 import { BeethovenStore } from './store';
 import { testConnection, localClaudeStatus } from '../core/wizard';
-import { accountEnvironment, accountPlace, asLabel, inheritedConfigDir } from '../core/accounts';
+import { accountPlace, accountProcessEnv, asLabel, inheritedConfigDir } from '../core/accounts';
 
 type Kind = 'root' | 'worker' | 'account' | 'token' | 'job' | 'info';
 
@@ -172,9 +172,9 @@ export class BeethovenTree implements vscode.TreeDataProvider<Item> {
       choice.kind === 'account'
         ? `${base}. The setting "account" picks ${choice.label}: every integrated terminal of this window uses that account's sign-in (${accountPlace(choice)})${inherited ? `. ${inherited}` : ''}`
         : choice.kind === 'invalid' || choice.kind === 'remote'
-          ? choice.problem
+          ? `${choice.problem}${inherited ? ` ${inherited}.` : ''}`
           : `${base}${inherited ? `. ${inherited}` : ''}`;
-    const lc = await localClaudeStatus(claudeExecutable, accountEnvironment(choice));
+    const lc = await localClaudeStatus(claudeExecutable, accountProcessEnv(choice));
     const as = asLabel(choice);
     // a label that is not applied: the usual sign-in is what the terminals use, so that is what the row shows, with why
     if (choice.kind === 'invalid') return new Item('Claude on this laptop', 'account', { description: `${lc.detail}; the account setting "${choice.label}" is not used: click to fix it`, icon: 'warning', tooltip, command: { command: 'workbench.action.openSettings', title: 'Open the setting', arguments: ['beethoven.account'] } });

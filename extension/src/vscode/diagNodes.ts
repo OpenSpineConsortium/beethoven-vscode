@@ -8,7 +8,7 @@ import { DiagNode, CheckResult } from '../core/diagnostics';
 import { run, ssh, gridCli } from '../core/shell';
 import { WizardEnv, stepWsuSignIn, stepGithub, stepHuggingFace, stepSshKey, stepSshConfig, stepGridInstall, testConnection, pushTokens, licenseFingerprint, stepClaudeLocal } from '../core/wizard';
 import { GridRelay } from '../core/relay';
-import { ADD_COMMAND, DEFAULT_PLACE, accountEnvironment, accountPlace, inheritedConfigDir, readAccounts } from '../core/accounts';
+import { ACCOUNT_LABEL, ADD_COMMAND, DEFAULT_PLACE, accountPlace, accountProcessEnv, inheritedConfigDir, readAccounts } from '../core/accounts';
 import { BeethovenStore, findClaudeExecutable } from './store';
 import { isMcpRegistered, registerMcp } from './mcpRegister';
 import { TERMS_VERSION } from '../core/terms';
@@ -266,11 +266,15 @@ export function buildGraph(): DiagNode<DiagCtx>[] {
     assumption: `the account list the engine's bee command keeps on this computer (~/.beethoven/engine/accounts.json, or under BEE_REGISTRY_DIR or BEETHOVEN_HOME as the engine reads it) is absent, or present and readable; Beethoven reads it and never writes it`,
     manualFix: `add an account with "${ADD_COMMAND} <label>" in a terminal; a list that does not read is the engine's to repair, never Beethoven's`,
     futureRisk: 'the engine moving the list or changing its rows', source: 'extension/src/core/accounts.ts (readAccounts)',
-    async check() {
+    async check(ctx) {
       const list = readAccounts();
       if (list.ok) return ok(list.accounts.length ? `${list.accounts.length}: ${list.accounts.map((a) => a.label + (a.path === null ? ` (${DEFAULT_PLACE})` : '') + (a.enabled ? '' : ' (out of the rotation)')).join(', ')}` : 'present, empty');
-      // the engine's bee refuses a list it cannot read too; what a label in the setting then means is account.choice's to say
-      if (list.reason === 'unreadable') return ok(`${list.file} could not be read (${list.detail}); bee refuses it as well`, true);
+      // the engine's bee refuses a list it cannot read too; with a label in the setting account.choice warns about
+      // it already, together with what that means for the label, so one problem gives one warning
+      if (list.reason === 'unreadable') {
+        const c = ctx.store.accountChoice();
+        return ok(`${list.file} could not be read (${list.detail}); bee refuses it as well`, !(c.kind === 'invalid' && ACCOUNT_LABEL.test(c.label)));
+      }
       return ok(`no account list on this computer (${list.file})`);
     },
   });
@@ -287,7 +291,7 @@ export function buildGraph(): DiagNode<DiagCtx>[] {
       const inherited = inheritedConfigDir(c);
       if (c.kind === 'default') return ok(inherited ? `the setting is empty; ${inherited}` : "the default: Claude Code's own sign-in on this laptop");
       if (c.kind === 'remote') return ok(c.problem);
-      if (c.kind === 'invalid') return ok(c.problem, true);
+      if (c.kind === 'invalid') return ok(inherited ? `${c.problem} ${inherited}.` : c.problem, true);
       const notes: string[] = [];
       if (c.outOfRotation) notes.push(`the engine has it out of its rotation; the terminals use it all the same, as bee-use does, and "bee account enable ${c.label}" puts it back once it is signed in`);
       if (c.hibernateUntil && Date.parse(c.hibernateUntil) > Date.now()) notes.push(`the engine rests this account until ${new Date(c.hibernateUntil).toLocaleString()}`);
@@ -436,9 +440,9 @@ export function buildGraph(): DiagNode<DiagCtx>[] {
     async check(ctx) {
       const c = ctx.store.accountChoice();
       const as = c.kind === 'account' ? ` for ${c.label}` : '';
-      return (await isMcpRegistered(accountEnvironment(c))) ? ok(`registered${as}`) : fail(`not registered${as}`);
+      return (await isMcpRegistered(accountProcessEnv(c))) ? ok(`registered${as}`) : fail(`not registered${as}`);
     },
-    async repair(ctx) { const r = await registerMcp(ctx.extensionPath, ctx.env.settings.sshAlias, ctx.log, accountEnvironment(ctx.store.accountChoice())); return { ok: r.ok, detail: `${r.how}: ${r.detail.split('\n')[0]}` }; },
+    async repair(ctx) { const r = await registerMcp(ctx.extensionPath, ctx.env.settings.sshAlias, ctx.log, accountProcessEnv(ctx.store.accountChoice())); return { ok: r.ok, detail: `${r.how}: ${r.detail.split('\n')[0]}` }; },
   });
   return G;
 }

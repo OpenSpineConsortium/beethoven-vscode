@@ -26,7 +26,7 @@ import { WorkerJobSpec, describeWall } from './core/slurm';
 import { BeethovenResult } from './core/protocol';
 import { run, expandHome, gridCliLine } from './core/shell';
 import { findClaudeExecutable } from './vscode/store';
-import { AccountChoice, accountEnvironment, accountPlace, accountsFile, inheritedConfigDir } from './core/accounts';
+import { AccountChoice, accountPlace, accountProcessEnv, accountsFile, inheritedConfigDir } from './core/accounts';
 import { adviseOldEdition, oldEditionInstalled, registerOldCommandAliases } from './vscode/oldEdition';
 
 let output: vscode.OutputChannel;
@@ -96,7 +96,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<{ _int
     output.appendLine(`account: ${describeAccount(store.accountChoice())}`);
     await warnAboutAccount(context);
     tree.refresh();
-    void troubleshooter?.recheckAfterAccountChange();
+    void troubleshooter?.recheckAfterAccountChange().catch((e) => output.appendLine(`account check: ${e}`));
     void followAccountWithMcp(context).catch((e) => output.appendLine(`MCP for the account: ${e}`));
   };
   // the engine replaces the file whole (a temporary file renamed over it): one change can arrive as several events
@@ -109,14 +109,24 @@ export async function activate(context: vscode.ExtensionContext): Promise<{ _int
     }, 500);
   };
   const list = accountsFile();
-  const listWatcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(vscode.Uri.file(path.dirname(list)), path.basename(list)));
-  // VS Code's watcher outside the workspace is not promised for a folder that does not exist yet (no list
-  // before the first `bee account add`): a once-a-minute look at the file covers that. A missing file is
-  // reported once with every field zeroed, so only a real change counts.
-  const polled = (cur: fs.Stats, prev: fs.Stats) => {
-    if (cur.mtimeMs !== prev.mtimeMs || cur.ino !== prev.ino || cur.size !== prev.size) listChanged();
+  const folder = path.dirname(list);
+  const watchList = () => {
+    const w = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(vscode.Uri.file(folder), path.basename(list)));
+    context.subscriptions.push(w, w.onDidCreate(listChanged), w.onDidChange(listChanged), w.onDidDelete(listChanged));
   };
-  fs.watchFile(list, { interval: 60_000 }, polled);
+  // VS Code's watcher outside the workspace is not promised for a folder that does not exist yet (no list
+  // before the first `bee account add`): until the folder is there a once-a-minute look at the file stands in,
+  // then hands over. Never both: the look compares only with its own last look, so it would report again, up to
+  // a minute later, every change the watcher already had. A missing file reads with every field zeroed.
+  const polled = (cur: fs.Stats, prev: fs.Stats) => {
+    if (cur.mtimeMs === prev.mtimeMs && cur.ino === prev.ino && cur.size === prev.size) return;
+    listChanged();
+    if (!fs.existsSync(folder)) return;
+    fs.unwatchFile(list, polled);
+    watchList();
+  };
+  if (fs.existsSync(folder)) watchList();
+  else fs.watchFile(list, { interval: 60_000 }, polled);
   context.subscriptions.push(
     license.onDidChange(() => {
       tree.refresh();
@@ -125,10 +135,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<{ _int
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (e.affectsConfiguration('beethoven.account')) void accountChanged();
     }),
-    listWatcher,
-    listWatcher.onDidCreate(listChanged),
-    listWatcher.onDidChange(listChanged),
-    listWatcher.onDidDelete(listChanged),
     {
       dispose: () => {
         fs.unwatchFile(list, polled);
@@ -242,6 +248,9 @@ function describeAccount(c: AccountChoice): string {
   return c.kind === 'remote' ? `"${c.label}" is not applied in a remote window` : `"${c.label}" is not applied`;
 }
 
+/** how many account warnings this window has shown, so the integration test can tell one from several */
+let accountWarningsShown = 0;
+
 /**
  * beethoven.account names something the engine's list does not offer: the terminals keep the usual sign-in,
  * and the student hears it once per label (the Beethoven view and the diagnostics say it every time). A remote
@@ -258,6 +267,7 @@ async function warnAboutAccount(context: vscode.ExtensionContext): Promise<void>
   output.appendLine(`account: ${choice.problem}`);
   if (context.globalState.get<string>(key) === choice.label) return;
   await context.globalState.update(key, choice.label);
+  accountWarningsShown++;
   void vscode.window.showWarningMessage(choice.problem, 'Open the setting').then((pick) => {
     if (pick) void vscode.commands.executeCommand('workbench.action.openSettings', 'beethoven.account');
   });
@@ -272,7 +282,7 @@ async function warnAboutAccount(context: vscode.ExtensionContext): Promise<void>
 async function followAccountWithMcp(context: vscode.ExtensionContext): Promise<void> {
   if (!store.config.get<boolean>('mcp.autoRegister', true) || !store.settings().accessId) return;
   if (!termsRecord(context) || !license.allowed('beethoven.registerMcp').ok) return;
-  const env = accountEnvironment(store.accountChoice());
+  const env = accountProcessEnv(store.accountChoice());
   if (await isMcpRegistered(env)) return;
   if (!(await localClaudeStatus(findClaudeExecutable(), env)).subscription) return;
   await commandRegisterMcp(context, true);
@@ -339,7 +349,7 @@ async function commandSetup(context: vscode.ExtensionContext): Promise<void> {
   else p.finish('Setup finished. The Beethoven view shows when the grid container is ready; then start a worker.', true);
   await store.hydrateEnvironment();
   tree.refresh();
-  if (!failed && store.config.get<boolean>('mcp.autoRegister', true) && !(await isMcpRegistered(accountEnvironment(store.accountChoice())))) await commandRegisterMcp(context, true);
+  if (!failed && store.config.get<boolean>('mcp.autoRegister', true) && !(await isMcpRegistered(accountProcessEnv(store.accountChoice())))) await commandRegisterMcp(context, true);
 }
 
 function mergeReports(base: StepReport[], updates: StepReport[]): StepReport[] {
@@ -622,7 +632,7 @@ async function commandRegisterMcp(context: vscode.ExtensionContext, quiet = fals
   const s = store.settings();
   // with the Claude account the setting names: the bridge lands where the terminals' Claude Code looks
   const choice = store.accountChoice();
-  const r = await registerMcp(context.extensionPath, s.sshAlias, (l) => output.appendLine(l), accountEnvironment(choice));
+  const r = await registerMcp(context.extensionPath, s.sshAlias, (l) => output.appendLine(l), accountProcessEnv(choice));
   const as = choice.kind === 'account' ? `, for your account ${choice.label}` : '';
   output.appendLine(`MCP: ${r.how}${as} ${r.detail}`);
   if (!quiet || !r.ok) {
@@ -667,7 +677,7 @@ async function commandReset(context: vscode.ExtensionContext): Promise<void> {
   const items: Array<vscode.QuickPickItem & { id: string }> = [
     { id: 'tokens', label: 'Tokens in the OS keychain', description: retired.length ? `GitHub, Hugging Face and the ${retired.map((r) => r.name).join(', ')}` : 'GitHub and Hugging Face', picked: true },
     { id: 'ssh', label: 'SSH key and the config block', description: `${s.identityFile}, the Beethoven block in ~/.ssh/config`, picked: true },
-    { id: 'settings', label: 'Beethoven settings', description: 'AccessID and preferences', picked: true },
+    { id: 'settings', label: 'Beethoven settings', description: 'AccessID, the Claude account for the terminals, and preferences', picked: true },
     { id: 'mcp', label: 'MCP bridge registration', description: 'claude mcp remove beethoven (Claude Code\'s own sign-in and the account the setting names)', picked: true },
     { id: 'grid', label: 'Beethoven on the grid', description: 'stop workers, remove ~/.beethoven and the bashrc block (the container stays)', picked: false },
     { id: 'gridRoot', label: 'The container and workspaces on the grid storage', description: 'rebuilt by the next install (7 min)', picked: false },
@@ -691,7 +701,7 @@ async function commandReset(context: vscode.ExtensionContext): Promise<void> {
   if (ids.has('mcp')) {
     // Claude Code keeps the registration per sign-in folder: the chosen account's, and the usual one it may
     // have had before an account was chosen
-    const chosen = accountEnvironment(store.accountChoice());
+    const chosen = accountProcessEnv(store.accountChoice());
     for (const env of chosen.CLAUDE_CONFIG_DIR ? [chosen, {}] : [chosen]) {
       const r = await run(findClaudeExecutable(), ['mcp', 'remove', '--scope', 'user', 'beethoven'], { timeoutMs: 60_000, env });
       done.push(`mcp${env.BEE_ACCOUNT ? ` (${env.BEE_ACCOUNT})` : ''}: ${(r.stdout || r.stderr).trim().split('\n')[0] || 'removed'}`);
@@ -709,7 +719,8 @@ async function commandReset(context: vscode.ExtensionContext): Promise<void> {
     done.push('ssh block and key removed (the grid still lists the old public key; harmless)');
   }
   if (ids.has('settings')) {
-    for (const k of ['accessId', 'wsuEmail', 'gridRoot', 'twoFactorDone']) await store.config.forget(k);
+    // the account's label too, as the privacy statement says: a new laptop's terminals use Claude Code's own sign-in
+    for (const k of ['accessId', 'wsuEmail', 'gridRoot', 'twoFactorDone', 'account']) await store.config.forget(k);
     await context.globalState.update('beethoven.offered', undefined);
     await context.globalState.update('beethoven.osBannerExplained', undefined);
     done.push('settings cleared');
@@ -848,6 +859,9 @@ const _internal = {
   makeCtx: (s: BeethovenStore, withNodeProbe: boolean, log: (l: string) => void) => makeCtx(s, s.wizardEnv(new SetupPanelFreeUI(output)), s.context.extensionPath, withNodeProbe, log),
   licenseGate: () => license,
   sharer: () => sharer,
+  /** the account warning: look again as a changed setting or list does, and count what was shown */
+  warnAboutAccount: () => warnAboutAccount(context0!),
+  accountWarnings: () => accountWarningsShown,
   terms: {
     record: (edition: TermsEdition = 'trial') => termsRecord(context0!, edition),
     version: TERMS_VERSION,

@@ -4,6 +4,11 @@ import * as path from 'node:path';
 import { WizardUI } from '../core/wizard';
 import { resolveExecutable } from '../core/shell';
 
+/** A terminal's added variables; VS Code skips one given as undefined but removes one given as null. */
+export function terminalEnv(env?: Record<string, string | undefined>): Record<string, string | null> | undefined {
+  return env && Object.fromEntries(Object.entries(env).map(([k, v]) => [k, v ?? null]));
+}
+
 export class VsCodeUI implements WizardUI {
   constructor(private output: vscode.OutputChannel) {}
 
@@ -43,10 +48,10 @@ export class VsCodeUI implements WizardUI {
    * Runs `command args` as the terminal's own process (shellPath), so there is no shell
    * quoting at all and the exit code is exact. The student types into it (password, code).
    */
-  async runInteractive(title: string, command: string, args: string[], env?: Record<string, string>): Promise<number | null> {
+  async runInteractive(title: string, command: string, args: string[], env?: Record<string, string | undefined>): Promise<number | null> {
     const shellPath = resolveExecutable(command);
     const fullArgs = path.basename(shellPath).startsWith('ssh') ? ['-o', 'AddressFamily=inet', '-o', 'GSSAPIAuthentication=no', ...args] : args;
-    const term = vscode.window.createTerminal({ name: title, shellPath, shellArgs: fullArgs, isTransient: true, env });
+    const term = vscode.window.createTerminal({ name: title, shellPath, shellArgs: fullArgs, isTransient: true, env: terminalEnv(env) });
     term.show(false);
     // the variables' names only: the log never carries a value
     this.output.appendLine(`[terminal] ${shellPath} ${args.map((a) => (a.includes(' ') ? JSON.stringify(a) : a)).join(' ')}${env && Object.keys(env).length ? ` (with ${Object.keys(env).join(', ')})` : ''}`);
