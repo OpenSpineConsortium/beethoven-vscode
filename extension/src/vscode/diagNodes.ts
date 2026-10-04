@@ -8,7 +8,7 @@ import { DiagNode, CheckResult } from '../core/diagnostics';
 import { run, ssh, gridCli } from '../core/shell';
 import { WizardEnv, stepWsuSignIn, stepGithub, stepHuggingFace, stepSshKey, stepSshConfig, stepGridInstall, testConnection, pushTokens, licenseFingerprint, stepClaudeLocal } from '../core/wizard';
 import { GridRelay } from '../core/relay';
-import { ADD_COMMAND, readAccounts } from '../core/accounts';
+import { ADD_COMMAND, DEFAULT_PLACE, accountEnvironment, accountPlace, inheritedConfigDir, readAccounts } from '../core/accounts';
 import { BeethovenStore, findClaudeExecutable } from './store';
 import { isMcpRegistered, registerMcp } from './mcpRegister';
 import { TERMS_VERSION } from '../core/terms';
@@ -258,32 +258,41 @@ export function buildGraph(): DiagNode<DiagCtx>[] {
   });
   add(tokenNode('account.github', stepGithub, 'GitHub token'));
   add(tokenNode('account.huggingface', stepHuggingFace, 'Hugging Face token'));
-  // the student's own Claude accounts (beethoven.account): the engine's list, read and never written, and the one label chosen from it
+  // the student's own Claude accounts (beethoven.account): the engine's list, read and never written, and the one
+  // label chosen from it. A label the list does not offer leaves the terminals on the usual sign-in, which is
+  // checked as before, so these two warn and never block the sign-in check or the grid below it.
   add({
     id: 'account.list', title: 'Your Claude account list', layer: 'account', dependsOn: ['laptop.os'],
-    assumption: `the account list the engine's bee command keeps on this computer (~/.beethoven/engine/accounts.json) is absent, or present and readable; Beethoven reads it and never writes it`,
+    assumption: `the account list the engine's bee command keeps on this computer (~/.beethoven/engine/accounts.json, or under BEE_REGISTRY_DIR or BEETHOVEN_HOME as the engine reads it) is absent, or present and readable; Beethoven reads it and never writes it`,
     manualFix: `add an account with "${ADD_COMMAND} <label>" in a terminal; a list that does not read is the engine's to repair, never Beethoven's`,
     futureRisk: 'the engine moving the list or changing its rows', source: 'extension/src/core/accounts.ts (readAccounts)',
-    async check(ctx) {
+    async check() {
       const list = readAccounts();
-      if (list.ok) return ok(list.accounts.length ? `${list.accounts.length}: ${list.accounts.map((a) => a.label + (a.enabled ? '' : ' (off)')).join(', ')}` : 'present, empty');
-      if (list.reason === 'unreadable') return fail(`${list.file} could not be read: ${list.detail}`);
-      return ctx.env.settings.account ? fail(`no account list on this computer (${list.file}), and the setting "account" names "${ctx.env.settings.account}"`) : skip('no account list on this computer; none is needed while the setting "account" is empty');
+      if (list.ok) return ok(list.accounts.length ? `${list.accounts.length}: ${list.accounts.map((a) => a.label + (a.path === null ? ` (${DEFAULT_PLACE})` : '') + (a.enabled ? '' : ' (out of the rotation)')).join(', ')}` : 'present, empty');
+      // the engine's bee refuses a list it cannot read too; what a label in the setting then means is account.choice's to say
+      if (list.reason === 'unreadable') return ok(`${list.file} could not be read (${list.detail}); bee refuses it as well`, true);
+      return ok(`no account list on this computer (${list.file})`);
     },
   });
   add({
-    id: 'account.choice', title: 'Claude account for the terminals', layer: 'account', dependsOn: ['laptop.os'],
-    assumption: `the setting beethoven.account is empty (Claude Code's own sign-in, as before) or names a listed, enabled account, whose directory every Claude Code terminal Beethoven opens or configures gets as CLAUDE_CONFIG_DIR (with BEE_ACCOUNT)`,
+    id: 'account.choice', title: 'Claude account for the terminals', layer: 'account', dependsOn: ['laptop.os', 'account.list'],
+    assumption: `the setting beethoven.account is empty (Claude Code's own sign-in, as before) or names a listed account, whose directory every integrated terminal of a local window gets as CLAUDE_CONFIG_DIR with the label as BEE_ACCOUNT (the label alone for an account at ${DEFAULT_PLACE}); a remote window's terminals get neither`,
     manualFix: `Settings > Beethoven > Account: pick a label from your account list, add the account with "${ADD_COMMAND} <label>" in a terminal, or leave the setting empty`,
     fixCommand: { command: 'workbench.action.openSettings', title: 'Open the setting', arguments: ['beethoven.account'] },
     futureRisk: 'the Claude Code VS Code extension not reading CLAUDE_CONFIG_DIR from the terminal environment (not yet measured on a real machine)',
-    source: 'extension/src/core/accounts.ts (chooseAccount), extension/src/vscode/store.ts (hydrateEnvironment)',
+    source: 'extension/src/core/accounts.ts (chooseAccount), extension/src/vscode/store.ts (accountChoice)',
     async check(ctx) {
+      // the store brings the terminals' variables in line as it reads, so this reports what the next terminal gets
       const c = ctx.store.accountChoice();
-      if (c.kind === 'default') return ok("the default: Claude Code's own sign-in on this laptop");
-      if (c.kind === 'invalid') return fail(c.problem);
-      const resting = !!c.hibernateUntil && Date.parse(c.hibernateUntil) > Date.now();
-      return ok(`as ${c.label}: ${c.path}${resting ? ` (the engine rests this account until ${new Date(c.hibernateUntil!).toLocaleString()})` : ''}`, resting);
+      const inherited = inheritedConfigDir(c);
+      if (c.kind === 'default') return ok(inherited ? `the setting is empty; ${inherited}` : "the default: Claude Code's own sign-in on this laptop");
+      if (c.kind === 'remote') return ok(c.problem);
+      if (c.kind === 'invalid') return ok(c.problem, true);
+      const notes: string[] = [];
+      if (c.outOfRotation) notes.push(`the engine has it out of its rotation; the terminals use it all the same, as bee-use does, and "bee account enable ${c.label}" puts it back once it is signed in`);
+      if (c.hibernateUntil && Date.parse(c.hibernateUntil) > Date.now()) notes.push(`the engine rests this account until ${new Date(c.hibernateUntil).toLocaleString()}`);
+      if (inherited) notes.push(inherited);
+      return ok(`as ${c.label}: ${accountPlace(c)}${notes.length ? `; ${notes.join('; ')}` : ''}`, notes.length > 0);
     },
   });
   add({ id: 'account.claude', title: 'Claude on this laptop', layer: 'account', dependsOn: ['account.wsu', 'vscode.claude-binary', 'account.choice'],
@@ -421,11 +430,15 @@ export function buildGraph(): DiagNode<DiagCtx>[] {
 
   // ---------------------------------------------------------------- the bridge to the local Claude
   add({
-    id: 'vscode.mcp-bridge', title: 'Claude Code bridge to the grid (MCP)', layer: 'vscode', dependsOn: ['vscode.claude-binary', 'network.grid-login'],
-    assumption: 'the beethoven MCP server is registered with Claude Code and connects', manualFix: 'Beethoven: Connect the Claude Code extension to the grid',
+    id: 'vscode.mcp-bridge', title: 'Claude Code bridge to the grid (MCP)', layer: 'vscode', dependsOn: ['vscode.claude-binary', 'network.grid-login', 'account.choice'],
+    assumption: 'the beethoven MCP server is registered with Claude Code, under the account the setting names when it names one (Claude Code keeps its servers per sign-in folder), and connects', manualFix: 'Beethoven: Connect the Claude Code extension to the grid',
     futureRisk: 'claude mcp CLI changes; Electron-as-node removed from VS Code', source: 'extension/src/vscode/mcpRegister.ts',
-    async check() { return (await isMcpRegistered()) ? ok('registered') : fail('not registered'); },
-    async repair(ctx) { const r = await registerMcp(ctx.extensionPath, ctx.env.settings.sshAlias, ctx.log); return { ok: r.ok, detail: `${r.how}: ${r.detail.split('\n')[0]}` }; },
+    async check(ctx) {
+      const c = ctx.store.accountChoice();
+      const as = c.kind === 'account' ? ` for ${c.label}` : '';
+      return (await isMcpRegistered(accountEnvironment(c))) ? ok(`registered${as}`) : fail(`not registered${as}`);
+    },
+    async repair(ctx) { const r = await registerMcp(ctx.extensionPath, ctx.env.settings.sshAlias, ctx.log, accountEnvironment(ctx.store.accountChoice())); return { ok: r.ok, detail: `${r.how}: ${r.detail.split('\n')[0]}` }; },
   });
   return G;
 }

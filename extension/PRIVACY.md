@@ -1,6 +1,6 @@
 # Beethoven for VS Code privacy statement
 
-Version 7, 2026-10-04. Part of the Beethoven for VS Code Trial Edition License Agreement
+Version 8, 2026-10-04. Part of the Beethoven for VS Code Trial Edition License Agreement
 (LICENSE.txt) and of the Beethoven for VS Code Full Edition License Agreement (LICENSE-FULL.txt).
 You can save and print this text; it is also on the Beethoven support page.
 
@@ -13,8 +13,8 @@ provided by or on behalf of any school, and Licensor is not acting for one.
 
 | Data | Where | Why | You control it by |
 |---|---|---|---|
-| Beethoven for VS Code settings (AccessID, hostnames, worker defaults, the label of the Claude account you chose) | VS Code settings | to reach your grid account; to pick which of your own Claude accounts the Claude Code terminals use | editing Settings, or Beethoven: Reset |
-| Your Claude account list, if the engine's `bee` command keeps one on this computer (`~/.beethoven/engine/accounts.json`: the labels and folder paths of your own Claude sign-ins, which are on and which rest; nothing from inside a sign-in folder) | the engine's folder, written by the engine only | read, so that the setting `beethoven.account` can name one of them; Beethoven for VS Code never writes it and never reads inside a sign-in folder | the `bee` command; the setting `beethoven.account` |
+| Beethoven for VS Code settings (AccessID, hostnames, worker defaults, the label of the Claude account you chose) | VS Code settings | to reach your grid account; to pick which of your own Claude accounts Claude Code uses in every integrated terminal of a Visual Studio Code window on your laptop (not in a remote window) | editing Settings, or Beethoven: Reset |
+| Your Claude account list, if the engine's `bee` command keeps one on this computer (`~/.beethoven/engine/accounts.json`, or where the engine's `BEE_REGISTRY_DIR` or `BEETHOVEN_HOME` puts it: the labels and folder paths of your own Claude sign-ins, which are on and which rest; nothing from inside a sign-in folder) | the engine's folder, written by the engine only | read, so that the setting `beethoven.account` can name one of them; Beethoven for VS Code never writes it and never reads inside a sign-in folder | the `bee` command; the setting `beethoven.account` |
 | Your GitHub and Hugging Face tokens | your operating system's credential store (VS Code SecretStorage) | so your own tools can use them on your laptop and, copied, in your grid account | Beethoven: Manage stored tokens; revoking the token at the service |
 | Your license key and the institutional identity you signed in with (AccessID, e-mail) | `~/.beethoven-local` (on a computer that ran an earlier release: `~/.ashley-local`) and VS Code's state | to check that the license names you | Beethoven: License (remove the key); Beethoven: Reset |
 | Your acceptance of the agreement: its version and text hashes, the statements you ticked with their wording, your typed name, the time, and the exact texts shown | `terms.json` and `terms/<version>/` in the same folder; VS Code's state | to prove the agreement and its terms, for you and for Licensor | it is yours to read, copy and print; Beethoven: Reset removes it |

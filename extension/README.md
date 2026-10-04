@@ -57,9 +57,11 @@ Read this before installing. It is the complete list.
   Claude Code's yes-or-no answer about whether it is signed in.
 - **Your own Claude accounts.** If the engine's `bee account add <label>` keeps an account list on
   this computer (`~/.beethoven/engine/accounts.json`), Beethoven reads it and never writes it, so
-  the setting `beethoven.account` can pick which of your own accounts the Claude Code terminals it
-  opens use. Nothing is read inside a sign-in folder and nothing is copied between accounts; your
-  grid worker's account is not changed by the setting.
+  the setting `beethoven.account` can pick which of your own accounts Claude Code uses in every
+  integrated terminal of a local VS Code window, the ones you open yourself included (Beethoven
+  sets `CLAUDE_CONFIG_DIR` and `BEE_ACCOUNT` there, as `bee-use` does; a remote window is left as
+  it is). Nothing is read inside a sign-in folder and nothing is copied between accounts; your grid
+  worker's account is not changed by the setting.
 - **Terminals and SSH.** Beethoven writes a managed block in `~/.ssh/config`, creates an SSH key,
   opens terminals that run `ssh` to your grid account, and installs its scripts there
   (`~/.beethoven/bin`). It starts Slurm jobs in your account: a persistent worker that runs the
@@ -68,7 +70,9 @@ Read this before installing. It is the complete list.
 - **Remote-SSH.** Beethoven sets `remote.SSH.connectTimeout` and `remote.SSH.remotePlatform` for the
   node it connects you to.
 - **MCP.** Beethoven registers an MCP server named `beethoven` with the Claude Code extension
-  (`claude mcp add-json`, user scope) so the Claude on your laptop can hand work to the worker.
+  (`claude mcp add-json`, user scope, under the account `beethoven.account` names when it names
+  one: Claude Code keeps its servers per sign-in folder and writes them there itself) so the Claude
+  on your laptop can hand work to the worker.
 - **Access check.** Beethoven verifies your access key offline against signing keys shipped with it,
   and fetches a signed list of withdrawn keys once a day from the address published with the
   support site (`services.json`, or the setting `beethoven.licenseRevocationUrl`). Obtaining a key

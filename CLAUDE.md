@@ -50,8 +50,9 @@ the Desktop folder is `ashley` until the maintainer renames it. The code is prop
   trap; IPC under `/dev/shm`; every job has a wall time.
 - **Terms:** the first-run agreement is `extension/LICENSE.txt` (Trial Edition); `LICENSE-FULL.txt`
   is shown only when a non-trial key is registered. Change the texts and `TERMS_VERSION` together
-  (integer; 6 since 5.0.0 dropped the API key). Never pre-tick a box; the button label is part of
-  the record.
+  (integer; 8 since 5.0.0 allowed several Claude accounts of one person and said that every
+  integrated terminal of a local window gets the chosen one, after 6 when it dropped the API key and
+  7, never shipped). Never pre-tick a box; the button label is part of the record.
 - **The old names are aliases, never silent breaks.** Installed builds still use them: Ashley for VS
   Code 3.0.0 reads `https://openspineconsortium.com/ashley/services.json` and accepts only `ASHLEY1.`
   keys and `ASHLEYREV1` lists; grid scripts before 7 and the browser edition up to 7.0.0 name

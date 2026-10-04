@@ -3,7 +3,7 @@ import * as vscode from 'vscode';
 import { GridApi, GridStatus, GridClaudeStatus } from '../core/gridApi';
 import { BeethovenStore } from './store';
 import { testConnection, localClaudeStatus } from '../core/wizard';
-import { accountEnvironment, asLabel } from '../core/accounts';
+import { accountEnvironment, accountPlace, asLabel, inheritedConfigDir } from '../core/accounts';
 
 type Kind = 'root' | 'worker' | 'account' | 'token' | 'job' | 'info';
 
@@ -164,19 +164,28 @@ export class BeethovenTree implements vscode.TreeDataProvider<Item> {
 
   /** Claude Code's own sign-in on this laptop (status only, the wizard's step "Claude on this laptop"), under the account beethoven.account names when it names one. */
   private async claudeOnLaptop(claudeExecutable: string): Promise<Item> {
+    // the store brings the terminals' variables in line as it reads, so the row shows what the next terminal gets
     const choice = this.store.accountChoice();
-    const tooltip = `Claude Code on this laptop, signed in with your own Claude Pro or Max subscription. Beethoven only checks; it stores nothing${choice.kind === 'account' ? `. The setting "account" picks ${choice.label}: the terminals Beethoven opens use that account's sign-in` : ''}`;
-    // a label the list does not offer: the row says so, and the click opens the setting
-    if (choice.kind === 'invalid') return new Item('Claude on this laptop', 'account', { description: `the account setting "${choice.label}" is not used: click to fix it`, icon: 'warning', tooltip: choice.problem, command: { command: 'workbench.action.openSettings', title: 'Open the setting', arguments: ['beethoven.account'] } });
+    const inherited = inheritedConfigDir(choice);
+    const base = 'Claude Code on this laptop, signed in with your own Claude Pro or Max subscription. Beethoven only checks; it stores nothing';
+    const tooltip =
+      choice.kind === 'account'
+        ? `${base}. The setting "account" picks ${choice.label}: every integrated terminal of this window uses that account's sign-in (${accountPlace(choice)})${inherited ? `. ${inherited}` : ''}`
+        : choice.kind === 'invalid' || choice.kind === 'remote'
+          ? choice.problem
+          : `${base}${inherited ? `. ${inherited}` : ''}`;
     const lc = await localClaudeStatus(claudeExecutable, accountEnvironment(choice));
     const as = asLabel(choice);
-    if (!lc.ok) return new Item('Claude on this laptop', 'account', { description: lc.detail + as, icon: 'warning', tooltip });
-    if (lc.loggedIn && lc.subscription) return new Item('Claude on this laptop', 'account', { description: lc.detail + as, icon: 'pass', tooltip });
+    // a label that is not applied: the usual sign-in is what the terminals use, so that is what the row shows, with why
+    if (choice.kind === 'invalid') return new Item('Claude on this laptop', 'account', { description: `${lc.detail}; the account setting "${choice.label}" is not used: click to fix it`, icon: 'warning', tooltip, command: { command: 'workbench.action.openSettings', title: 'Open the setting', arguments: ['beethoven.account'] } });
+    const remote = choice.kind === 'remote' ? `; the account setting "${choice.label}" is not applied in a remote window` : '';
+    if (!lc.ok) return new Item('Claude on this laptop', 'account', { description: lc.detail + as + remote, icon: 'warning', tooltip });
+    if (lc.loggedIn && lc.subscription) return new Item('Claude on this laptop', 'account', { description: lc.detail + as + remote, icon: 'pass', tooltip });
     return new Item('Claude on this laptop', 'account', {
-      description: `${lc.detail}${as}: click to sign in`,
+      description: `${lc.detail}${as}${remote}${remote ? '' : ': click to sign in'}`,
       icon: lc.loggedIn ? 'warning' : 'circle-outline',
       tooltip,
-      command: { command: 'beethoven.claudeLocalSignIn', title: 'Sign in to Claude on this laptop' },
+      command: remote ? undefined : { command: 'beethoven.claudeLocalSignIn', title: 'Sign in to Claude on this laptop' },
     });
   }
 

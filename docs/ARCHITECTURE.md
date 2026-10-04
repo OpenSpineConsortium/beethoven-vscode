@@ -176,36 +176,64 @@ expiry). The heartbeat notices when it ends; the extension asks for step 12 agai
 ## Several accounts of one person: `beethoven.account`
 
 Decided by the maintainer on 2026-10-04 (the plan item *ACCOUNT_SWITCH_CLIENTS.md*, 2): a student
-may hold several Claude accounts of their own, and the engine (`bee`, the `beethoven-agents`
+may hold several Claude accounts of their own, and the engine (`bee`, the `beethoven-research`
 repository, not installed with this edition) keeps the list of their sign-in directories. This
 edition reads that list and lets the student pick one for the laptop. "One person, one Claude
 account" became "one person, their own accounts": never pooled, never anyone else's.
 
-- **The list is the engine's file, read only.** `~/.beethoven/engine/accounts.json` holds `version`
-  and, per account, `label`, `path`, `enabled`, `order` and `hibernate_until`; nothing from inside a
-  sign-in directory. Sign-in directories are `~/.beethoven/accounts/<label>/claude`; the account
-  `main` is a link to the edition's own `~/.beethoven/claude`. Labels are lower-case letters, digits
-  and hyphens (`ACCOUNT_LABEL` in `core/accounts.ts`). Beethoven never writes the file, never reads
-  inside a sign-in directory (the one thing ever asked of one is `claude auth status`), and never
-  copies, moves or links a credential between two directories: the switch is which directory the
-  next Claude Code gets, nothing else. `usage/<label>.json` beside the list is not read by this
-  edition.
+- **The list is the engine's file, read only.** `~/.beethoven/engine/accounts.json` (or
+  `$BEE_REGISTRY_DIR/accounts.json`, else `$BEETHOVEN_HOME/engine/accounts.json`: the engine's own
+  lookup, `accountsFile` in `core/accounts.ts`) holds `version` and, per account, `label`, `path`,
+  `enabled`, `order` and `hibernate_until`; nothing from inside a sign-in directory. Sign-in
+  directories are `~/.beethoven/accounts/<label>/claude`; the account `main` is a link to the
+  edition's own `~/.beethoven/claude`; a `path` of `null` (`bee account add <label>
+  --default-location`) is Claude Code's default place, where `CLAUDE_CONFIG_DIR` stays unset. A row
+  the engine would refuse (a label that breaks its rule, a folder that is missing, empty or not
+  absolute) is dropped. Labels are lower-case letters, digits and hyphens, not starting with a
+  hyphen, at most 32 (`ACCOUNT_LABEL`, the engine's `AccountRecord` pattern). `enabled` is the
+  engine's rotation only: `bee-use` and `bee account login` take an account that is out of it, and
+  so does this edition, which is also how the student signs one in again after the engine set it
+  aside. Beethoven never writes the file, never reads inside a sign-in directory (what it asks of
+  one it asks of Claude Code started there: `claude auth status`, and `claude mcp` for the bridge),
+  and never copies, moves or links a credential between two directories: the switch is which
+  directory the next Claude Code gets, nothing else. `usage/<label>.json` beside the list is not
+  read by this edition.
 - **What the terminals get.** With `beethoven.account` empty (the default) nothing changes: the
   terminals and the Claude Code extension use Claude Code's own sign-in, as in every build before.
-  With a label that is listed and enabled, `hydrateEnvironment` (`vscode/store.ts`) puts
+  With a listed label, `BeethovenStore.accountChoice` (`vscode/store.ts`) puts
   `CLAUDE_CONFIG_DIR=<that account's path>` and `BEE_ACCOUNT=<label>` into the persistent
-  `environmentVariableCollection`, so every integrated terminal gets them; the terminal the wizard
-  opens for `claude auth login` gets them explicitly as well (the `env` of `WizardUI.runInteractive`),
-  and so does *Investigate the failure with Claude* (`claude -p` on the laptop). These are the two
-  variables `bee-use <label>` sets, so the edition and the command line share one list and one
-  meaning. `Beethoven: Sign in to Claude on this laptop` keeps its flow and signs in under that
-  directory, creating it empty and mode 0700 when it does not exist yet (Claude Code writes its own
-  files there). A label that is not listed, is turned off, or is not a label at all sets nothing:
-  the terminals keep the usual sign-in, the student is told once per label (a warning with the two
-  fixes: pick a listed label, or `bee account add <label>` in a terminal), the Beethoven view's
-  *Claude on this laptop* row says so, and the diagnostics nodes `account.list`, `account.choice`
-  and `account.claude` say it every time. With a valid label the row and the wizard's step detail
-  carry "as <label>" beside the signed-in account.
+  `environmentVariableCollection`, so every integrated terminal of the window gets them, the ones
+  the student opens included; an account at the default place gets `BEE_ACCOUNT` alone. These are
+  the two variables `bee-use <label>` sets, so the edition and the command line share one list and
+  one meaning. The terminal the wizard opens for `claude auth login` gets them explicitly as well
+  (the `env` of `WizardUI.runInteractive`), and so do *Investigate the failure with Claude*
+  (`claude -p` on the laptop), every `claude auth status` the wizard, the view and the
+  troubleshooter ask, and the bridge's registration (`claude mcp`, which Claude Code keeps per
+  sign-in folder: a newly chosen account gets the bridge once it is signed in, `followAccountWithMcp`
+  in `extension.ts`). The two variables carry no token, so they follow the setting whatever the
+  license says, and a cleared setting clears them even while the license keeps the tokens out.
+- **The terminals follow the list as well as the setting.** Every read of the choice, by the view,
+  the wizard or the diagnostics, re-reads the list and brings the two variables in line before it
+  reports, so what is reported is what the next terminal gets; a watcher on the list (VS Code's file
+  watcher, and a once-a-minute look at the file for a folder that does not exist yet) does the same
+  when the engine changes it. A terminal already open keeps the environment it started with (VS
+  Code marks it for a relaunch). A `CLAUDE_CONFIG_DIR` VS Code itself was started with (from a
+  shell after `bee-use`) reaches every terminal unless the choice replaces it, since the collection
+  can give a variable but never take one away: `account.choice` and the view's tooltip say so.
+- **A remote window is left alone.** In a Remote-SSH, WSL or container window the terminals run on
+  another computer, where the laptop's sign-in folders mean nothing: neither variable is applied
+  there, Beethoven's checks in that window use the laptop's usual sign-in, and the view's *Claude
+  on this laptop* row and `account.choice` say the setting is not applied in a remote window.
+- **A label that is not applied fails nothing.** A label that is not listed, or is not a label at
+  all, sets nothing: the terminals keep the usual sign-in, which the wizard's step checks as
+  before (its detail says why the label is not used, and it does not sign the usual place in on
+  the label's behalf), the student is told once per label (a warning with the two fixes: pick a
+  listed label, or `bee account add <label>` in a terminal), the Beethoven view's *Claude on this
+  laptop* row says so, and the diagnostics nodes `account.list` and `account.choice` warn every
+  time without blocking `account.claude` or anything on the grid. A changed setting or list checks
+  those nodes again when the last report had something to say about them
+  (`Troubleshooter.recheckAfterAccountChange`). With a listed label the row and the wizard's step
+  detail carry `as <label>` beside the signed-in account.
 - **The grid is not changed.** A sign-in on the grid (`beethoven claude login` through the grid
   scripts) and the worker still use `~/.beethoven/claude` (grid scripts 8). Which of the student's
   accounts a grid job runs under, and the hand-over between them, is the engine's to choose
@@ -214,7 +242,9 @@ account" became "one person, their own accounts": never pooled, never anyone els
   from the terminal environment (Cloak's known limitation, named in the plan item). The integrated
   terminals and the processes this edition starts get the variable; what the Claude Code extension's
   own panel does with it has not been checked on a real machine. The maintainer checks before 5.0.0
-  ships (`docs/MARKETPLACE.md`, before the first publish).
+  ships (`docs/MARKETPLACE.md`, before the first publish). Also not yet measured: whether VS Code's
+  file watcher reports a list outside the workspace on every platform (the once-a-minute look is the
+  backstop either way).
 
 ## Secrets: where they are and where they are not
 

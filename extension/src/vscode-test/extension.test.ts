@@ -8,6 +8,57 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as L from '../../../grid/license.js';
 
+/** Waits for a condition the extension reaches after an event (a setting written, a file watched). */
+async function until(what: string, ok: () => boolean, ms = 10_000): Promise<void> {
+  for (const end = Date.now() + ms; Date.now() < end; await new Promise((r) => setTimeout(r, 100))) if (ok()) return;
+  assert.fail(`timed out waiting for ${what}`);
+}
+
+/**
+ * beethoven.account against a list in the test's own engine folder (BEE_REGISTRY_DIR, .vscode-test.mjs): the
+ * two variables of every terminal follow the setting and the list, and a cleared setting clears them, with or
+ * without a license. Returns once the setting is empty again.
+ */
+async function accountVariablesFollow(licensed: boolean): Promise<void> {
+  const internal = (vscode.extensions.getExtension(EXT_ID)!.exports as any)._internal;
+  assert.equal(internal.licenseGate().allowed('beethoven.hydrate').ok, licensed, licensed ? 'licensed here' : 'unlicensed here');
+  const store = internal.storeFor();
+  const col: vscode.EnvironmentVariableCollection = store.context.environmentVariableCollection;
+  const dir = process.env.BEE_REGISTRY_DIR!;
+  const list = path.join(dir, 'accounts.json');
+  const write = (second: string) => fs.writeFileSync(list, JSON.stringify({ version: 1, accounts: [{ label: 'second', path: second, enabled: true, order: 0, hibernate_until: null }, { label: 'laptop', path: null, enabled: true, order: 1, hibernate_until: null }] }));
+  const first = path.join(dir, 'second-claude');
+  const moved = path.join(dir, 'moved-claude');
+  const c = vscode.workspace.getConfiguration('beethoven');
+  write(first);
+  try {
+    await c.update('account', 'second', vscode.ConfigurationTarget.Global);
+    await until('the account folder in the terminals', () => col.get('CLAUDE_CONFIG_DIR')?.value === first);
+    assert.equal(col.get('BEE_ACCOUNT')?.value, 'second');
+    // the engine moves the folder: the next read (the view, the diagnostics) is what the terminals get
+    write(moved);
+    const choice = store.accountChoice();
+    assert.equal(choice.path, moved);
+    assert.equal(col.get('CLAUDE_CONFIG_DIR')?.value, moved);
+    // an account at Claude Code's default place: the label alone
+    await c.update('account', 'laptop', vscode.ConfigurationTarget.Global);
+    await until('the label alone', () => col.get('BEE_ACCOUNT')?.value === 'laptop');
+    assert.equal(col.get('CLAUDE_CONFIG_DIR'), undefined);
+    // a label the list does not offer: nothing, and one warning recorded for that label
+    await c.update('account', 'third', vscode.ConfigurationTarget.Global);
+    await until('nothing for an unlisted label', () => col.get('BEE_ACCOUNT') === undefined);
+    assert.equal(col.get('CLAUDE_CONFIG_DIR'), undefined);
+    await until('the warning recorded once for that label', () => store.context.globalState.get('beethoven.accountWarned') === 'third');
+    await c.update('account', 'second', vscode.ConfigurationTarget.Global);
+    await until('the folder again', () => col.get('CLAUDE_CONFIG_DIR')?.value === moved);
+    await until('the warning record cleared by a valid label', () => store.context.globalState.get('beethoven.accountWarned') === undefined);
+  } finally {
+    await c.update('account', undefined, vscode.ConfigurationTarget.Global);
+    fs.rmSync(list, { force: true });
+  }
+  await until('both variables gone with the setting', () => col.get('CLAUDE_CONFIG_DIR') === undefined && col.get('BEE_ACCOUNT') === undefined);
+}
+
 const EXT_ID = 'openspineconsortium.beethoven';
 const COMMANDS = [
   'beethoven.setup', 'beethoven.license', 'beethoven.doctor', 'beethoven.troubleshoot', 'beethoven.showLog', 'beethoven.investigate', 'beethoven.healthMenu', 'beethoven.connect', 'beethoven.workerStart', 'beethoven.workerStop', 'beethoven.workerLogs', 'beethoven.ask',
@@ -38,6 +89,8 @@ suite('Beethoven for VS Code extension', () => {
     assert.equal(c.get('worker.hours'), 24);
     assert.equal(c.get('account'), '', 'no account chosen: Claude Code\'s own sign-in, as before');
   });
+
+  test('without a license the account variables still follow the setting and the list, and clear with it', () => accountVariablesFollow(false));
 
   // the rename (Ashley for VS Code 3.0.0 -> Beethoven for VS Code 4.0.0): settings still set under the
   // old name are read (the workspace fixture sets two), and the new name wins once it is set
@@ -225,6 +278,8 @@ suite('Beethoven for VS Code extension', () => {
     assert.equal(gate().allowed('beethoven.workerStop').ok, true);
     if (before) assert.equal((await gate().set(before)).status, 'valid', 'the key from before again');
   });
+
+  test('with a license the account variables follow the setting and the list, and clear with it', () => accountVariablesFollow(true));
 
   test('the wizard signs in first, then the access step reports the stored key', async () => {
     const ext = vscode.extensions.getExtension(EXT_ID)!;

@@ -144,7 +144,7 @@ Paid keys come after those answers; trials can run before them.
 
 `extension/LICENSE.txt` and `extension/PRIVACY.md` are the texts; `TERMS_VERSION` in
 `extension/src/core/terms.ts` is an integer that every substantive change bumps (no fractional
-versions; 6 since 5.0.0 removed the API key, 5 since the rename). A bump makes every installation show the signing dialog again before
+versions; 8 since 5.0.0 allowed several Claude accounts of one person and said which terminals get the chosen one, 7 a draft of it that never shipped, 6 when 5.0.0 removed the API key, 5 since the rename). A bump makes every installation show the signing dialog again before
 the next command, and the old record stays on disk under `terms/<old version>/`. Keep every published
 version of both texts (the repository history does; the site shows the current one at
 `https://openspineconsortium.com/beethoven/vscode/terms.html`, rendered from this repository's text

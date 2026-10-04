@@ -5,7 +5,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { RETIRED_SECRETS, SecretId, SERVICES, localEnvironment } from '../core/services';
 import { WizardEnv, WizardSettings, WizardUI, localClaudeStatus } from '../core/wizard';
-import { AccountChoice, accountEnvironment, chooseAccount } from '../core/accounts';
+import { ACCOUNT_VARS, AccountChoice, accountEnvironment, chooseAccount, readAccounts } from '../core/accounts';
 import { installPublicKey } from '../core/sshInstall';
 import { isMcpRegistered, registerMcp } from './mcpRegister';
 import type { LicenseGate } from './licenseGate';
@@ -60,9 +60,34 @@ export class BeethovenStore {
     };
   }
 
-  /** beethoven.account against the engine's account list, read afresh each time: the list is the engine's and changes under us. */
+  /**
+   * beethoven.account against the engine's account list, read afresh each time (the list is the engine's and
+   * changes under us), with the terminals' two account variables brought in line on the way: whoever reads the
+   * choice, the view, the wizard or the diagnostics, reports what the next terminal gets.
+   */
   accountChoice(): AccountChoice {
-    return chooseAccount(this.config.get<string>('account', ''));
+    const choice = chooseAccount(this.config.get<string>('account', ''), readAccounts(), vscode.env.remoteName);
+    this.applyAccount(choice);
+    return choice;
+  }
+
+  /**
+   * The two account variables in the terminals' collection, set or taken out to match the choice whatever the
+   * license says: they carry no token, only the student's own folder and label, and a cleared setting must
+   * clear them even while the license keeps the tokens out (extension.ts, hydrate). A value already there is
+   * not written again, so open terminals are not marked for a relaunch for nothing.
+   */
+  private applyAccount(choice: AccountChoice): void {
+    const col = this.context.environmentVariableCollection;
+    col.persistent = true;
+    const want = accountEnvironment(choice);
+    for (const k of ACCOUNT_VARS) {
+      const have = col.get(k);
+      const v = want[k];
+      if (v === undefined) {
+        if (have) col.delete(k);
+      } else if (have?.value !== v || have.type !== vscode.EnvironmentVariableMutatorType.Replace) col.replace(k, v);
+    }
   }
 
   async saveSetting<K extends keyof WizardSettings>(key: K, value: WizardSettings[K]): Promise<void> {
@@ -130,8 +155,9 @@ export class BeethovenStore {
   /**
    * Integrated terminals get GITHUB_TOKEN / HF_TOKEN, a few harmless variables and, when beethoven.account
    * names one of the student's own accounts, that account's sign-in directory as CLAUDE_CONFIG_DIR with the
-   * label as BEE_ACCOUNT (the same two `bee-use <label>` sets). ANTHROPIC_API_KEY is deliberately never
-   * injected: with it set, the local Claude Code would bill the key instead of the student's subscription.
+   * label as BEE_ACCOUNT (the same two `bee-use <label>` sets; accountChoice keeps those two current between
+   * hydrations). ANTHROPIC_API_KEY is deliberately never injected: with it set, the local Claude Code would
+   * bill the key instead of the student's subscription.
    */
   async hydrateEnvironment(): Promise<string[]> {
     const col = this.context.environmentVariableCollection;
@@ -156,12 +182,9 @@ export class BeethovenStore {
           }
       }
     }
-    // a label the list does not offer sets nothing: the terminals keep the usual sign-in and the
-    // student is told (extension.ts, warnAboutAccount; the diagnostics node account.choice)
-    for (const [k, v] of Object.entries(accountEnvironment(this.accountChoice()))) {
-      col.replace(k, v);
-      names.push(k);
-    }
+    // a label the list does not offer, or a remote window, sets nothing: the terminals keep the usual sign-in
+    // and the student is told (extension.ts, warnAboutAccount; the diagnostics node account.choice)
+    names.push(...Object.keys(accountEnvironment(this.accountChoice())));
     return names;
   }
 
@@ -286,14 +309,16 @@ export class BeethovenStore {
       allowlist: () => this.allowlist(),
       services: () => this.services(),
       license: this.licenseGate,
+      accountChoice: () => this.accountChoice(),
       extraRequirements: async () => {
         const m: string[] = [];
         if (!vscode.extensions.getExtension('anthropic.claude-code')) m.push('the Claude Code extension (signed in to Claude Pro or Max)');
-        const lc = await localClaudeStatus(s.claudeExecutable, accountEnvironment(this.accountChoice()));
+        const env = accountEnvironment(this.accountChoice());
+        const lc = await localClaudeStatus(s.claudeExecutable, env);
         if (!lc.subscription) m.push(`Claude Code on this laptop signed in with a Claude Pro or Max subscription (${lc.detail})`);
         if (!vscode.extensions.getExtension('ms-vscode-remote.remote-ssh')) m.push('the Remote-SSH extension');
-        if (!(await isMcpRegistered())) {
-          const r = await registerMcp(this.context.extensionPath, s.sshAlias, () => {});
+        if (!(await isMcpRegistered(env))) {
+          const r = await registerMcp(this.context.extensionPath, s.sshAlias, () => {}, env);
           if (!r.ok) m.push(`the Claude Code bridge (${r.detail})`);
         }
         return m;

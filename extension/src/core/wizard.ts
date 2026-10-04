@@ -18,7 +18,7 @@ import { upsertBlock, hasBlock, SshTargets } from './sshConfig';
 import { run, ssh, scp, expandHome, isWindows, gridCli, gridCliLine, GRID_HOME_PICK } from './shell';
 import { parseSbatchId } from './slurm';
 import { KEY_PATTERN, LicenseCheck, Identity, describeLicense } from './license';
-import { accountEnvironment, asLabel, chooseAccount, ensureAccountDir } from './accounts';
+import { AccountChoice, accountEnvironment, asLabel, chooseAccount, ensureAccountDir } from './accounts';
 import * as crypto from 'node:crypto';
 
 export type StepStatus = 'done' | 'todo' | 'skipped' | 'failed';
@@ -130,6 +130,8 @@ export interface WizardEnv {
   installKeyWithPassword?(pub: string): Promise<{ ok: boolean; detail: string; authFailure?: boolean }>;
   /** The Beethoven license on this computer (extension: the gate; CLI: the files in ~/.beethoven-local, core/localDir.ts). */
   license?: WizardLicense;
+  /** beethoven.account as this host applies it (VS Code: the store, which also knows a remote window); else read from settings.account */
+  accountChoice?(): AccountChoice;
 }
 
 export interface WizardLicense {
@@ -546,24 +548,29 @@ export const stepClaudeLocal: WizardStep = {
   title: 'Claude on this laptop',
   blurb: 'Claude Code here is signed in with your own Claude Pro or Max subscription (Beethoven only checks; it stores nothing).',
   async check(env) {
-    // asked in the directory beethoven.account names, when it names a listed account: the one the terminals get
-    const choice = chooseAccount(env.settings.account);
-    if (choice.kind === 'invalid') return report(this.id, this.title, 'failed', choice.problem);
+    // asked in the environment the terminals get: the chosen account's folder, or the usual sign-in when the
+    // setting is empty, names nothing the list offers, or this is a remote window. A setting that is not
+    // applied changes nothing, so it fails nothing either: the usual sign-in decides and the reason rides along.
+    const choice = env.accountChoice?.() ?? chooseAccount(env.settings.account);
+    const why = choice.kind === 'invalid' || choice.kind === 'remote' ? `. ${choice.problem}` : '';
+    const as = asLabel(choice);
     const s = await localClaudeStatus(env.settings.claudeExecutable, accountEnvironment(choice));
-    if (!s.ok) return report(this.id, this.title, 'todo', s.detail);
-    if (!s.loggedIn) return report(this.id, this.title, 'todo', `Claude Code on this laptop is not signed in${asLabel(choice)}`);
-    if (!s.subscription) return report(this.id, this.title, 'failed', `${s.detail}${asLabel(choice)}; Beethoven needs Claude Pro or Max (the account made with your Wayne State e-mail)`);
-    return report(this.id, this.title, 'done', s.detail + asLabel(choice));
+    if (!s.ok) return report(this.id, this.title, 'todo', s.detail + why);
+    if (!s.loggedIn) return report(this.id, this.title, 'todo', `Claude Code on this laptop is not signed in${as}${why}`);
+    if (!s.subscription) return report(this.id, this.title, 'failed', `${s.detail}${as}; Beethoven needs Claude Pro or Max (the account made with your Wayne State e-mail)${why}`);
+    return report(this.id, this.title, 'done', s.detail + as + why);
   },
   async run(env) {
     const cur = await this.check(env);
     if (cur.status === 'done') return cur;
-    const choice = chooseAccount(env.settings.account);
-    if (choice.kind === 'invalid') return cur;
+    const choice = env.accountChoice?.() ?? chooseAccount(env.settings.account);
+    // the student named an account that is not applied here: signing the usual place in could put the wrong
+    // account there, so the detail says what to fix instead
+    if (choice.kind === 'invalid' || choice.kind === 'remote') return cur;
     const who = env.settings.accessId ? `${env.settings.accessId}@wayne.edu` : 'your Wayne State e-mail';
     const message =
       choice.kind === 'account'
-        ? `Sign in to Claude Code on this laptop under your account "${choice.label}", the one the Beethoven setting "account" names: one of your own Claude accounts (Claude Pro at the minimum). Claude Code opens the browser and keeps its own sign-in in that account's folder; Beethoven never sees it.`
+        ? `Sign in to Claude Code on this laptop under your account "${choice.label}", the one the Beethoven setting "account" names: one of your own Claude accounts (Claude Pro at the minimum). Claude Code opens the browser and keeps its own sign-in ${choice.path === null ? "in its default place" : "in that account's folder"}; Beethoven never sees it.`
         : `Sign in to Claude Code on this laptop with the Claude account you made with ${who} (Claude Pro at the minimum). Claude Code opens the browser and keeps its own sign-in; Beethoven never sees it.`;
     const go = await env.ui.confirm(message, 'Sign in', 'Not now');
     if (!go) return report(this.id, this.title, 'skipped', 'not signed in');
