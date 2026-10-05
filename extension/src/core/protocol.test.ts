@@ -66,8 +66,8 @@ test('worker start args switch to the GPU partitions', () => {
 test('AccessID normalisation and grid home', () => {
   assert.equal(normaliseAccessId(' AB1234 '), 'ab1234');
   assert.equal(normaliseAccessId('ab1234@wayne.edu'), 'ab1234');
-  assert.equal(normaliseAccessId('gregory'), null);
-  assert.equal(gridHome('go2432'), '/wsu/home/go/go24/go2432');
+  assert.equal(normaliseAccessId('jordan'), null);
+  assert.equal(gridHome('hx4821'), '/wsu/home/hx/hx48/hx4821');
 });
 
 test('token patterns accept real shapes and reject junk', () => {
