@@ -23,7 +23,7 @@ import { GridRelay } from './core/relay';
 import { SERVICES, SecretId, gridHome } from './core/services';
 import { remoteUri, stripBlock, hasBlock } from './core/sshConfig';
 import { WorkerJobSpec, describeWall } from './core/slurm';
-import { BeethovenResult } from './core/protocol';
+import { BeethovenResult, isClaudeCodeLink } from './core/protocol';
 import { run, expandHome, gridCliLine, gridUninstallLine } from './core/shell';
 import { findClaudeExecutable } from './vscode/store';
 import { AccountChoice, accountPlace, accountProcessEnv, accountsFile, inheritedConfigDir } from './core/accounts';
@@ -794,7 +794,8 @@ async function commandPhone(context: vscode.ExtensionContext, grid: GridApi, wor
       if (st?.message) p.progress(st.message);
       if (st && phases.includes(st.phase)) return st;
       if (Date.now() > end) return st ?? null;
-      await new Promise((r) => setTimeout(r, 2500));
+      // each status runs one squeue on the login node, so it is asked at the clients' 60 s floor
+      await new Promise((r) => setTimeout(r, 60_000));
     }
   };
   p.progress(await grid.phone('on', w.name));
@@ -820,8 +821,8 @@ async function commandPhone(context: vscode.ExtensionContext, grid: GridApi, wor
     st = await wait(['need_login', 'need_consent', 'running', 'error', 'elsewhere'], 180);
   }
   if (st?.phase === 'running' || st?.phase === 'starting') {
-    p.finish(`Phone access is on. Open the Claude app on your phone (or claude.ai/code), go to Code, and pick the session on ${w.name}. It runs as long as the worker job does; the sign-in lasts about a month and Beethoven tells you when to repeat it.${st.session_url ? ` Link: ${st.session_url}` : ''}`, true);
-    if (st.session_url) {
+    p.finish(`Phone access is on. Open the Claude app on your phone (or claude.ai/code), go to Code, and pick the session on ${w.name}. It runs as long as the worker job does; the sign-in lasts about a month and Beethoven tells you when to repeat it.${isClaudeCodeLink(st.session_url) ? ` Link: ${st.session_url}` : ''}`, true);
+    if (isClaudeCodeLink(st.session_url)) {
       const open = await vscode.window.showInformationMessage('Phone access is on. Open the session on this laptop too?', 'Open');
       if (open) await vscode.env.openExternal(vscode.Uri.parse(st.session_url));
     }

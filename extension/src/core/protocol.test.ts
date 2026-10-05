@@ -4,7 +4,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { makeRequest, newRequestId, looksRateLimited, parseResetTime } from './protocol';
+import { makeRequest, newRequestId, looksRateLimited, parseResetTime, isClaudeCodeLink } from './protocol';
 import { parseSqueue, parseSbatchId, workerStartArgs, describeWall } from './slurm';
 import { normaliseAccessId, gridHome, SERVICES, extractWrappedToken } from './services';
 import { shq, shjoin, renderRemote, remotePath, gridCli, gridCliLine, GRID_HOME_PICK } from './shell';
@@ -175,4 +175,16 @@ test('a token is captured whole: across chunks and across hard line wraps', () =
   assert.deepEqual(extractWrappedToken('x\n' + tok + '\n\nDone\n', pat), { token: tok, complete: true });
   // the token followed by text on the same line
   assert.deepEqual(extractWrappedToken(`token=${tok} (keep it)\n`, pat), { token: tok, complete: true });
+});
+
+test('only an exact Claude Code session or environment link is opened', () => {
+  for (const ok of ['https://claude.ai/code/session_01AbC-d_9', 'https://claude.ai/code?environment=env_01XyZ', 'https://claude.com/code/session_x'])
+    assert.equal(isClaudeCodeLink(ok), true, ok);
+  for (const bad of [
+    undefined, null, '', 'https://claude.ai/code', 'https://claude.ai/code/session_', 'http://claude.ai/code/session_x',
+    'https://claude.ai.evil.example/code/session_x', 'https://evil.example/?https://claude.ai/code/session_x',
+    'https://claude.ai/code/session_x/../../settings', 'https://claude.ai/code/session_x#y', 'https://claude.ai/code/session_x ',
+    'https://claude.ai/code?environment=env_x&next=https://evil.example', 'javascript:alert(1)//https://claude.ai/code/session_x',
+  ])
+    assert.equal(isClaudeCodeLink(bad), false, String(bad));
 });
