@@ -49,7 +49,9 @@ the Desktop folder is `ashley` until the maintainer renames it. The code is prop
   sign-in folder, `accounts/`, `engine/`, `projects/` or the work folder (`ROOT`); `beethoven
   uninstall --yes` removes only what install made (`bin/`, `config.env`, `READY`, `log/`,
   `workers/`, the bashrc block, the links) and refuses `--purge-root`; `claude auth logout` is never
-  run and `beethoven claude forget` only says so; Reset offers nothing more. The one move kept is
+  run and `beethoven claude forget` only says so; Reset offers nothing more, runs the grid's uninstall
+  only through grid scripts 9 or later (`gridUninstallLine`: older ones delete the whole folder) and
+  deletes the SSH key only when the setup made it (`keyMadeByBeethoven`). The one move kept is
   the old one of a whole `~/.ashley` folder to `~/.beethoven` (by name, deleting nothing, refused
   while a worker runs from it). A destructive subcommand refuses under `CLAUDECODE`,
   `BEETHOVEN_REQUEST_ID`, `BEETHOVEN_WORKER` (or their `ASHLEY_` names) and without a terminal

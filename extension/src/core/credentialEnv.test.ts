@@ -1,8 +1,8 @@
 // The variables that could put Claude Code on a key, a token or another provider are taken away in five
 // places: the laptop's terminals (services.ts), the grid daemon and phone access (AUTH_VARS), the grid's
 // sign-in sitting (claude_in_alloc) and the sign-in relay. They are kept equal to hpcworker's CLEAN_ENV by
-// hand, so this reads all five as text and fails the moment one drifts. Tokens Beethoven passes on purpose
-// (GitHub, Hugging Face) must never be on the list.
+// hand, so this reads all five as text and fails the moment one drifts from the others or from the copy of
+// hpcworker's list below. Tokens Beethoven passes on purpose (GitHub, Hugging Face) must never be on the list.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
@@ -47,14 +47,23 @@ test('the strip list takes away keys, tokens, gateways and other providers, neve
   }
 });
 
-// hpcworker's own list, when its checkout is beside this one (HPCWORKER_DIR); the browser and desktop
-// editions follow that repository, so this is the comparison that keeps the three editions one rule
-const hpcworker = process.env.HPCWORKER_DIR ? path.join(process.env.HPCWORKER_DIR, 'framework', 'jobs', 'worker.sbatch.tpl') : '';
-test('the strip list equals hpcworker\'s CLEAN_ENV credential variables', { skip: hpcworker && fs.existsSync(hpcworker) ? false : 'set HPCWORKER_DIR to an hpcworker checkout' }, () => {
-  const t = fs.readFileSync(hpcworker, 'utf8');
-  const m = /CLEAN_ENV=\(env ([^)]*)\)/.exec(t);
-  assert.ok(m, 'hpcworker declares CLEAN_ENV');
+// hpcworker's own list: the browser and desktop editions follow that repository, so this is the comparison
+// that keeps the three editions one rule. A verbatim copy of its CLEAN_ENV is kept with the tests and compared
+// on every run; when HPCWORKER_DIR names a checkout, the copy is compared with hpcworker's own as well, so a
+// change there fails here until the copy and the five lists follow it.
+function cleanEnvCredentials(text: string): string[] {
+  const m = /CLEAN_ENV=\(env ([^)]*)\)/.exec(text);
+  assert.ok(m, 'declares CLEAN_ENV');
   // the two Remote Control switches are not credentials: the daemon sets one of them on purpose
-  const theirs = [...m[1].matchAll(/-u ([A-Z0-9_]+)/g)].map((x) => x[1]).filter((k) => k !== 'CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC' && k !== 'DISABLE_GROWTHBOOK');
-  assert.deepEqual(sorted([...CLAUDE_CREDENTIAL_ENV]), sorted(theirs));
+  return [...m[1].matchAll(/-u ([A-Z0-9_]+)/g)].map((x) => x[1]).filter((k) => k !== 'CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC' && k !== 'DISABLE_GROWTHBOOK');
+}
+const copy = cleanEnvCredentials(read('extension/test-fixtures/hpcworker/clean_env.txt'));
+
+test('the strip list equals hpcworker\'s CLEAN_ENV credential variables (the copy kept with the tests)', () => {
+  assert.deepEqual(sorted([...CLAUDE_CREDENTIAL_ENV]), sorted(copy));
+});
+
+const hpcworker = process.env.HPCWORKER_DIR ? path.join(process.env.HPCWORKER_DIR, 'framework', 'jobs', 'worker.sbatch.tpl') : '';
+test('and that copy equals hpcworker\'s own', { skip: hpcworker && fs.existsSync(hpcworker) ? false : 'set HPCWORKER_DIR to an hpcworker checkout to check the copy is current' }, () => {
+  assert.deepEqual(sorted(cleanEnvCredentials(fs.readFileSync(hpcworker, 'utf8'))), sorted(copy), 'hpcworker changed its list: copy its CLEAN_ENV into test-fixtures/hpcworker/clean_env.txt and the five lists here');
 });

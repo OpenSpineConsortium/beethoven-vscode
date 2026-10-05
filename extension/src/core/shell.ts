@@ -156,7 +156,8 @@ export const GRID_CLI = '~/.beethoven/bin/beethoven';
  * grid until the grid step runs, and its first contact must already stop that worker spending on the
  * key. It deletes nothing.
  */
-const GRID_CLI_PICK = 'b=$HOME/.beethoven/bin/beethoven; [ -x $b ] || b=$HOME/.ashley/bin/ashley; k=${b%/bin/*}/accounts/apikey; [ ! -e $k/apikey ] || [ -e $k/disabled ] || touch $k/disabled 2>/dev/null; exec $b';
+const GRID_CLI_FIND = 'b=$HOME/.beethoven/bin/beethoven; [ -x $b ] || b=$HOME/.ashley/bin/ashley; k=${b%/bin/*}/accounts/apikey; [ ! -e $k/apikey ] || [ -e $k/disabled ] || touch $k/disabled 2>/dev/null;';
+const GRID_CLI_PICK = `${GRID_CLI_FIND} exec $b`;
 /**
  * Sets $h to the grid folder: ~/.beethoven, or ~/.ashley on an account the rename has not moved yet.
  * Files the laptop writes (license, tokens) go where that account's grid command reads them.
@@ -169,6 +170,18 @@ export function gridCli(args: string[]): string[] {
 /** The same as one remote command line, for `ssh -t <alias> <line>` in a terminal and for the relay. */
 export function gridCliLine(args: string[]): string {
   return [GRID_CLI_PICK, ...args.map(shq)].join(' ');
+}
+/** The first grid scripts whose `uninstall --yes` keeps the Claude sign-ins, the accounts and the history. */
+export const GRID_SAFE_UNINSTALL = 9;
+/**
+ * `beethoven uninstall --yes` as one line for `ssh -t`, run only by grid scripts 9 or later. Up to 8 the grid's
+ * uninstall ignored --yes and removed all of ~/.beethoven (the Claude sign-in hpcworker's workers use, the
+ * engine's sign-ins and account list, the history); only the missing terminal stopped it, and `ssh -t` gives it
+ * one. Nothing updates the grid's scripts by itself, so the same shell that would run them asks them for their
+ * version first and refuses below 9 (an old ~/.ashley/bin/ashley included; a version it cannot read counts as 0).
+ */
+export function gridUninstallLine(): string {
+  return `${GRID_CLI_FIND} v=$($b version 2>/dev/null); case $v in ''|*[!0-9]*) v=0;; esac; if [ $v -lt ${GRID_SAFE_UNINSTALL} ]; then echo 'Nothing was removed: the Beethoven scripts on the grid are an older version ('$v'), whose uninstall would also delete your Claude sign-in. Run Install on the grid in the setup first, then reset again.' >&2; exit 3; fi; exec $b uninstall --yes`;
 }
 
 /** scp local files to a remote directory (files are given explicitly: no globbing on Windows). */

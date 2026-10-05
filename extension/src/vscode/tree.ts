@@ -1,6 +1,6 @@
 // The "Beethoven" view in the activity bar: connection, grid install, workers, accounts, tokens.
 import * as vscode from 'vscode';
-import { GridApi, GridStatus, GridClaudeStatus } from '../core/gridApi';
+import { GridApi, GridStatus, GridClaudeStatus, judgedByOldRule } from '../core/gridApi';
 import { BeethovenStore } from './store';
 import { testConnection, localClaudeStatus } from '../core/wizard';
 import { accountPlace, accountProcessEnv, asLabel, inheritedConfigDir } from '../core/accounts';
@@ -202,6 +202,7 @@ export class BeethovenTree implements vscode.TreeDataProvider<Item> {
     if (!cs) return new Item('Claude on the grid', 'account', { description: 'the grid did not answer', icon: 'warning', tooltip });
     const phone = cs.consent ? '; phone access enabled' : '';
     if (cs.login?.loggedIn && cs.login.subscription === false) return new Item('Claude on the grid', 'account', { description: 'signed in, but not with a Claude subscription: click to sign in again', icon: 'warning', tooltip, command: signIn });
+    if (judgedByOldRule(cs.login)) return new Item('Claude on the grid', 'account', { description: 'signed in, but your running worker is from an earlier version that does not check for an API key behind the sign-in: restart it (Install on the grid in the setup restarts it)', icon: 'warning', tooltip, command: { command: 'beethoven.setup', title: 'Set up' } });
     if (cs.login?.loggedIn) return new Item('Claude on the grid', 'account', { description: `signed in${cs.login.email ? ` as ${cs.login.email}` : ''}${phone}`, icon: 'pass', tooltip });
     if (cs.login && cs.login.loggedIn === false && cs.dir_present) return new Item('Claude on the grid', 'account', { description: 'sign-in ended: click to sign in', icon: 'warning', tooltip, command: signIn });
     if (cs.dir_present) return new Item('Claude on the grid', 'account', { description: `signed in (a running worker will confirm it)${phone}`, icon: 'pass', tooltip });

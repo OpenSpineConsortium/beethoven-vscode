@@ -17,14 +17,14 @@ import { VsCodeUI as SetupPanelFreeUI } from './vscode/ui';
 import { order, runDiagnostics, formatReport } from './core/diagnostics';
 import { BeethovenTree } from './vscode/tree';
 import { registerMcp, isMcpRegistered } from './vscode/mcpRegister';
-import { runWizard, checkAll, StepReport, testConnection, STEPS, validateToken, localClaudeStatus } from './core/wizard';
+import { runWizard, checkAll, StepReport, testConnection, STEPS, validateToken, localClaudeStatus, keyMadeByBeethoven } from './core/wizard';
 import { GridApi } from './core/gridApi';
 import { GridRelay } from './core/relay';
 import { SERVICES, SecretId, gridHome } from './core/services';
 import { remoteUri, stripBlock, hasBlock } from './core/sshConfig';
 import { WorkerJobSpec, describeWall } from './core/slurm';
 import { BeethovenResult } from './core/protocol';
-import { run, expandHome, gridCliLine } from './core/shell';
+import { run, expandHome, gridCliLine, gridUninstallLine } from './core/shell';
 import { findClaudeExecutable } from './vscode/store';
 import { AccountChoice, accountPlace, accountProcessEnv, accountsFile, inheritedConfigDir } from './core/accounts';
 import { adviseOldEdition, oldEditionInstalled, registerOldCommandAliases } from './vscode/oldEdition';
@@ -676,7 +676,7 @@ async function commandReset(context: vscode.ExtensionContext): Promise<void> {
   const retired = await store.retiredSecrets();
   const items: Array<vscode.QuickPickItem & { id: string }> = [
     { id: 'tokens', label: 'Tokens in the OS keychain', description: retired.length ? `GitHub, Hugging Face and the ${retired.map((r) => r.name).join(', ')}` : 'GitHub and Hugging Face', picked: true },
-    { id: 'ssh', label: 'SSH key and the config block', description: `${s.identityFile}, the Beethoven block in ~/.ssh/config`, picked: true },
+    { id: 'ssh', label: 'SSH key and the config block', description: `${s.identityFile} if Beethoven made it, the Beethoven block in ~/.ssh/config`, picked: true },
     { id: 'settings', label: 'Beethoven settings', description: 'AccessID, the Claude account for the terminals, and preferences', picked: true },
     { id: 'mcp', label: 'MCP bridge registration', description: 'claude mcp remove beethoven (Claude Code\'s own sign-in and the account the setting names)', picked: true },
     { id: 'grid', label: 'Beethoven on the grid', description: 'stop workers; remove Beethoven\'s scripts, settings, logs and the bashrc block (your Claude sign-in, your work and the container stay)', picked: false },
@@ -689,8 +689,9 @@ async function commandReset(context: vscode.ExtensionContext): Promise<void> {
   const done: string[] = [];
   if (ids.has('grid')) {
     // in a terminal the student sees: the grid refuses an uninstall without one, and it never deletes the
-    // Claude sign-in, the accounts, the history or the work folder (grid scripts 9)
-    const code = await new SetupPanelFreeUI(output).runInteractive('Beethoven on the grid: uninstall', 'ssh', ['-t', s.sshAlias, gridCliLine(['uninstall', '--yes'])]);
+    // Claude sign-in, the accounts, the history or the work folder (grid scripts 9); older scripts, which
+    // would, are refused by the line itself (gridUninstallLine)
+    const code = await new SetupPanelFreeUI(output).runInteractive('Beethoven on the grid: uninstall', 'ssh', ['-t', s.sshAlias, gridUninstallLine()]);
     done.push(code === 0 ? 'grid: Beethoven uninstalled there (your Claude sign-in and your work stay)' : 'grid: not uninstalled (the terminal says why)');
   }
   if (ids.has('tokens')) {
@@ -715,8 +716,12 @@ async function commandReset(context: vscode.ExtensionContext): Promise<void> {
       const t = fs.readFileSync(cfg, 'utf8');
       if (hasBlock(t)) fs.writeFileSync(cfg, stripBlock(t));
     }
-    for (const f of [expandHome(s.identityFile), expandHome(s.identityFile) + '.pub']) if (fs.existsSync(f)) fs.rmSync(f);
-    done.push('ssh block and key removed (the grid still lists the old public key; harmless)');
+    // only a key the SSH key step made: one the setting points at that the student already had (for GitHub or
+    // anything else) is theirs, and the step accepted it without making one
+    const key = expandHome(s.identityFile);
+    const ours = fs.existsSync(key + '.pub') && keyMadeByBeethoven(fs.readFileSync(key + '.pub', 'utf8'));
+    if (ours) for (const f of [key, key + '.pub']) if (fs.existsSync(f)) fs.rmSync(f);
+    done.push(ours ? 'ssh block and key removed (the grid still lists the old public key; harmless)' : fs.existsSync(key) ? `ssh block removed; the key ${s.identityFile} stays, as Beethoven did not make it` : 'ssh block removed');
   }
   if (ids.has('settings')) {
     // the account's label too, as the privacy statement says: a new laptop's terminals use Claude Code's own sign-in

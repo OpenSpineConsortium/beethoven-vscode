@@ -88,19 +88,26 @@ export function definesHost(configText: string, name: string): boolean {
   return false;
 }
 
-/** The config without our managed block(s), under either name. */
+/**
+ * The config without our managed block(s), under either name. A block is a start marker and the next end
+ * marker with no other start between them; a start without an end of its own (deleted or mistyped by hand)
+ * stays with everything after it, which is the student's (other hosts), never ours to drop.
+ */
 export function stripBlock(configText: string): string {
   let text = configText;
   for (const [start, end] of MARKERS) {
+    let from = 0;
     for (;;) {
-      const s = text.indexOf(start);
+      const s = text.indexOf(start, from);
       if (s < 0) break;
       const e = text.indexOf(end, s);
-      if (e < 0) {
-        text = text.slice(0, s);
-        break;
+      const again = text.indexOf(start, s + start.length);
+      if (e < 0 || (again >= 0 && again < e)) {
+        from = s + start.length;
+        continue;
       }
       text = text.slice(0, s) + text.slice(e + end.length).replace(/^\r?\n/, '');
+      from = s;
     }
   }
   return text;

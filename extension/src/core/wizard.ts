@@ -17,6 +17,7 @@ import { SERVICES, ServiceConfig, SecretId, normaliseAccessId, gridHome } from '
 import { upsertBlock, hasBlock, SshTargets } from './sshConfig';
 import { run, ssh, scp, expandHome, isWindows, gridCli, gridCliLine, GRID_HOME_PICK } from './shell';
 import { parseSbatchId } from './slurm';
+import { GridClaudeStatus, judgedByOldRule } from './gridApi';
 import { KEY_PATTERN, LicenseCheck, Identity, describeLicense } from './license';
 import { AccountChoice, accountProcessEnv, asLabel, chooseAccount, ensureAccountDir, inheritedConfigDir } from './accounts';
 import * as crypto from 'node:crypto';
@@ -361,6 +362,15 @@ export const stepTwoFactor: WizardStep = {
   },
 };
 
+/**
+ * Did the SSH key step make this key? It writes "<AccessID>@wayne.edu beethoven" as the comment (Ashley for VS
+ * Code wrote "ashley"), and it accepts any key already at the configured path without making one, so Reset
+ * deletes a key only when its public half carries that comment: any other key there is the student's own.
+ */
+export function keyMadeByBeethoven(pubText: string): boolean {
+  return /^ssh-ed25519 \S+ \S*@wayne\.edu (beethoven|ashley)$/.test(pubText.trim());
+}
+
 export const stepSshKey: WizardStep = {
   id: 'sshKey',
   title: 'SSH key',
@@ -595,9 +605,11 @@ export const stepClaudeGrid: WizardStep = {
     const r = await ssh(env.settings.sshAlias, gridCli(['claude', 'status', '--json']), { timeoutMs: 60_000 });
     if (r.code !== 0) return report(this.id, this.title, 'todo', 'the grid did not answer (install on the grid first)');
     try {
-      const j = JSON.parse(r.stdout.trim().split('\n').pop() ?? '{}') as { dir_present?: boolean; consent?: boolean; login?: { loggedIn?: boolean; subscription?: boolean; detail?: string; email?: string } | null };
+      const j = JSON.parse(r.stdout.trim().split('\n').pop() ?? '{}') as GridClaudeStatus;
       // the worker runs nothing on a sign-in through an API key, a token or a cloud provider
       if (j.login && j.login.loggedIn && j.login.subscription === false) return report(this.id, this.title, 'failed', 'Claude on the grid is signed in, but not with a Claude subscription: sign in again with your own Claude subscription');
+      // a worker still on an earlier version's daemon has not looked for a key behind the sign-in
+      if (judgedByOldRule(j.login)) return report(this.id, this.title, 'todo', 'signed in on the grid, but your running worker is from an earlier version that does not check for an API key behind the sign-in: restart it (Install on the grid restarts it)');
       if (j.login && j.login.loggedIn) return report(this.id, this.title, 'done', `signed in on the grid${j.login.email ? ` as ${j.login.email}` : ''}${j.consent ? '; phone access enabled' : ''}`);
       if (j.login && j.login.loggedIn === false && j.dir_present) return report(this.id, this.title, 'failed', 'the sign-in on the grid has ended (about a month): sign in again');
       if (j.dir_present) return report(this.id, this.title, 'done', 'signed in on the grid (a running worker will confirm it)');
@@ -746,7 +758,9 @@ export const stepGridInstall: WizardStep = {
     const verify = await ssh(alias, gridCli(['verify-tokens']), { timeoutMs: 90_000 });
     const verified = verify.code === 0 ? verify.stdout.trim().split('\n').filter(Boolean).join('; ') : '';
     const head = already ? 'grid already ready' : adopted ? "adopted the lab's shared container (nothing to build)" : awaiting ? "installed; the lab's container comes with lab access, the last step" : jobId ? `bootstrap job ${jobId} submitted (5 to 15 minutes)` : r.stdout.trim().split('\n').pop() ?? 'submitted';
-    return report(this.id, this.title, 'done', head + (verified ? `; tokens on the grid: ${verified}` : ''));
+    // a worker still running older grid scripts is restarted by install onto these (or says why it could not be)
+    const workers = `${r.stdout}\n${r.stderr}`.split('\n').filter((l) => /^(restarted worker |worker .* ran grid scripts older than)/.test(l));
+    return report(this.id, this.title, 'done', head + (verified ? `; tokens on the grid: ${verified}` : '') + (workers.length ? `; ${workers.join('; ')}` : ''));
   },
 };
 

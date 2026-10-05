@@ -55,6 +55,10 @@ const CLAUDE_HOME = envOf('CLAUDE_HOME') || path.join(BEETHOVEN_HOME, 'claude');
 const AUTH_VARS = ['ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_BASE_URL', 'CLAUDE_CODE_OAUTH_TOKEN', 'CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR', 'CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR', 'CLAUDE_CODE_USE_BEDROCK', 'CLAUDE_CODE_USE_VERTEX', 'CLAUDE_CODE_USE_FOUNDRY', 'CLAUDE_CODE_USE_ANTHROPIC_AWS', 'CLAUDE_CODE_USE_ANTHROPIC_GOOGLE_CLOUD', 'CLAUDE_CODE_USE_MANTLE', 'CLAUDE_CODE_USE_GATEWAY', 'CLAUDE_CODE_OAUTH_REFRESH_TOKEN', 'CLAUDE_CODE_OAUTH_SCOPES'];
 const SECRETS = path.join(BEETHOVEN_HOME, 'secrets.env');
 const STATE = path.join(WORKER_DIR, 'state.json');
+// The grid scripts this daemon was loaded from. Node keeps them in memory until the job ends, so a newer upload
+// does not reach a running worker: `beethoven install` restarts a worker whose heartbeat lacks this (grid
+// scripts 8 and older, which move files inside the sign-in folder and accept a sign-in with a key behind it).
+const SCRIPTS = readFirstLine(path.join(__dirname, 'VERSION')) || null;
 const STOP = path.join(WORKER_DIR, 'stop');
 const HARD_CAP_MS = 6 * 3600e3;
 
@@ -538,6 +542,7 @@ function writeState(status) {
     slurm: SLURM,
     license,
     claude_login: claudeLogin,
+    scripts: SCRIPTS,
   };
   atomicWrite(STATE, JSON.stringify(st, null, 1));
 }

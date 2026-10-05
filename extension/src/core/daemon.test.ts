@@ -18,7 +18,7 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'beethoven-test-'));
 // release keys, whose private half is not in the repository).
 const bin = path.join(tmp, 'bin');
 fs.mkdirSync(bin, { recursive: true });
-for (const f of ['beethovend.js', 'phone.js', 'license.js']) fs.copyFileSync(path.join(repo, 'grid', f), path.join(bin, f));
+for (const f of ['beethovend.js', 'phone.js', 'license.js', 'VERSION']) fs.copyFileSync(path.join(repo, 'grid', f), path.join(bin, f));
 const testKey = crypto.createPrivateKey(fs.readFileSync(path.join(repo, 'extension', 'test-fixtures', 'license', 'test-signing-key.pem'), 'utf8'));
 fs.writeFileSync(path.join(bin, 'license_keys.json'), JSON.stringify({ test: L.rawFromPublicKey(crypto.createPublicKey(testKey)) }));
 const daemon = path.join(bin, 'beethovend.js');
@@ -175,6 +175,8 @@ test('a request may name only the sign-in, and the heartbeat has the expected sh
   const st = JSON.parse(fs.readFileSync(path.join(worker, 'state.json'), 'utf8'));
   for (const k of ['worker', 'node', 'job', 'pid', 'last_beat', 'status', 'concurrency', 'running', 'queued', 'processed', 'accounts']) assert.ok(k in st, `state has ${k}`);
   assert.equal(st.worker, 'w1');
+  // the scripts it was loaded from: `beethoven install` restarts a running worker whose heartbeat lacks them
+  assert.equal(st.scripts, fs.readFileSync(path.join(repo, 'grid', 'VERSION'), 'utf8').trim());
   assert.ok(st.processed >= 5); // r1, r2, r3, r5, r6, r8 ran Claude Code (r4 and r7 never started it); the heartbeat may trail by one
 });
 

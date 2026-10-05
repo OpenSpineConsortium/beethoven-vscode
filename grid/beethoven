@@ -80,6 +80,14 @@ SHARED="$(dirname "$LIBRARY_ROOT")"      # the lab folder: students read it, nev
 ACCESS_ROOT="$SHARED/access"
 lib_file() { echo "$LIBRARY_ROOT/library.json"; }
 lib_readable() { [ -r "$(lib_file)" ]; }
+# Readable is not approved: the lab's folder stays readable to every account the volume root lets in
+# (hpcworker's shared copy lives there too), and the root also lets in an applicant whose request is pending,
+# denied or removed (the pass-through to their status file). Their lead's decision rules; an account with no
+# decision and a readable library is one the grid's own list let in.
+lib_granted() {
+  lib_readable || return 1
+  case "$(status_field "$USER" state)" in pending|denied|removed) return 1;; esac
+}
 lib_field() { # NAME FIELD -> value (string fields only; python-free)
   local name="$1" field="$2"
   tr -d '\n' < "$(lib_file)" | grep -o "\"$name\": *{[^}]*}" | grep -o "\"$field\": *\"[^\"]*\"" | head -1 | sed 's/.*: *"\([^"]*\)"$/\1/'
@@ -116,6 +124,7 @@ cmd_library() {
 cmd_adopt() { # use a shared container instead of building: writes config.env + READY
   local name="${1:-}"
   lib_readable || die "no shared library readable at $LIBRARY_ROOT"
+  lib_granted || die "the lab's container comes with your lead's approval, and your lab access is $(status_field "$USER" state)"
   [ -n "$name" ] || name=$(lib_default)
   local sandbox claude runtime ver
   sandbox=$(lib_field "$name" sandbox); claude=$(lib_field "$name" claude_bin); runtime=$(lib_field "$name" runtime); ver=$(lib_field "$name" claude_version)
@@ -188,8 +197,21 @@ old_names() { # the scripts' names before grid scripts 7, as links beside the ne
 # recognised, so an old block is replaced where it stands and never duplicated.
 BASHRC_START='^# >>> (beethoven|ashley)'; BASHRC_END='^# <<< (beethoven|ashley)'
 has_bashrc_block() { grep -Eq "$BASHRC_START" "${1:-$HOME/.bashrc}" 2>/dev/null; }
-bashrc_without_blocks() { # FILE: the file without any of the blocks
-  awk -v s="$BASHRC_START" -v e="$BASHRC_END" '$0 ~ s {skip=1; next} skip && $0 ~ e {skip=0; next} !skip {print}' "$1"
+# A block is a start line and the next end line with no other start line between them. A start line with no
+# end of its own (deleted or mistyped by hand) stays where it stands with every line after it: those are the
+# student's (conda init, aliases), never ours to drop.
+bashrc_without_blocks() { # FILE [BLOCK]: FILE without our blocks; with BLOCK, the first replaced by it where it stands (appended when none)
+  awk -v s="$BASHRC_START" -v e="$BASHRC_END" -v blk="${2:-}" '
+    NR == FNR { if ($0 ~ s) o = FNR; else if (o && $0 ~ e) { c[o] = 1; o = 0 }; next }
+    !skip && (FNR in c) { skip = 1; if (blk != "" && !done) { while ((getline l < blk) > 0) print l; done = 1 }; next }
+    skip { if ($0 ~ e) skip = 0; next }
+    { print }
+    END { if (blk != "" && !done) { print ""; while ((getline l < blk) > 0) print l } }' "$1" "$1"
+}
+bashrc_rewrite() { # FILE [BLOCK]: FILE through bashrc_without_blocks, written into the file a link leads to (the link stays)
+  local real; real=$(readlink -f -- "$1") && [ -f "$real" ] || return 1
+  bashrc_without_blocks "$real" "${2:-}" > "$real.beethoven.tmp" || { rm -f -- "$real.beethoven.tmp"; return 1; }
+  chmod --reference="$real" "$real.beethoven.tmp" 2>/dev/null; mv -- "$real.beethoven.tmp" "$real"
 }
 
 cmd_install() {
@@ -210,18 +232,19 @@ cmd_install() {
   load_cfg
   mkdir -p "$ROOT" 2>/dev/null || die "cannot create ROOT=$ROOT"
   # bashrc block (VS Code glibc sysroot + PATH), idempotent by markers: the first block (new or old
-  # marker) is replaced where it stands, any further one is dropped
+  # marker) is replaced where it stands, any further one is dropped, a start line without its end is kept
   local rc="$HOME/.bashrc" blk="$BIN/bashrc.block"
   touch "$rc"
   if has_bashrc_block "$rc"; then
-    awk -v blk="$blk" -v s="$BASHRC_START" -v e="$BASHRC_END" 'BEGIN{skip=0; done=0} $0 ~ s {skip=1; if (!done) {while ((getline l < blk) > 0) print l; done=1}; next} skip && $0 ~ e {skip=0; next} skip==0{print}' "$rc" > "$rc.beethoven.tmp" && mv "$rc.beethoven.tmp" "$rc"
+    bashrc_rewrite "$rc" "$blk" || echo "note: could not rewrite $rc; its Beethoven block is as it was" >&2
   else
     { echo; cat "$blk"; } >> "$rc"
   fi
   echo "installed beethoven $VERSION at $BEETHOVEN_HOME (ROOT=$ROOT); bashrc block written"
+  restart_old_workers
   if is_ready; then echo "grid already ready: $(cat "$BEETHOVEN_HOME/READY")"; return 0; fi
   # the shared library first: instant, consistent across the lab, no storage used
-  if [ $build_own -eq 0 ] && lib_readable && cmd_adopt "$(lib_default)" 2>/dev/null; then return 0; fi
+  if [ $build_own -eq 0 ] && lib_granted && cmd_adopt "$(lib_default)" 2>/dev/null; then return 0; fi
   # Not readable yet. When the lab runs access requests, the container arrives with access (the
   # wizard's last step): do not spend 1.8 GB and seven minutes of the student's space on a copy.
   if [ $build_own -eq 0 ] && lab_mode; then
@@ -230,6 +253,22 @@ cmd_install() {
     return 0
   fi
   cmd_bootstrap "${pass[@]}"
+}
+
+# A running worker keeps the daemon it started with (node holds it in memory) until its job ends, whatever
+# was uploaded since. One from before grid scripts 9 moves Claude Code's transcripts inside the sign-in folder
+# and runs on a sign-in with an API key behind it, so install restarts every running worker whose own
+# heartbeat lacks "scripts" (beethovend.js writes it since 9) onto the scripts just installed; a request it
+# had claimed is taken up again by the new daemon.
+restart_old_workers() {
+  local wk wd jid out
+  for wk in $(worker_dirs); do wd="$BEETHOVEN_HOME/workers/$wk"; jid=$(cat "$wd/job.id" 2>/dev/null || echo "")
+    [ -n "$jid" ] && [ -s "$wd/state.json" ] && grep -q "\"job\": *\"$jid\"" "$wd/state.json" || continue
+    grep -q '"scripts":' "$wd/state.json" && continue
+    [ "$(job_state "$jid")" = RUNNING ] || continue
+    if out=$( ( cmd_worker restart --name "$wk" ) 2>&1 ); then echo "restarted worker $wk: it ran grid scripts older than $VERSION"
+    else echo "worker $wk ran grid scripts older than $VERSION and was stopped, but did not start again ($(printf '%s' "$out" | tail -1)): start it again (Beethoven: Start a worker)" >&2; fi
+  done
 }
 
 cmd_bootstrap() {
@@ -296,7 +335,7 @@ license_fp() { # first 16 hex digits of the license key's SHA-256 (the laptop co
 cmd_status() {
   local as_json=0; [ "${1:-}" = "--json" ] && as_json=1
   load_cfg
-  if ! is_ready && lib_readable; then ( cmd_adopt "$(lib_default)" ) >/dev/null 2>&1; load_cfg; fi
+  if ! is_ready && lib_granted; then ( cmd_adopt "$(lib_default)" ) >/dev/null 2>&1; load_cfg; fi
   local ready=false cv="" bst=""
   is_ready && ready=true
   [ -s "$BEETHOVEN_HOME/READY" ] && cv=$(grep -o '"claude_version":"[^"]*"' "$BEETHOVEN_HOME/READY" | cut -d'"' -f4)
@@ -304,7 +343,7 @@ cmd_status() {
   read -r used soft < <(home_quota)
   if [ $as_json -eq 1 ]; then
     local awaiting=false
-    case "$bst" in PENDING|RUNNING|CONFIGURING) ;; *) if [ "$ready" = false ] && ! lib_readable && lab_mode; then awaiting=true; fi;; esac
+    case "$bst" in PENDING|RUNNING|CONFIGURING) ;; *) if [ "$ready" = false ] && ! lib_granted && lab_mode; then awaiting=true; fi;; esac
     printf '{"version":%s,"host":%s,"ready":%s,"awaiting_access":%s,"root":%s,"runtime":%s,"claude_version":%s,"container":%s,"source":%s,"library":%s,"bootstrap_job":%s,"bootstrap_state":%s,"home_used_gb":%s,"home_soft_gb":%s,"workers":[' \
       "$(json_str "$VERSION")" "$(json_str "$(hostname)")" "$ready" "$awaiting" "$(json_str "$ROOT")" "$(json_str "$RUNTIME")" "$(json_str "$cv")" "$(json_str "${CONTAINER:-own}")" "$(json_str "${SOURCE:-own}")" "$(lib_readable && echo true || echo false)" "$(json_str "$BOOTSTRAP_JOB")" "$(json_str "$bst")" "${used:-0}" "${soft:-0}"
     local first=1; for w in $(worker_dirs); do [ $first -eq 1 ] || printf ','; first=0; worker_json "$w"; done
@@ -353,9 +392,11 @@ cmd_worker() {
   case "$sub" in
     start)
       # access granted since the last install: adopt the lab's container on the spot
-      if ! is_ready && lib_readable; then ( cmd_adopt "$(lib_default)" ) >/dev/null 2>&1; load_cfg; fi
-      if ! is_ready && ! lib_readable && lab_mode; then die "no container yet: it comes with lab access (the last setup step; your lead approves it)"; fi
+      if ! is_ready && lib_granted; then ( cmd_adopt "$(lib_default)" ) >/dev/null 2>&1; load_cfg; fi
+      if ! is_ready && ! lib_granted && lab_mode; then die "no container yet: it comes with lab access (the last setup step; your lead approves it)"; fi
       is_ready || die "grid not ready yet (bootstrap job ${BOOTSTRAP_JOB:-none}: $(job_state "${BOOTSTRAP_JOB:-}")); try again when 'beethoven status' says ready=true"
+      # the lab's container stays readable after a lead denies or removes access; the decision still holds
+      [ "${SOURCE:-}" != shared ] || lib_granted || die "your lab access is $(status_field "$USER" state), and the lab's container comes with it: ask your lead"
       [ -s "$BEETHOVEN_HOME/license.key" ] || die "no Beethoven license on the grid yet: run the setup's grid step in VS Code (it copies your license here)"
       mkdir -p "$w"/{inbox,outbox,log}
       rm -f "$w/stop"
@@ -519,9 +560,11 @@ claude_in_alloc() { # run Claude Code interactively inside the container, in a r
   load_cfg; is_ready || die "the lab container is not adopted yet (lab access is the step before this)"
   local jid="" wk; for wk in $(worker_dirs); do local j; j=$(cat "$BEETHOVEN_HOME/workers/$wk/job.id" 2>/dev/null); [ "$(job_state "$j")" = RUNNING ] && { jid=$j; break; }; done
   local cwd="$ROOT/workspaces/phone"; mkdir -p "$cwd" "$CLAUDE_HOME"; chmod 700 "$CLAUDE_HOME"
-  # first-run settings so Claude Code asks no onboarding questions in the terminal (settings, not credentials)
+  # first-run settings so Claude Code asks no onboarding questions in the terminal (settings, not credentials):
+  # the three keys only added when missing, nothing written when they are there, and a file that does not parse
+  # (Claude Code writing it, or damaged) left as it is (hpcworker's seed; seedClaudeJson in phone.js)
   # shellcheck disable=SC2016
-  local seed='const fs=require("fs"),p=process.env.CLAUDE_CONFIG_DIR+"/.claude.json";let j={};try{j=JSON.parse(fs.readFileSync(p,"utf8"))}catch{};j.hasCompletedOnboarding=true;j.theme=j.theme||"dark";j.projects=j.projects||{};j.projects[process.cwd()]=Object.assign({},j.projects[process.cwd()]||{},{hasTrustDialogAccepted:true});fs.writeFileSync(p,JSON.stringify(j,null,1),{mode:0o600});'
+  local seed='const fs=require("fs"),p=process.env.CLAUDE_CONFIG_DIR+"/.claude.json",no=function(){console.error("Claude Code settings file "+p+" could not be read; Beethoven left it as it is");process.exit(0)};let j={};try{j=JSON.parse(fs.readFileSync(p,"utf8"))}catch(e){if(!e||e.code!=="ENOENT")no()}if(!j||typeof j!=="object"||Array.isArray(j))no();let ch=false;if(j.hasCompletedOnboarding!==true){j.hasCompletedOnboarding=true;ch=true}if(!j.theme){j.theme="dark";ch=true}j.projects=j.projects||{};const d=process.cwd(),pr=j.projects[d]||{};if(pr.hasTrustDialogAccepted!==true){j.projects[d]=Object.assign({},pr,{hasTrustDialogAccepted:true});ch=true}if(ch){fs.writeFileSync(p+".part",JSON.stringify(j,null,1),{mode:0o600});fs.renameSync(p+".part",p)}'
   local inner="cd '$cwd' && node -e '$seed' && exec '$CLAUDE_BIN' $*"
   # a sign-in is judged in the same session, before anything else runs on it: exit 4 when it is not the
   # student's Claude subscription (signin_kind, this file run inside the container)
@@ -776,7 +819,7 @@ curl_auth_code() { # TOKEN URL [extra header lines...] -> HTTP status code
   { printf 'header = "Authorization: Bearer %s"\n' "$tok"; for h in "$@"; do printf 'header = "%s"\n' "$h"; done; } | curl -s -m 15 -o /dev/null -w '%{http_code}' -K - "$url"
 }
 student_state() { # none | filed | pending | approved | approved_unreadable | denied | removed
-  if lib_readable; then echo approved; return; fi
+  if lib_granted; then echo approved; return; fi
   local s; s=$(status_field "$USER" state)
   case "$s" in
     approved) echo approved_unreadable;;
@@ -834,12 +877,12 @@ cmd_access() {
     whoami)
       local adm st; adm=$(access_admin); st=$(is_admin && echo admin || student_state)
       is_admin || tidy_request_job
-      if [ "${1:-}" = "--json" ]; then printf '{"user":%s,"admin":%s,"lab_admin":%s,"granted":%s,"state":%s}\n' "$(json_str "$USER")" "$(is_admin && echo true || echo false)" "$(json_str "$adm")" "$(lib_readable && echo true || echo false)" "$(json_str "$st")"
+      if [ "${1:-}" = "--json" ]; then printf '{"user":%s,"admin":%s,"lab_admin":%s,"granted":%s,"state":%s}\n' "$(json_str "$USER")" "$(is_admin && echo true || echo false)" "$(json_str "$adm")" "$(lib_granted && echo true || echo false)" "$(json_str "$st")"
       else echo "user $USER; lab admin $adm; state $st"; fi;;
     status)
       local st; st=$(student_state); tidy_request_job
       if [ "${1:-}" = "--json" ]; then
-        printf '{"granted":%s,"state":%s,"message":%s,"decided":%s}\n' "$(lib_readable && echo true || echo false)" "$(json_str "$st")" "$(json_str "$(status_field "$USER" message)")" "$(json_str "$(status_field "$USER" decided)")"
+        printf '{"granted":%s,"state":%s,"message":%s,"decided":%s}\n' "$(lib_granted && echo true || echo false)" "$(json_str "$st")" "$(json_str "$(status_field "$USER" message)")" "$(json_str "$(status_field "$USER" decided)")"
       else echo "lab access: $st$([ -n "$(status_field "$USER" message)" ] && echo " ($(status_field "$USER" message))")"; fi;;
     requirements)
       # A request is the LAST step: everything the lab works with must already work. The shared
@@ -885,7 +928,11 @@ cmd_access() {
           local fails=0; acl_grant "$id" || fails=$?
           write_status "$id" approved "$(status_field "$id" note)" "" "$(status_field "$id" requested)" "$(status_field "$id" job)"
           decision_log "$id" approved "failures=$fails"
-          if [ "$fails" -gt 0 ]; then echo "$id approved, but $fails part(s) of the lab folder could not be opened (not owned by you?)"; else echo "$id approved: reads the lab folder $SHARED"; fi;;
+          if [ "$fails" -gt 0 ]; then echo "$id approved, but $fails part(s) of the lab folder could not be opened (not owned by you?)"; else echo "$id approved: reads the lab folder $SHARED"; fi
+          # the volume root's full entries are the grid's approved list, which hpcworker's tools/grid_access.sh keeps
+          # equal to its roster and which removes every other named entry, the enter-only one this approval
+          # needs included; until one list holds both, say so where the decision is made
+          [ "$(vol_entry "$id")" = rwx ] || echo "note: $id is not on the grid's approved list (hpcworker's roster); its next sync removes the entry that lets $id into $VOL, and with it the lab folder: add $id to that list too";;
         deny|remove)
           local id="${1:?$act ID}" msg=""; shift; while [ $# -gt 0 ]; do case "$1" in --message) msg="$2"; shift 2;; *) shift;; esac; done
           msg=$(sanitize_note "$msg")
@@ -1033,8 +1080,8 @@ cmd_diag() {
     *) diag_emit grid.lab-access false false false "not requested yet (the wizard's last step)";;
   esac; fi
   if is_ready; then diag_emit grid.container true false false "${CONTAINER:-own} ready: $(basename "$SANDBOX")"
-  elif lib_readable && [ $repair = 1 ] && ( cmd_adopt "$(lib_default)" ) >/dev/null 2>&1 && is_ready; then diag_emit grid.container true false false "adopted the lab container" "ran beethoven adopt"
-  elif lib_readable; then diag_emit grid.container false false false "the lab container is readable but not adopted (repair runs beethoven adopt)"
+  elif lib_granted && [ $repair = 1 ] && ( cmd_adopt "$(lib_default)" ) >/dev/null 2>&1 && is_ready; then diag_emit grid.container true false false "adopted the lab container" "ran beethoven adopt"
+  elif lib_granted; then diag_emit grid.container false false false "the lab container is readable but not adopted (repair runs beethoven adopt)"
   else diag_emit grid.container false false false "no container yet: it comes with lab access"; fi
   if [ -n "$RUNTIME" ] && [ -x "$RUNTIME" ]; then diag_emit grid.runtime true false false "$RUNTIME"
   else
@@ -1149,7 +1196,7 @@ cmd_uninstall() { # takes away what `beethoven install` put in place, and only t
   [ "$here" = "$real/bin" ] || die "refusing: this command runs from ${here:-?}, not from $real/bin; nothing removed"
   for w in $(worker_dirs); do local jid; jid=$(cat "$BEETHOVEN_HOME/workers/$w/job.id" 2>/dev/null || echo ""); [ -n "$jid" ] && scancel "$jid" 2>/dev/null && echo "cancelled worker $w (job $jid)"; done
   local rc="$HOME/.bashrc"
-  if [ -f "$rc" ] && has_bashrc_block "$rc"; then bashrc_without_blocks "$rc" > "$rc.beethoven.tmp" && mv "$rc.beethoven.tmp" "$rc"; echo "bashrc block removed"; fi
+  if [ -f "$rc" ] && has_bashrc_block "$rc"; then bashrc_rewrite "$rc" && echo "bashrc block removed"; fi
   # what install made, by name; rm on a link removes the link, and the scripts go last (bash has read this one)
   local e; for e in workers log config.env config.env.part READY READY.part bin; do
     [ -e "$real/$e" ] || [ -L "$real/$e" ] || continue
@@ -1160,7 +1207,10 @@ cmd_uninstall() { # takes away what `beethoven install` put in place, and only t
     echo "removed $real"
     local l; for l in "$OLD_HOME" "$NEW_HOME" "$BEETHOVEN_HOME"; do [ -L "$l" ] && [ ! -e "$l" ] && rm -f "$l" && echo "removed the link $l"; done
   else
-    echo "kept in $real, as Beethoven did not install them: $(ls -A "$real" 2>/dev/null | tr '\n' ' ')"
+    # some of it Beethoven made (the copies of the tokens and the license key, the folders install made), and it
+    # stays all the same: the sign-ins, the accounts and the history are never ours to delete, the tokens are
+    # the student's to delete (LICENSE 5(a))
+    echo "kept in $real: $(ls -A "$real" 2>/dev/null | tr '\n' ' ')(Beethoven removes only what install put in place; your Claude sign-in (claude), your other accounts (accounts, engine), your history (projects, sessions) and the copies of your tokens and license key (secrets.env, license.key) stay until you delete them yourself)"
   fi
   echo "Beethoven is uninstalled for ${USER:-$(id -un)}${ROOT:+; your work folder $ROOT is untouched}"
 }

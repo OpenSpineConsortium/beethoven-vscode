@@ -5,6 +5,26 @@ import { ssh, RunResult, RunOptions, shq, remotePath, gridCli } from './shell';
 import { BeethovenRequest, BeethovenResult, WorkerState, makeRequest, PermissionMode } from './protocol';
 import { parseSqueue, SqueueRow, SQUEUE_FORMAT, workerStartArgs, WorkerJobSpec } from './slurm';
 import { GridRelay } from './relay';
+import { redactCredentials } from './redact';
+
+/**
+ * The grid half of readFile and listDir, which the laptop's Claude can call (beethoven_read_file,
+ * beethoven_list_dir). Beethoven never reads or relays a Claude credential, so by the grid's own resolved
+ * path (a link leads nowhere new) nothing inside a Claude sign-in folder (~/.claude, ~/.beethoven/claude, the
+ * engine's ~/.beethoven/accounts and each sign-in an account there leads to, the same under ~/.ashley) or
+ * ~/.ssh is read or listed, and no file is read whose name holds a credential, a key or a token anywhere (the
+ * desktop edition's refused names, plus Beethoven's own copies: secrets.env, license.key, apikey).
+ * $1 the path, $2 read|list, $3 the byte limit.
+ */
+export const GRID_READ_GUARD = [
+  'p=$(readlink -f -- "$1" 2>/dev/null) || { echo "no such file or folder: $1" >&2; exit 2; };',
+  'refuse() { echo "Beethoven does not read $1: it is, or is inside, a Claude sign-in, a key or a token" >&2; exit 3; };',
+  'for d in "$HOME/.claude" "$HOME/.beethoven/claude" "$HOME/.beethoven/accounts" "$HOME"/.beethoven/accounts/*/claude "$HOME/.ashley/claude" "$HOME/.ashley/accounts" "$HOME/.ssh"; do',
+  'r=$(readlink -f -- "$d" 2>/dev/null) && [ -e "$r" ] || continue; case "$p/" in "$r"/*) refuse "$1";; esac; done;',
+  'n=${p##*/}; n=${n,,};',
+  'if [ "$2" != list ]; then case "$n" in .credentials.json|.claude.json|job.token|*.token|.netrc|.env|.env.*|*.pem|*.key|secrets.env|apikey|id_rsa|id_dsa|id_ecdsa|id_ed25519|id_ecdsa_sk|id_ed25519_sk) refuse "$1";; esac; fi;',
+  'if [ "$2" = list ]; then exec ls -la -- "$p"; else exec head -c "$3" -- "$p"; fi',
+].join(' '); // one line: a newline is not sure to cross Windows argument quoting
 
 export interface GridStatus {
   version?: string;
@@ -34,6 +54,16 @@ export interface GridClaudeStatus {
    *  key behind the sign-in included (grid scripts 9, which also report apiKey; a worker without it
    *  judged by the earlier rule until it restarts) */
   login: { loggedIn?: boolean; subscription?: boolean; apiKey?: boolean; detail?: string; email?: string } | null;
+}
+
+/**
+ * A sign-in reported by a worker whose daemon is from grid scripts 8 or older: it judged the sign-in without
+ * looking for an API key behind it, and its heartbeat has no apiKey (grid scripts 9 always report one with an
+ * answer). Such a worker keeps its old daemon until the job ends or `beethoven install` restarts it, so the
+ * laptop says "restart it" as the grid's doctor does (claude_login_old_rule), never "signed in".
+ */
+export function judgedByOldRule(login: GridClaudeStatus['login'] | undefined): boolean {
+  return !!login?.loggedIn && login.apiKey === undefined;
 }
 
 export interface AskEvents {
@@ -236,12 +266,12 @@ export class GridApi {
 
   /** Small, read-only commands on the login node (what the lab allows there). */
   async readFile(path: string, maxBytes = 200_000): Promise<{ ok: boolean; text: string }> {
-    const r = await ssh(this.alias, ['head', '-c', String(maxBytes), path], { timeoutMs: 60_000 });
-    return { ok: r.code === 0, text: r.code === 0 ? r.stdout : r.stderr };
+    const r = await ssh(this.alias, ['bash', '-c', GRID_READ_GUARD, 'beethoven-read', path, 'read', String(maxBytes)], { timeoutMs: 60_000 });
+    return { ok: r.code === 0, text: r.code === 0 ? redactCredentials(r.stdout) : r.stderr };
   }
 
   async listDir(path: string): Promise<{ ok: boolean; text: string }> {
-    const r = await ssh(this.alias, ['ls', '-la', path], { timeoutMs: 60_000 });
+    const r = await ssh(this.alias, ['bash', '-c', GRID_READ_GUARD, 'beethoven-read', path, 'list'], { timeoutMs: 60_000 });
     return { ok: r.code === 0, text: (r.stdout || r.stderr).trim() };
   }
 

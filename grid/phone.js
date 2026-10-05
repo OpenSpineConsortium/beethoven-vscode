@@ -40,6 +40,45 @@ function clean(s) {
 }
 // apiKeySource rules a sign-in out by its presence alone, its value never read (beethovend.js, hpcworker's rule)
 const isSubscription = (j) => !!j.loggedIn && !Object.prototype.hasOwnProperty.call(j, 'apiKeySource') && j.authMethod === 'claude.ai' && (j.apiProvider ?? 'firstParty') === 'firstParty';
+
+/**
+ * Claude Code's first-run settings in <dir>/.claude.json, the three keys the rule allows (onboarding done, a
+ * theme, trust for one folder) and nothing else: only added when missing, nothing written when they are there,
+ * and a file that exists but does not parse (Claude Code writing it this moment, or damaged) is left as it is,
+ * never replaced by those keys alone, which would lose the student's Remote Control answer, account and other
+ * settings. hpcworker's seed keeps the same rule; the beethoven command and login_relay.sh carry it as a line.
+ * -> 'seeded' | 'already' | 'unreadable'
+ */
+function seedClaudeJson(dir, trusted) {
+  const f = path.join(dir, '.claude.json');
+  let j = {};
+  try {
+    j = JSON.parse(fs.readFileSync(f, 'utf8'));
+  } catch (e) {
+    if (!e || e.code !== 'ENOENT') return 'unreadable';
+  }
+  if (!j || typeof j !== 'object' || Array.isArray(j)) return 'unreadable';
+  let changed = false;
+  if (j.hasCompletedOnboarding !== true) {
+    j.hasCompletedOnboarding = true;
+    changed = true;
+  }
+  if (!j.theme) {
+    j.theme = 'dark';
+    changed = true;
+  }
+  j.projects = j.projects || {};
+  const pr = j.projects[trusted] || {};
+  if (pr.hasTrustDialogAccepted !== true) {
+    j.projects[trusted] = { ...pr, hasTrustDialogAccepted: true };
+    changed = true;
+  }
+  if (!changed) return 'already';
+  fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+  fs.writeFileSync(f + '.part', JSON.stringify(j, null, 1), { mode: 0o600 });
+  fs.renameSync(f + '.part', f);
+  return 'seeded';
+}
 const NOT_SUBSCRIPTION = 'Claude on the grid is signed in, but not with a Claude subscription, and phone access runs only on your own subscription: sign in again with it: beethoven claude login (Beethoven: Sign in to Claude on the grid)';
 
 function startPhone(o) {
@@ -130,20 +169,7 @@ function startPhone(o) {
   }
   function pretrust() {
     // Remote Control refuses an untrusted folder; mark the phone folder trusted in this login's config
-    const f = path.join(CFG, '.claude.json');
-    let j = {};
-    try {
-      j = JSON.parse(fs.readFileSync(f, 'utf8'));
-    } catch {
-      /* new */
-    }
-    j.hasCompletedOnboarding = true;
-    j.theme = j.theme || 'dark';
-    j.projects = j.projects || {};
-    j.projects[PROJ] = { ...(j.projects[PROJ] || {}), hasTrustDialogAccepted: true };
-    fs.mkdirSync(CFG, { recursive: true, mode: 0o700 });
-    fs.writeFileSync(f + '.part', JSON.stringify(j, null, 1), { mode: 0o600 });
-    fs.renameSync(f + '.part', f);
+    if (seedClaudeJson(CFG, PROJ) === 'unreadable') log('phone: Claude Code\'s settings file (.claude.json) could not be read; left as it is');
   }
   function startSession() {
     pretrust();
@@ -289,4 +315,4 @@ function startPhone(o) {
   };
 }
 
-module.exports = { startPhone, clean, URL_RE, AUTH_VARS, isSubscription };
+module.exports = { startPhone, clean, URL_RE, AUTH_VARS, isSubscription, seedClaudeJson };

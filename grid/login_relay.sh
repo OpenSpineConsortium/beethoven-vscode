@@ -27,10 +27,10 @@ case "${1:-}" in
   start)
     if tm has-session -t "$SESSION" 2>/dev/null; then echo "already running"; exec "$0" screen; fi
     mkdir -p "$ROOT/workspaces/phone" "$CLAUDE_HOME"; chmod 700 "$CLAUDE_HOME"
-    # same first-run settings seed as `beethoven claude login` (settings, never credentials), kept in a
-    # file so that no quoting layer touches it
+    # same first-run settings seed as `beethoven claude login` (settings, never credentials; a file that does
+    # not parse is left as it is), kept in a file so that no quoting layer touches it
     cat > "$KEEP/seed.js" <<'JS'
-const fs=require("fs"),p=process.env.CLAUDE_CONFIG_DIR+"/.claude.json";let j={};try{j=JSON.parse(fs.readFileSync(p,"utf8"))}catch{};j.hasCompletedOnboarding=true;j.theme=j.theme||"dark";j.projects=j.projects||{};j.projects[process.cwd()]=Object.assign({},j.projects[process.cwd()]||{},{hasTrustDialogAccepted:true});fs.writeFileSync(p,JSON.stringify(j,null,1),{mode:0o600});
+const fs=require("fs"),p=process.env.CLAUDE_CONFIG_DIR+"/.claude.json",no=function(){console.error("Claude Code settings file "+p+" could not be read; Beethoven left it as it is");process.exit(0)};let j={};try{j=JSON.parse(fs.readFileSync(p,"utf8"))}catch(e){if(!e||e.code!=="ENOENT")no()}if(!j||typeof j!=="object"||Array.isArray(j))no();let ch=false;if(j.hasCompletedOnboarding!==true){j.hasCompletedOnboarding=true;ch=true}if(!j.theme){j.theme="dark";ch=true}j.projects=j.projects||{};const d=process.cwd(),pr=j.projects[d]||{};if(pr.hasTrustDialogAccepted!==true){j.projects[d]=Object.assign({},pr,{hasTrustDialogAccepted:true});ch=true}if(ch){fs.writeFileSync(p+".part",JSON.stringify(j,null,1),{mode:0o600});fs.renameSync(p+".part",p)};
 JS
     chmod 600 "$KEEP/seed.js"
     inner="cd '$ROOT/workspaces/phone' && node '$KEEP/seed.js' && exec '$CLAUDE_BIN' auth login"

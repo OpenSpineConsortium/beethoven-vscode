@@ -9,6 +9,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { gridUninstallLine } from './shell';
 
 const repo = path.resolve(__dirname, '..', '..', '..', '..'); // dist-test/unit/core -> repository root
 const hasScript = process.platform === 'linux' && spawnSync('script', ['--version'], { encoding: 'utf8' }).status === 0;
@@ -26,6 +27,7 @@ function lab() {
   // what install makes
   fs.mkdirSync(path.join(bh, 'bin'), { recursive: true });
   fs.copyFileSync(path.join(repo, 'grid', 'beethoven'), path.join(bh, 'bin', 'beethoven'));
+  fs.chmodSync(path.join(bh, 'bin', 'beethoven'), 0o755); // as install leaves it
   fs.copyFileSync(path.join(repo, 'grid', 'VERSION'), path.join(bh, 'bin', 'VERSION'));
   put('.beethoven/config.env', `ROOT=${root}\n`);
   put('.beethoven/READY', '{"fake":true}\n');
@@ -64,6 +66,11 @@ function lab() {
     pipe: (args: string[], extra: NodeJS.ProcessEnv = {}) => {
       const r = spawnSync('bash', [cli, ...args], { env: { ...env, ...extra }, encoding: 'utf8', input: '' });
       return { status: r.status, out: r.stdout + r.stderr };
+    },
+    // Reset's own remote line (gridUninstallLine), as `ssh -t` runs it in the login shell
+    line: () => {
+      const r = spawnSync('script', ['-qec', ['bash', '-c', gridUninstallLine()].map(quote).join(' '), '/dev/null'], { env, encoding: 'utf8', input: '' });
+      return { status: r.status, out: (r.stdout + r.stderr).replace(/\r/g, '') };
     },
     exists: (rel: string) => { try { fs.lstatSync(path.join(h, rel)); return true; } catch { return false; } },
   };
@@ -106,6 +113,8 @@ test('uninstall removes what install made and keeps the sign-ins, the accounts, 
     assert.equal(fs.readFileSync(path.join(l.h, '.bashrc'), 'utf8'), '# the student\'s own line\nalias ll="ls -l"\n', 'only the block left .bashrc');
     assert.equal(fs.readFileSync(path.join(l.h, 'scancel.calls'), 'utf8').trim(), '123', 'the worker was stopped');
     assert.match(r.out, /kept in .*claude/);
+    assert.match(r.out, /copies of your tokens and license key \(secrets\.env, license\.key\) stay until you delete them yourself/, 'says the token file stays for the student to delete');
+    assert.doesNotMatch(r.out, /did not install/, 'never calls what install or the setup made someone else\'s');
     assert.match(r.out, /your work folder .* is untouched/);
   } finally {
     fs.rmSync(l.h, { recursive: true, force: true });
@@ -133,6 +142,40 @@ test('claude forget refuses in one plain sentence and deletes nothing', { skip }
       assert.notEqual(run.status, 0);
       assert.match(run.out, /Beethoven never deletes or signs out a Claude sign-in\. To sign out, run claude auth logout yourself on a compute node\./);
     }
+    for (const rel of THEIRS) assert.ok(l.exists(rel), `${rel} kept`);
+  } finally {
+    fs.rmSync(l.h, { recursive: true, force: true });
+  }
+});
+
+test('Reset\'s line uninstalls only through grid scripts 9 or later: older scripts, whose uninstall deletes the sign-in, are never run', { skip }, () => {
+  // an older uninstall, by the version it reports: it only leaves a mark here, where grid scripts 7 and 8 removed all of ~/.beethoven
+  const old = (version: string) => `#!/bin/bash\ncase "$1" in version) echo '${version}';; uninstall) touch "$HOME/old-uninstall-ran";; esac\n`;
+  for (const [what, version, ashleyOnly] of [['grid scripts 8', '8', false], ['grid scripts 7', '7', false], ['a version of the 1.0.0 form', '1.0.0', false], ['an account never moved to ~/.beethoven, on Ashley\'s scripts', '6', true]] as const) {
+    const l = lab();
+    try {
+      if (ashleyOnly) {
+        fs.unlinkSync(path.join(l.h, '.ashley'));
+        fs.rmSync(path.join(l.bh, 'bin'), { recursive: true, force: true });
+        fs.mkdirSync(path.join(l.h, '.ashley', 'bin'), { recursive: true });
+        fs.writeFileSync(path.join(l.h, '.ashley', 'bin', 'ashley'), old(version), { mode: 0o755 });
+      } else {
+        fs.writeFileSync(path.join(l.bh, 'bin', 'beethoven'), old(version), { mode: 0o755 });
+      }
+      const r = l.line();
+      assert.notEqual(r.status, 0, `${what}: refused (${r.out})`);
+      assert.match(r.out, /Nothing was removed: the Beethoven scripts on the grid are an older version/, what);
+      assert.equal(l.exists('old-uninstall-ran'), false, `${what}: the old uninstall never ran`);
+      for (const rel of THEIRS) assert.ok(l.exists(rel), `${what}: ${rel} kept`);
+    } finally {
+      fs.rmSync(l.h, { recursive: true, force: true });
+    }
+  }
+  const l = lab();
+  try {
+    const r = l.line();
+    assert.equal(r.status, 0, `grid scripts ${fs.readFileSync(path.join(repo, 'grid', 'VERSION'), 'utf8').trim()} run it (${r.out})`);
+    for (const rel of INSTALLED) assert.equal(l.exists(rel), false, `${rel} removed`);
     for (const rel of THEIRS) assert.ok(l.exists(rel), `${rel} kept`);
   } finally {
     fs.rmSync(l.h, { recursive: true, force: true });

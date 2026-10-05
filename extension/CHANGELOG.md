@@ -62,8 +62,18 @@ The format follows Keep a Changelog; versions follow Semantic Versioning.
   leftovers under the login node's `/tmp` or Claude tokens an earlier version stored under
   `~/.beethoven/accounts`, which may hold your other sign-ins now: it reports them. The worker no
   longer moves Claude Code's session history out of the sign-in folder into a shared one and links
-  it back, the setup no longer deletes old token files there, and the sign-in relay deletes only
-  the code file it was given inside `~/.beethoven/tmp`.
+  it back, the setup no longer deletes old token files there, and the sign-in relay deletes only the
+  code file it was given inside `~/.beethoven/tmp`. Reset's grid choice first asks the grid's
+  scripts for their version and runs the uninstall only on grid scripts 9 or later: the older ones
+  (7, 8 and Ashley's) ignore `--yes` and remove the whole folder, sign-in included, and the terminal
+  Reset opens would let them through; on those it removes nothing and says to run Install on the
+  grid first. Reset's SSH choice deletes the key only when the setup's SSH key step made it (the
+  key's comment says so): a key of your own that `beethoven.identityFile` points at stays. Install
+  and uninstall keep every line of `~/.bashrc` after a Beethoven start line whose end line was
+  deleted by hand (they dropped them all), and a `~/.bashrc` that is a link stays a link; this
+  laptop treats a lone start line in `~/.ssh/config` the same way. Uninstall's last line no longer
+  calls what it kept not Beethoven's: it names your sign-in, your accounts, your history and the
+  copies of your tokens and license key, which stay until you delete them.
 
 ### Changed
 - The grid worker and phone access run only on a Claude subscription sign-in, the same rule as on
@@ -79,19 +89,37 @@ The format follows Keep a Changelog; versions follow Semantic Versioning.
   (only `authMethod` `claude.ai`, the provider Anthropic's own, and no `apiKeySource`), say "signed
   in, but not with a Claude subscription", and run nothing on it. The key's value is never read.
   `beethoven claude login` checks the new sign-in before it says it is done. A worker started before
-  grid scripts 9 does not look for a key: `beethoven doctor` and the troubleshooter say to restart
-  it.
+  grid scripts 9 keeps its old daemon in memory until its job ends and does not look for a key:
+  Install on the grid now restarts every such running worker onto the new scripts (the heartbeat
+  names the scripts it runs since 9), and `beethoven doctor`, the troubleshooter, the Beethoven view
+  and the setup say to restart one that is left.
 - The variables taken away before Claude Code starts are one list in all five places (this
   laptop's terminals, the worker, phone access, the grid sign-in and the sign-in relay), equal to
   hpcworker's: the switches to AWS, Google Cloud, Mantle and a gateway, and the OAuth refresh token
   and scopes, join them; GitHub and Hugging Face tokens pass as before. A test reads the five and
-  fails when they differ.
+  fails when they differ from each other or from a copy of hpcworker's list kept with the tests;
+  with `HPCWORKER_DIR` naming an hpcworker checkout it also fails when that copy is out of date, and
+  the same holds for hpcworker's sign-in rule.
 - The lab's shared folder (grid scripts 9): `beethoven access init` and `beethoven library publish`
   keep other users' read and enter on `/rs/rs_grp_oschome/shared/beethoven` and below, where
   hpcworker's shared copy and the lab's image live too (the volume root's list of approved accounts
   is the gate, and closing the folder shut the browser and desktop editions' students out), and
   never lower an approved account's full entry on the volume root to enter-only. They still close
-  every other folder in `shared/` and take away group and other write everywhere.
+  every other folder in `shared/` and take away group and other write everywhere. Since that folder
+  is readable by every account the volume root lets in, an applicant's way to their own status file
+  included, readable no longer counts as approved: the lead's decision does. A pending, denied or
+  removed request is shown as such, is not granted and adopts no container, and a worker on the
+  lab's container does not start after a denial or removal. Approving an account that is not on the
+  grid's approved list (hpcworker's roster) says that the list's next sync removes the entry the
+  approval needs.
+- Phone access, `beethoven claude login` and the sign-in relay only add Claude Code's three
+  first-run settings to its `.claude.json` when they are missing, and leave a file that does not
+  parse as it is: they replaced it with those three settings alone, losing your Remote Control
+  answer, your account and every other folder's trust (grid scripts 9).
+- The tools that read the grid for the Claude Code on this laptop (`beethoven_read_file`,
+  `beethoven_list_dir`) refuse, by the grid's resolved path, anything inside a Claude sign-in folder
+  or `~/.ssh` and any file named like a credential, a key or a token copy, and what they read loses
+  credential-shaped text: they read any path, the Claude sign-in included.
 - New agreement texts (Trial and Full Edition version 7, privacy statement version 7): section 5(c)
   says Beethoven for VS Code asks for no API key and uses no paid usage, and asks you to keep extra
   usage (usage credits) off in your Claude account's settings, which Beethoven cannot see; the
