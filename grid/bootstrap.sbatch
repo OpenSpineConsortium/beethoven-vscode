@@ -124,7 +124,9 @@ json.dump(lib, open(p + ".part", "w"), indent=1)
 os.replace(p + ".part", p)
 print("library entry written:", name)
 PYEOF
-  chmod -R g+rX,g-w,o-rwx "$ROOT" 2>/dev/null; find "$ROOT" -type d -exec chmod g+s {} + 2>/dev/null
+  # other's read and enter are left as they are: this folder also holds hpcworker's shared copy and the lab's
+  # image, which the browser and desktop editions' students reach as other, through the volume root's list
+  chmod -R g+rX,g-w,o-w "$ROOT" 2>/dev/null; find "$ROOT" -type d -exec chmod g+s {} + 2>/dev/null
   "$BEETHOVEN_HOME/bin/beethoven" access admin resync 2>/dev/null   # approved students read the new entry too
   say "published $LIB_NAME to $ROOT (group read-only; approved students by ACL)"
   exit 0

@@ -17,7 +17,9 @@ import { SERVICES, ServiceConfig, SecretId, normaliseAccessId, gridHome } from '
 import { upsertBlock, hasBlock, SshTargets } from './sshConfig';
 import { run, ssh, scp, expandHome, isWindows, gridCli, gridCliLine, GRID_HOME_PICK } from './shell';
 import { parseSbatchId } from './slurm';
+import { GridClaudeStatus, judgedByOldRule } from './gridApi';
 import { KEY_PATTERN, LicenseCheck, Identity, describeLicense } from './license';
+import { AccountChoice, accountProcessEnv, asLabel, chooseAccount, ensureAccountDir, inheritedConfigDir } from './accounts';
 import * as crypto from 'node:crypto';
 
 export type StepStatus = 'done' | 'todo' | 'skipped' | 'failed';
@@ -44,6 +46,8 @@ export interface WizardSettings {
   gridScriptsDir: string;
   /** Path to a claude executable (for `claude auth status` and `auth login`), or 'claude' if on PATH. */
   claudeExecutable: string;
+  /** beethoven.account: the label of one of the student's own Claude accounts from the engine's list, or '' for Claude Code's own sign-in (core/accounts.ts). */
+  account: string;
 }
 
 export interface TokenAskOptions {
@@ -63,8 +67,8 @@ export interface WizardUI {
   ask(prompt: string, opts?: { password?: boolean; placeholder?: string; value?: string; validate?: (v: string) => string | null }): Promise<string | undefined>;
   confirm(message: string, yes: string, no: string): Promise<boolean>;
   openUrl(url: string): Promise<void>;
-  /** Run an interactive command in a terminal the student can type into. Resolves with the exit code when known. */
-  runInteractive(title: string, command: string, args: string[]): Promise<number | null>;
+  /** Run an interactive command in a terminal the student can type into, with `env` added to its environment (a variable given as undefined is taken out). Resolves with the exit code when known. */
+  runInteractive(title: string, command: string, args: string[], env?: Record<string, string | undefined>): Promise<number | null>;
   progress(message: string): void;
   /** A token field that also watches the clipboard; falls back to ask() when not implemented. */
   askToken?(prompt: string, opts: TokenAskOptions): Promise<string | undefined>;
@@ -127,6 +131,8 @@ export interface WizardEnv {
   installKeyWithPassword?(pub: string): Promise<{ ok: boolean; detail: string; authFailure?: boolean }>;
   /** The Beethoven license on this computer (extension: the gate; CLI: the files in ~/.beethoven-local, core/localDir.ts). */
   license?: WizardLicense;
+  /** beethoven.account as this host applies it (VS Code: the store, which also knows a remote window); else read from settings.account */
+  accountChoice?(): AccountChoice;
 }
 
 export interface WizardLicense {
@@ -356,6 +362,15 @@ export const stepTwoFactor: WizardStep = {
   },
 };
 
+/**
+ * Did the SSH key step make this key? It writes "<AccessID>@wayne.edu beethoven" as the comment (Ashley for VS
+ * Code wrote "ashley"), and it accepts any key already at the configured path without making one, so Reset
+ * deletes a key only when its public half carries that comment: any other key there is the student's own.
+ */
+export function keyMadeByBeethoven(pubText: string): boolean {
+  return /^ssh-ed25519 \S+ \S*@wayne\.edu (beethoven|ashley)$/.test(pubText.trim());
+}
+
 export const stepSshKey: WizardStep = {
   id: 'sshKey',
   title: 'SSH key',
@@ -521,20 +536,23 @@ export async function localClaudeStatus(exe: string, env?: NodeJS.ProcessEnv): P
   if (r.code === 127 || /ENOENT/.test(r.stderr)) return { ok: false, loggedIn: false, subscription: false, detail: 'Claude Code is not installed on this laptop' };
   let j: { loggedIn?: boolean; authMethod?: string; apiProvider?: string; email?: string; subscriptionType?: string } = {};
   try {
-    j = JSON.parse(r.stdout.trim());
+    j = JSON.parse(r.stdout.trim()) ?? {};
   } catch {
     return { ok: false, loggedIn: false, subscription: false, detail: `claude auth status did not answer (${(r.stderr || r.stdout).trim().slice(0, 100)})` };
   }
   // only the claude.ai sign-in billed by Anthropic itself counts: an API key, a key helper or a cloud
-  // provider (Bedrock, Vertex, Foundry) bills by use
+  // provider (Bedrock, Vertex, Foundry) bills by use. apiKeySource is there only when a key is behind the
+  // sign-in (the Console's own key is reported as authMethod "claude.ai" beside it), so its presence alone
+  // rules it out and its value is never read: hpcworker's rule (hpcw_claude_signin), and the grid's
+  const keyBehind = Object.prototype.hasOwnProperty.call(j, 'apiKeySource');
   const method = String(j.authMethod ?? '');
   const provider = String(j.apiProvider ?? 'firstParty');
-  const subscription = !!j.loggedIn && method === 'claude.ai' && provider === 'firstParty';
+  const subscription = !!j.loggedIn && !keyBehind && method === 'claude.ai' && provider === 'firstParty';
   return {
     ok: true,
     loggedIn: !!j.loggedIn,
     subscription,
-    detail: !j.loggedIn ? 'not signed in' : subscription ? `signed in${j.email ? ` as ${j.email}` : ''}${j.subscriptionType ? ` (${j.subscriptionType})` : ''}` : `signed in through ${provider === 'firstParty' ? method || 'an unknown method' : provider}, not a Claude subscription`,
+    detail: !j.loggedIn ? 'not signed in' : subscription ? `signed in${j.email ? ` as ${j.email}` : ''}${j.subscriptionType ? ` (${j.subscriptionType})` : ''}` : 'signed in, but not with a Claude subscription',
   };
 }
 
@@ -543,19 +561,38 @@ export const stepClaudeLocal: WizardStep = {
   title: 'Claude on this laptop',
   blurb: 'Claude Code here is signed in with your own Claude Pro or Max subscription (Beethoven only checks; it stores nothing).',
   async check(env) {
-    const s = await localClaudeStatus(env.settings.claudeExecutable);
-    if (!s.ok) return report(this.id, this.title, 'todo', s.detail);
-    if (!s.loggedIn) return report(this.id, this.title, 'todo', 'Claude Code on this laptop is not signed in');
-    if (!s.subscription) return report(this.id, this.title, 'failed', `${s.detail}; Beethoven needs Claude Pro or Max (the account made with your Wayne State e-mail)`);
-    return report(this.id, this.title, 'done', s.detail);
+    // asked where the label puts Claude Code (its folder, or for one at the default place no folder at all, as
+    // bee-use has it), else where the terminals' Claude Code signs in without the setting: when it names nothing
+    // the list offers or this is a remote window. A setting that is not applied changes nothing, so it fails
+    // nothing either: that sign-in decides and the reason rides along, with a folder VS Code was started with.
+    const choice = env.accountChoice?.() ?? chooseAccount(env.settings.account);
+    const inherited = inheritedConfigDir(choice);
+    const problem = choice.kind === 'invalid' || choice.kind === 'remote' ? choice.problem : '';
+    const why = problem ? `. ${problem}${inherited ? ` ${inherited}.` : ''}` : inherited ? `. ${inherited}` : '';
+    const as = asLabel(choice);
+    const s = await localClaudeStatus(env.settings.claudeExecutable, accountProcessEnv(choice));
+    if (!s.ok) return report(this.id, this.title, 'todo', s.detail + why);
+    if (!s.loggedIn) return report(this.id, this.title, 'todo', `Claude Code on this laptop is not signed in${as}${why}`);
+    if (!s.subscription) return report(this.id, this.title, 'failed', `${s.detail}${as}; Beethoven needs Claude Pro or Max (the account made with your Wayne State e-mail)${why}`);
+    return report(this.id, this.title, 'done', s.detail + as + why);
   },
   async run(env) {
     const cur = await this.check(env);
     if (cur.status === 'done') return cur;
+    const choice = env.accountChoice?.() ?? chooseAccount(env.settings.account);
+    // the student named an account that is not applied here: signing the usual place in could put the wrong
+    // account there, so the detail says what to fix instead
+    if (choice.kind === 'invalid' || choice.kind === 'remote') return cur;
     const who = env.settings.accessId ? `${env.settings.accessId}@wayne.edu` : 'your Wayne State e-mail';
-    const go = await env.ui.confirm(`Sign in to Claude Code on this laptop with the Claude account you made with ${who} (Claude Pro at the minimum). Claude Code opens the browser and keeps its own sign-in; Beethoven never sees it.`, 'Sign in', 'Not now');
+    const message =
+      choice.kind === 'account'
+        ? `Sign in to Claude Code on this laptop under your account "${choice.label}", the one the Beethoven setting "account" names: one of your own Claude accounts (Claude Pro at the minimum). Claude Code opens the browser and keeps its own sign-in ${choice.path === null ? "in its default place" : "in that account's folder"}; Beethoven never sees it.`
+        : `Sign in to Claude Code on this laptop with the Claude account you made with ${who} (Claude Pro at the minimum). Claude Code opens the browser and keeps its own sign-in; Beethoven never sees it.`;
+    const go = await env.ui.confirm(message, 'Sign in', 'Not now');
     if (!go) return report(this.id, this.title, 'skipped', 'not signed in');
-    await env.ui.runInteractive('Claude sign-in', env.settings.claudeExecutable, ['auth', 'login']);
+    // a new account's folder exists, empty and private, before Claude Code writes its own files there
+    ensureAccountDir(choice);
+    await env.ui.runInteractive('Claude sign-in', env.settings.claudeExecutable, ['auth', 'login'], accountProcessEnv(choice));
     return this.check(env);
   },
 };
@@ -568,9 +605,11 @@ export const stepClaudeGrid: WizardStep = {
     const r = await ssh(env.settings.sshAlias, gridCli(['claude', 'status', '--json']), { timeoutMs: 60_000 });
     if (r.code !== 0) return report(this.id, this.title, 'todo', 'the grid did not answer (install on the grid first)');
     try {
-      const j = JSON.parse(r.stdout.trim().split('\n').pop() ?? '{}') as { dir_present?: boolean; consent?: boolean; login?: { loggedIn?: boolean; subscription?: boolean; detail?: string; email?: string } | null };
+      const j = JSON.parse(r.stdout.trim().split('\n').pop() ?? '{}') as GridClaudeStatus;
       // the worker runs nothing on a sign-in through an API key, a token or a cloud provider
       if (j.login && j.login.loggedIn && j.login.subscription === false) return report(this.id, this.title, 'failed', 'Claude on the grid is signed in, but not with a Claude subscription: sign in again with your own Claude subscription');
+      // a worker still on an earlier version's daemon has not looked for a key behind the sign-in
+      if (judgedByOldRule(j.login)) return report(this.id, this.title, 'todo', 'signed in on the grid, but your running worker is from an earlier version that does not check for an API key behind the sign-in: restart it (Install on the grid restarts it)');
       if (j.login && j.login.loggedIn) return report(this.id, this.title, 'done', `signed in on the grid${j.login.email ? ` as ${j.login.email}` : ''}${j.consent ? '; phone access enabled' : ''}`);
       if (j.login && j.login.loggedIn === false && j.dir_present) return report(this.id, this.title, 'failed', 'the sign-in on the grid has ended (about a month): sign in again');
       if (j.dir_present) return report(this.id, this.title, 'done', 'signed in on the grid (a running worker will confirm it)');
@@ -624,10 +663,11 @@ export async function pushTokens(env: WizardEnv): Promise<{ ok: boolean; detail:
   const secrets = [gh ? `GITHUB_TOKEN=${gh}\nGH_TOKEN=${gh}` : '', hf ? `HF_TOKEN=${hf}` : ''].filter(Boolean).join('\n') + '\n';
   const r = await ssh(alias, ['bash', '-c', `${GRID_HOME_PICK} umask 077; mkdir -p $h; cat > $h/secrets.env`], { input: secrets });
   if (r.code !== 0) return { ok: false, detail: `writing secrets.env: ${r.stderr.trim()}` };
-  // Beethoven stores no Claude credential and copies none: an earlier version's stored token is deleted.
+  // Beethoven stores no Claude credential and copies none, and deletes nothing in accounts/: the engine keeps
+  // the student's other sign-ins there (an earlier version's stored token is only reported, by beethoven diag).
   // The API key builds up to 4.0.0 copied to accounts/apikey is left for the student, but marked disabled,
   // the one switch a worker still running grid scripts 7 honours (grid/beethoven, retire_apikey).
-  await ssh(alias, ['bash', '-c', `${GRID_HOME_PICK} rm -f $h/accounts/*/token $h/accounts/*/minted_at $h/accounts/*/.credentials.json 2>/dev/null; [ ! -e $h/accounts/apikey/apikey ] || touch $h/accounts/apikey/disabled; true`]);
+  await ssh(alias, ['bash', '-c', `${GRID_HOME_PICK} [ ! -f $h/accounts/apikey/apikey ] || touch $h/accounts/apikey/disabled; true`]);
   return { ok: true, detail: 'tokens updated on the grid' };
 }
 
@@ -718,7 +758,9 @@ export const stepGridInstall: WizardStep = {
     const verify = await ssh(alias, gridCli(['verify-tokens']), { timeoutMs: 90_000 });
     const verified = verify.code === 0 ? verify.stdout.trim().split('\n').filter(Boolean).join('; ') : '';
     const head = already ? 'grid already ready' : adopted ? "adopted the lab's shared container (nothing to build)" : awaiting ? "installed; the lab's container comes with lab access, the last step" : jobId ? `bootstrap job ${jobId} submitted (5 to 15 minutes)` : r.stdout.trim().split('\n').pop() ?? 'submitted';
-    return report(this.id, this.title, 'done', head + (verified ? `; tokens on the grid: ${verified}` : ''));
+    // a worker still running older grid scripts is restarted by install onto these (or says why it could not be)
+    const workers = `${r.stdout}\n${r.stderr}`.split('\n').filter((l) => /^(restarted worker |worker .* ran grid scripts older than)/.test(l));
+    return report(this.id, this.title, 'done', head + (verified ? `; tokens on the grid: ${verified}` : '') + (workers.length ? `; ${workers.join('; ')}` : ''));
   },
 };
 

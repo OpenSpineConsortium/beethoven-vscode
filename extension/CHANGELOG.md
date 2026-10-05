@@ -4,6 +4,35 @@ The format follows Keep a Changelog; versions follow Semantic Versioning.
 
 ## 5.0.0 (2026-10-04)
 
+### Added
+- The setting `beethoven.account`: which of your own Claude accounts Claude Code uses on this
+  laptop, by its label in the account list the engine's `bee account add <label>` keeps on this
+  computer (`~/.beethoven/engine/accounts.json`, or where the engine's `BEE_REGISTRY_DIR` or
+  `BEETHOVEN_HOME` puts it; Beethoven reads it and never writes it). Empty, the default, means
+  Claude Code's own sign-in, as before. With a label, every integrated terminal of a local VS Code
+  window, the ones you open yourself included, gets that account's sign-in folder as
+  `CLAUDE_CONFIG_DIR` and the label as `BEE_ACCOUNT` (only the label for an account listed at
+  Claude Code's default place), the same as `bee-use <label>`, so Beethoven and the command line
+  pick the same account (the maintainer, 2026-10-04: one person, their own accounts, never pooled,
+  never anyone else's, never a sign-in copied or moved); **Beethoven: Sign in to Claude on this
+  laptop**, Beethoven's checks of Claude Code, Investigate the failure with Claude and the bridge's
+  registration (`claude mcp`, which Claude Code keeps per sign-in folder) use the same account. The
+  terminals follow the account list as well as the setting: when the engine moves a folder or drops
+  a label, the next terminal gets what the list now says, and what the Beethoven view and the
+  troubleshooter report is what the terminals get. A remote window (Remote-SSH, WSL, a container)
+  is left as it is, and the view says so. A label that is not in the list changes nothing: Beethoven
+  says so once, the Beethoven view's *Claude on this laptop* row says so, the troubleshooter warns
+  (the account list, the chosen account) without holding up any other check, and the setup carries
+  on with Claude Code's usual sign-in. An account the engine took out of its rotation is still used,
+  as `bee-use` does, and can be signed in again from VS Code. A list that `bee` itself refuses (a
+  folder written with `~`, a row without its order, a label twice) is refused whole here too, and the
+  troubleshooter says why; Beethoven: Reset forgets the setting with the other settings; error reports
+  leave out your accounts' labels and folders. The grid is not changed by it: grid scripts
+  9 still sign in at `~/.beethoven/claude`, and which of your accounts a grid job uses is the
+  engine's decision. Not yet measured: whether the Claude Code extension for VS Code honours
+  `CLAUDE_CONFIG_DIR` from the terminal environment; the maintainer checks this on a real machine
+  before 5.0.0 ships.
+
 ### Removed
 - The optional Anthropic API key and the pay-per-use overflow onto it. Beethoven uses no API key and
   asks for no paid usage: the grid worker runs only on your own Claude subscription, and when its
@@ -19,6 +48,32 @@ The format follows Keep a Changelog; versions follow Semantic Versioning.
   Code calls). It was Claude Code's list-price estimate, and on your subscription it is not a bill.
 - The packages of 2.0.0 to 4.0.0 in the repository: they ask for an API key. Do not install them,
   nor Ashley for VS Code 3.0.0 from the Marketplace.
+- Every way Beethoven could delete what it did not make (grid scripts 9). `beethoven uninstall`
+  removed all of `~/.beethoven`, where the Claude sign-in hpcworker's workers use, the engine's
+  other sign-ins and account list and your session history live too, and `--purge-root` removed
+  your work folder; `beethoven claude forget` deleted the sign-in. Now `beethoven uninstall --yes`,
+  typed at a terminal, stops your workers and removes only Beethoven's scripts, settings, logs,
+  worker folders, its block in `~/.bashrc` and the links it made, lists what it left, and refuses
+  `--purge-root`; `beethoven claude forget` says that Beethoven never deletes or signs out a Claude
+  sign-in and that you run `claude auth logout` yourself on a compute node. **Beethoven: Reset** no
+  longer offers to remove the container and workspaces, and its grid choice runs the uninstall in
+  a terminal you see (over the hidden connection it used, the grid always refused it, as a
+  destructive command needs a person at a terminal). The troubleshooter's repair no longer deletes
+  leftovers under the login node's `/tmp` or Claude tokens an earlier version stored under
+  `~/.beethoven/accounts`, which may hold your other sign-ins now: it reports them. The worker no
+  longer moves Claude Code's session history out of the sign-in folder into a shared one and links
+  it back, the setup no longer deletes old token files there, and the sign-in relay deletes only the
+  code file it was given inside `~/.beethoven/tmp`. Reset's grid choice first asks the grid's
+  scripts for their version and runs the uninstall only on grid scripts 9 or later: the older ones
+  (7, 8 and Ashley's) ignore `--yes` and remove the whole folder, sign-in included, and the terminal
+  Reset opens would let them through; on those it removes nothing and says to run Install on the
+  grid first. Reset's SSH choice deletes the key only when the setup's SSH key step made it (the
+  key's comment says so): a key of your own that `beethoven.identityFile` points at stays. Install
+  and uninstall keep every line of `~/.bashrc` after a Beethoven start line whose end line was
+  deleted by hand (they dropped them all), and a `~/.bashrc` that is a link stays a link; this
+  laptop treats a lone start line in `~/.ssh/config` the same way. Uninstall's last line no longer
+  calls what it kept not Beethoven's: it names your sign-in, your accounts, your history and the
+  copies of your tokens and license key, which stay until you delete them.
 
 ### Changed
 - The grid worker and phone access run only on a Claude subscription sign-in, the same rule as on
@@ -27,11 +82,57 @@ The format follows Keep a Changelog; versions follow Semantic Versioning.
   (the worker asks Claude Code again before a request when its last answer is over a minute old);
   the Beethoven view, the setup, the troubleshooter and `beethoven doctor` say so too (grid scripts
   version 8).
-- New agreement texts (Trial and Full Edition version 6, privacy statement version 6): section 5(c)
+- A sign-in with an API key behind it is not a Claude subscription either (grid scripts 9). Claude
+  Code reports `apiKeySource` beside a claude.ai sign-in when a key is in play (the Anthropic
+  Console's own key, or one in the environment); the worker, phone access, `beethoven claude login`,
+  `beethoven doctor`, the troubleshooter and this laptop's checks now treat it as hpcworker does
+  (only `authMethod` `claude.ai`, the provider Anthropic's own, and no `apiKeySource`), say "signed
+  in, but not with a Claude subscription", and run nothing on it. The key's value is never read.
+  `beethoven claude login` checks the new sign-in before it says it is done. A worker started before
+  grid scripts 9 keeps its old daemon in memory until its job ends and does not look for a key:
+  Install on the grid now restarts every such running worker onto the new scripts (the heartbeat
+  names the scripts it runs since 9), and `beethoven doctor`, the troubleshooter, the Beethoven view
+  and the setup say to restart one that is left.
+- The variables taken away before Claude Code starts are one list in all five places (this
+  laptop's terminals, the worker, phone access, the grid sign-in and the sign-in relay), equal to
+  hpcworker's: the switches to AWS, Google Cloud, Mantle and a gateway, and the OAuth refresh token
+  and scopes, join them; GitHub and Hugging Face tokens pass as before. A test reads the five and
+  fails when they differ from each other or from a copy of hpcworker's list kept with the tests;
+  with `HPCWORKER_DIR` naming an hpcworker checkout it also fails when that copy is out of date, and
+  the same holds for hpcworker's sign-in rule.
+- The lab's shared folder (grid scripts 9): `beethoven access init` and `beethoven library publish`
+  keep other users' read and enter on `/rs/rs_grp_oschome/shared/beethoven` and below, where
+  hpcworker's shared copy and the lab's image live too (the volume root's list of approved accounts
+  is the gate, and closing the folder shut the browser and desktop editions' students out), and
+  never lower an approved account's full entry on the volume root to enter-only. They still close
+  every other folder in `shared/` and take away group and other write everywhere. Since that folder
+  is readable by every account the volume root lets in, an applicant's way to their own status file
+  included, readable no longer counts as approved: the lead's decision does. A pending, denied or
+  removed request is shown as such, is not granted and adopts no container, and a worker on the
+  lab's container does not start after a denial or removal. Approving an account that is not on the
+  grid's approved list (hpcworker's roster) says that the list's next sync removes the entry the
+  approval needs.
+- Phone access, `beethoven claude login` and the sign-in relay only add Claude Code's three
+  first-run settings to its `.claude.json` when they are missing, and leave a file that does not
+  parse as it is: they replaced it with those three settings alone, losing your Remote Control
+  answer, your account and every other folder's trust (grid scripts 9).
+- The tools that read the grid for the Claude Code on this laptop (`beethoven_read_file`,
+  `beethoven_list_dir`) refuse, by the grid's resolved path, anything inside a Claude sign-in folder
+  or `~/.ssh` and any file named like a credential, a key or a token copy, and what they read loses
+  credential-shaped text: they read any path, the Claude sign-in included.
+- New agreement texts (Trial and Full Edition version 7, privacy statement version 7): section 5(c)
   says Beethoven for VS Code asks for no API key and uses no paid usage, and asks you to keep extra
   usage (usage credits) off in your Claude account's settings, which Beethoven cannot see; the
   agreement no longer lists a key among what Beethoven stores, and says how to delete one an earlier
-  version left. The terms version is 6, so the signing dialog is shown once more.
+  version left. Sections 4(b) and 5(a) say that every Claude account you use is your own, that you
+  may hold several and choose in the settings which one Claude Code signs in with in every
+  integrated terminal of a local VS Code window on your laptop, and that Beethoven never pools
+  accounts or moves a sign-in between them; the privacy statement lists the account list Beethoven
+  reads. Section 5(a) and the privacy statement also say what Beethoven reads of Claude Code's
+  report of the sign-in, that only your own Claude subscription with no API key behind it counts,
+  that Beethoven never deletes a Claude sign-in or signs one out, and that removing it from the grid
+  takes away only what it installed, never your sign-ins, accounts, history or work folder. The
+  terms version is 7, so the signing dialog is shown once more.
 - Update every computer you use Beethoven on to 5.0.0 before you run the grid step again, and do not
   run the grid step of Ashley for VS Code: the grid step of an earlier version puts its own grid
   scripts back.

@@ -30,8 +30,10 @@ has cost time when it was broken.
 
 1. Beethoven never reads, stores, copies or relays a Claude credential. It sets `CLAUDE_CONFIG_DIR`
    and asks `claude auth status`; nothing else.
-2. One person, one Claude account, and no fallback: no API key, no usage credits; a spent window
-   is answered `rate_limited` with `retry_after`, and the request is sent again after the reset.
+2. One person, their own accounts, and no fallback: several sign-in directories of the student's
+   own, chosen on the laptop by `beethoven.account` from the engine's list (read, never written),
+   never pooled and never anyone else's; no API key, no usage credits; a spent window is answered
+   `rate_limited` with `retry_after`, and the request is sent again after the reset.
 3. Every Claude Code process Beethoven starts on the grid runs inside a Slurm allocation, never on the
    login node; every job has a wall time.
 4. Tokens travel on stdin or in files with mode 600, never on a command line, in a job log or in

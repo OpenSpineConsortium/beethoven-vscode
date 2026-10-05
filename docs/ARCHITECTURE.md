@@ -120,9 +120,12 @@ its directory.
 `--resume` looks only in the running config folder's `projects/`. Measured on Claude Code 2.1.283:
 from a second config folder the resume answers "No conversation found"; with the transcript present
 it finds it. Up to grid scripts 7 a turn could move to the student's API key after a limit, so every
-account's `projects/` became a link to one `~/.beethoven/projects`. The sign-in folder's link stays
-(the daemon links it before each run; the diagnostics node `grid.accounts` finds and repairs an
-unlinked one), so the sessions kept there still resume.
+account's `projects/` became a link to one `~/.beethoven/projects`, and up to grid scripts 8 the
+daemon moved the sign-in folder's `projects/` there and linked it back before each run. Since grid
+scripts 9 nothing of ours moves, renames, links or deletes anything inside a sign-in folder, which
+is hpcworker's and the engine's too: a session resumes from the one sign-in it runs under, a link an
+earlier version made is left as it is (Claude Code writes through it), and `~/.beethoven/projects`
+is never touched.
 
 ## Credentials
 
@@ -151,8 +154,8 @@ What happens instead:
   signed in is answered with the command that fixes it. Only a claude.ai sign-in billed by Anthropic
   itself counts, the laptop's rule: a sign-in through an API key, a token or a cloud provider is
   reported as not a Claude subscription, and the worker and phone access run nothing on it.
-- One person, one Claude account, and no other credential: no API key and no usage credits, by
-  anyone, ever (the maintainer, 2026-10-04). When the subscription window is spent the daemon
+- One person, their own accounts (the next section), and no other credential: no API key and no
+  usage credits, by anyone, ever (the maintainer, 2026-10-04). When the subscription window is spent the daemon
   answers `rate_limited` with the reset time in `retry_after`; nothing retries by itself, and the
   student sends the request again after the reset. The pay-per-use key overflow of 4.0.0 (grid
   scripts 7) is gone; a key it stored in `~/.beethoven/accounts/apikey/apikey` is never used or
@@ -172,6 +175,92 @@ What happens instead:
 
 The sign-in lasts about a month (a user report; Anthropic's docs give a three-day warning before
 expiry). The heartbeat notices when it ends; the extension asks for step 12 again.
+
+## Several accounts of one person: `beethoven.account`
+
+Decided by the maintainer on 2026-10-04 (the plan item *ACCOUNT_SWITCH_CLIENTS.md*, 2): a student
+may hold several Claude accounts of their own, and the engine (`bee`, the `beethoven-research`
+repository, not installed with this edition) keeps the list of their sign-in directories. This
+edition reads that list and lets the student pick one for the laptop. "One person, one Claude
+account" became "one person, their own accounts": never pooled, never anyone else's.
+
+- **The list is the engine's file, read only.** `~/.beethoven/engine/accounts.json` (or
+  `$BEE_REGISTRY_DIR/accounts.json`, else `$BEETHOVEN_HOME/engine/accounts.json`, each taken as
+  written, without `~`: the engine's own lookup, `accountsFile` in `core/accounts.ts`) holds
+  `version` and, per account, `label`, `path`, `enabled`, `order` and `hibernate_until`; nothing from
+  inside a sign-in directory. Sign-in directories are `~/.beethoven/accounts/<label>/claude`; the
+  account `main` is a link to the edition's own `~/.beethoven/claude`; a `path` of `null` (`bee
+  account add <label> --default-location`) is Claude Code's default place, where `CLAUDE_CONFIG_DIR`
+  stays unset. A file the engine refuses (a field its model does not know, a row without its order, a
+  folder that is not a full path, `~` included, a label or a folder twice) is refused whole here too,
+  with the reason, as `bee` refuses it: `readAccounts` follows the engine's `RegistryFile` model and
+  its lax values, so the setting never applies an account `bee-use` would not. Labels are lower-case
+  letters, digits and hyphens, not starting with a hyphen, at most 32 (`ACCOUNT_LABEL`, the engine's
+  `AccountRecord` pattern). `enabled` is the
+  engine's rotation only: `bee-use` and `bee account login` take an account that is out of it, and
+  so does this edition, which is also how the student signs one in again after the engine set it
+  aside. Beethoven never writes the file, never reads inside a sign-in directory (what it asks of
+  one it asks of Claude Code started there: `claude auth status`, and `claude mcp` for the bridge),
+  and never copies, moves or links a credential between two directories: the switch is which
+  directory the next Claude Code gets, nothing else. `usage/<label>.json` beside the list is not
+  read by this edition.
+- **What the terminals get.** With `beethoven.account` empty (the default) nothing changes: the
+  terminals and the Claude Code extension use Claude Code's own sign-in, as in every build before.
+  With a listed label, `BeethovenStore.accountChoice` (`vscode/store.ts`) puts
+  `CLAUDE_CONFIG_DIR=<that account's path>` and `BEE_ACCOUNT=<label>` into the persistent
+  `environmentVariableCollection`, so every integrated terminal of the window gets them, the ones
+  the student opens included; an account at the default place gets `BEE_ACCOUNT` alone. These are
+  the two variables `bee-use <label>` sets, so the edition and the command line share one list and
+  one meaning. The terminal the wizard opens for `claude auth login` gets them explicitly as well
+  (the `env` of `WizardUI.runInteractive`), and so do *Investigate the failure with Claude*
+  (`claude -p` on the laptop), every `claude auth status` the wizard, the view and the
+  troubleshooter ask, and the bridge's registration (`claude mcp`, which Claude Code keeps per
+  sign-in folder: a newly chosen account gets the bridge once it is signed in, `followAccountWithMcp`
+  in `extension.ts`; a folder that is not there yet waits for its sign-in, the bridge never makes it).
+  For an account at the default place these processes also have `CLAUDE_CONFIG_DIR` taken away, as
+  `bee-use` takes it away (`accountProcessEnv`), so a folder VS Code was started with is never signed
+  in or given the bridge under that label. The two variables carry no token, so they follow the
+  setting whatever the license says, and a cleared setting clears them even while the license keeps
+  the tokens out. *Beethoven: Reset* forgets the setting with the other settings, and an error report
+  carries neither the list's place, its folders and labels, the setting's label, nor a
+  `CLAUDE_CONFIG_DIR` or `BEE_ACCOUNT` VS Code was started with (`accountValues`, replaced by
+  placeholders).
+- **The terminals follow the list as well as the setting.** Every read of the choice, by the view,
+  the wizard or the diagnostics, re-reads the list and brings the two variables in line before it
+  reports, so what is reported is what the next terminal gets; a watcher on the list (VS Code's file
+  watcher or, while the folder does not exist yet, a once-a-minute look at the file that then hands
+  over to it, never both) does the same when the engine changes it. A terminal already open keeps the environment it started with (VS
+  Code marks it for a relaunch). A `CLAUDE_CONFIG_DIR` VS Code itself was started with (from a
+  shell after `bee-use`) reaches every terminal unless the choice replaces it, since the collection
+  can give a variable but never take one away: `account.choice`, the wizard's step and the view's
+  tooltip say so.
+- **A remote window is left alone.** In a Remote-SSH, WSL or container window the terminals run on
+  another computer, where the laptop's sign-in folders mean nothing: neither variable is applied
+  there, Beethoven's checks in that window use the laptop's usual sign-in, and the view's *Claude
+  on this laptop* row and `account.choice` say the setting is not applied in a remote window.
+- **A label that is not applied fails nothing.** A label that is not listed, or is not a label at
+  all, sets nothing: the terminals keep the usual sign-in, which the wizard's step checks as
+  before (its detail says why the label is not used, and it does not sign the usual place in on
+  the label's behalf), the student is told once per label (a warning with the two fixes: pick a
+  listed label, or `bee account add <label>` in a terminal), the Beethoven view's *Claude on this
+  laptop* row says so, and the diagnostics node `account.choice` warns every time without blocking
+  `account.claude` or anything on the grid (`account.list` warns about a list that cannot be read
+  only when no label in the setting already makes `account.choice` say it). A changed setting or
+  list checks those nodes again, quickly and quietly, when one of them failed or warned in the last
+  report (`Troubleshooter.recheckAfterAccountChange`): the status bar shows the result, and an open
+  troubleshooter panel keeps its full report and says to check again. With a listed label the row and the wizard's step
+  detail carry `as <label>` beside the signed-in account.
+- **The grid is not changed.** A sign-in on the grid (`beethoven claude login` through the grid
+  scripts) and the worker still use `~/.beethoven/claude` (grid scripts 8). Which of the student's
+  accounts a grid job runs under, and the hand-over between them, is the engine's to choose
+  (`beethoven-research`, `BUILD_PLAN.md` section 17), not this setting's.
+- **Not yet measured:** whether the Claude Code extension for VS Code honours `CLAUDE_CONFIG_DIR`
+  from the terminal environment (Cloak's known limitation, named in the plan item). The integrated
+  terminals and the processes this edition starts get the variable; what the Claude Code extension's
+  own panel does with it has not been checked on a real machine. The maintainer checks before 5.0.0
+  ships (`docs/MARKETPLACE.md`, before the first publish). Also not yet measured: whether VS Code's
+  file watcher reports a list outside the workspace on every platform (the once-a-minute look is the
+  backstop either way).
 
 ## Secrets: where they are and where they are not
 
@@ -265,18 +354,27 @@ own home), so one copy serves the whole lab. `/rs/rs_grp_oschome/shared/beethove
   student may ask again); each goes to `access/requests/decisions.log`. The student's own held job
   is cancelled once a decision exists.
 - **Approval is a read-only ACL** (CephFS honours POSIX ACLs; the admin owns the volume): `--x` on
-  the volume root, `r-x` plus a default ACL on `shared/`, and `r-X` recursively with default ACLs on
+  the volume root where the account has no entry there yet (hpcworker's `tools/grid_access.sh`
+  keeps `rwx` entries there for its approved list; Beethoven never lowers one, and a removal takes
+  away only an entry that is `--x`), `r-x` plus a default ACL on `shared/`, and `r-X` recursively with default ACLs on
   everything under it except `access/`, walking physically (links are never followed out of the
   folder). No unix-group change, no ticket. `beethoven access admin resync` re-applies grants after
   data is copied in with `cp -a` or `mv`; publishing a container resyncs automatically.
 - **Layout after `beethoven access init`:** volume root 2770 with a default ACL `o::---` (new entries
-  start closed); `shared/` and its contents 2750 (the group reads, only the admin writes); `access/`
-  and `access/status/` 2710; `access/requests/` 2700. Nothing is open to other grid users.
+  start closed); the root's `other::---` and its named entries are the gate. Below it, `shared/`
+  2755 and `shared/beethoven` with everything under it readable by other (since grid scripts 9:
+  hpcworker's shared copy and the lab's image live there, and the browser and desktop editions'
+  students reach them as other, through the gate; `library publish` keeps it so); every other
+  entry of `shared/` 2750 (the group reads, only the admin writes); nothing writable by group or
+  other; `access/` and `access/status/` 2710; `access/requests/` 2700. Nothing is open to grid users
+  outside the gate. So for `shared/beethoven` a VS Code approval adds nothing to an entry on the
+  root: whoever holds one reads it, and the per-user approvals decide only `shared/`'s other
+  entries. How the two approved lists are reconciled is not decided here (the maintainer's call).
 - **The request is refused until the environment works the way the lab works:** every earlier step
   done; the Claude Code and Remote-SSH extensions and the bridge present; and, checked on the grid
-  by `beethoven access requirements`, a Claude subscription token the API accepts (`GET /v1/models`
-  with the OAuth token must answer 200; 401 means invalid or revoked; `claude setup-token` only
-  issues tokens to paid plans), and GitHub and Hugging Face tokens that verify. The shared container
+  by `beethoven access requirements`, the `.bashrc` block in place and GitHub and Hugging Face
+  tokens that verify. No Claude token is asked for or checked: the Claude sign-in is the student's
+  own `claude auth login` on a compute node, judged only by `claude auth status`. The shared container
   is what access gives, never a precondition; students are never offered a private build (`beethoven
   install --build-own` is for the admin only).
 - **Token checks never put a token on a command line:** `curl -K -` reads the header from stdin, so

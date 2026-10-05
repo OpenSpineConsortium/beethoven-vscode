@@ -10,7 +10,7 @@ extensions it asks you to install.
 
 | Package | Version | Licence | In |
 |---|---|---|---|
-| @modelcontextprotocol/sdk | 1.30.1 | MIT | mcp-server.js |
+| @modelcontextprotocol/sdk | 1.31.0 | MIT | mcp-server.js |
 | ajv | 8.20.0 | MIT | mcp-server.js |
 | ajv-formats | 3.0.1 | MIT | mcp-server.js |
 | asn1 | 0.2.6 | MIT | beethoven-cli.js, extension.js |
@@ -24,7 +24,7 @@ extensions it asks you to install.
 | zod | 4.6.5 | MIT | mcp-server.js |
 | zod-to-json-schema | 3.25.2 | ISC | mcp-server.js |
 
-## @modelcontextprotocol/sdk 1.30.1
+## @modelcontextprotocol/sdk 1.31.0
 
 Licence: MIT. Source: https://github.com/modelcontextprotocol/typescript-sdk.git
 

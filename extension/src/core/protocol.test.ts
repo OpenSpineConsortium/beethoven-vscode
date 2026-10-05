@@ -4,7 +4,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { makeRequest, newRequestId, looksRateLimited, parseResetTime } from './protocol';
+import { makeRequest, newRequestId, looksRateLimited, parseResetTime, isClaudeCodeLink } from './protocol';
 import { parseSqueue, parseSbatchId, workerStartArgs, describeWall } from './slurm';
 import { normaliseAccessId, gridHome, SERVICES, extractWrappedToken } from './services';
 import { shq, shjoin, renderRemote, remotePath, gridCli, gridCliLine, GRID_HOME_PICK } from './shell';
@@ -66,8 +66,8 @@ test('worker start args switch to the GPU partitions', () => {
 test('AccessID normalisation and grid home', () => {
   assert.equal(normaliseAccessId(' AB1234 '), 'ab1234');
   assert.equal(normaliseAccessId('ab1234@wayne.edu'), 'ab1234');
-  assert.equal(normaliseAccessId('gregory'), null);
-  assert.equal(gridHome('go2432'), '/wsu/home/go/go24/go2432');
+  assert.equal(normaliseAccessId('jordan'), null);
+  assert.equal(gridHome('hx4821'), '/wsu/home/hx/hx48/hx4821');
 });
 
 test('token patterns accept real shapes and reject junk', () => {
@@ -144,9 +144,12 @@ test('the grid doctor fails a sign-in that is not a Claude subscription, from th
   const shapes: [string, Record<string, unknown>, RegExp][] = [
     ['a token', { loggedIn: true, subscription: false, authMethod: 'oauth_token', apiProvider: null, email: 'ab1234@wayne.edu', subscriptionType: 'pro', checked, detail: 'signed in, but not with a Claude subscription' }, /^FAIL  Claude on the grid is signed in, but not with a Claude subscription/m],
     ['a cloud provider', { loggedIn: true, subscription: false, authMethod: 'claude.ai', apiProvider: 'bedrock', email: null, subscriptionType: null, checked, detail: 'signed in, but not with a Claude subscription' }, /^FAIL  Claude on the grid is signed in, but not with a Claude subscription/m],
-    ['the subscription', { loggedIn: true, subscription: true, authMethod: 'claude.ai', apiProvider: null, email: 'ab1234@wayne.edu', subscriptionType: 'pro', checked, detail: 'signed in as ab1234@wayne.edu' }, /^PASS  Claude signed in on the grid/m],
+    ['an API key behind a claude.ai sign-in', { loggedIn: true, subscription: false, authMethod: 'claude.ai', apiProvider: null, apiKey: true, email: 'ab1234@wayne.edu', subscriptionType: 'pro', checked, detail: 'signed in, but not with a Claude subscription' }, /^FAIL  Claude on the grid is signed in, but not with a Claude subscription/m],
+    ['the subscription', { loggedIn: true, subscription: true, authMethod: 'claude.ai', apiProvider: null, apiKey: false, email: 'ab1234@wayne.edu', subscriptionType: 'pro', checked, detail: 'signed in as ab1234@wayne.edu' }, /^PASS  Claude signed in on the grid \([^)]*\)$/m],
     ['no answer', { loggedIn: false, subscription: false, checked, detail: 'auth status did not answer (timeout)' }, /^PASS  Claude signed in on the grid/m],
-    ['a daemon from before the field', { loggedIn: true, authMethod: 'claude.ai', email: 'ab1234@wayne.edu', subscriptionType: 'pro', checked, detail: 'signed in as ab1234@wayne.edu' }, /^PASS  Claude signed in on the grid/m],
+    // a worker of grid scripts 8 judged the sign-in without looking for a key: passed, with the word to restart it
+    ['a daemon of grid scripts 8', { loggedIn: true, subscription: true, authMethod: 'claude.ai', apiProvider: null, email: 'ab1234@wayne.edu', subscriptionType: 'pro', checked, detail: 'signed in as ab1234@wayne.edu' }, /^PASS  Claude signed in on the grid.*before grid scripts 9.*restart it$/m],
+    ['a daemon from before the field', { loggedIn: true, authMethod: 'claude.ai', email: 'ab1234@wayne.edu', subscriptionType: 'pro', checked, detail: 'signed in as ab1234@wayne.edu' }, /^PASS  Claude signed in on the grid.*restart it$/m],
   ];
   for (const [what, login, want] of shapes) {
     fs.writeFileSync(path.join(wd, 'state.json'), JSON.stringify({ v: 1, worker: 'w1', state: 'idle', claude_login: login }, null, 1));
@@ -172,4 +175,16 @@ test('a token is captured whole: across chunks and across hard line wraps', () =
   assert.deepEqual(extractWrappedToken('x\n' + tok + '\n\nDone\n', pat), { token: tok, complete: true });
   // the token followed by text on the same line
   assert.deepEqual(extractWrappedToken(`token=${tok} (keep it)\n`, pat), { token: tok, complete: true });
+});
+
+test('only an exact Claude Code session or environment link is opened', () => {
+  for (const ok of ['https://claude.ai/code/session_01AbC-d_9', 'https://claude.ai/code?environment=env_01XyZ', 'https://claude.com/code/session_x'])
+    assert.equal(isClaudeCodeLink(ok), true, ok);
+  for (const bad of [
+    undefined, null, '', 'https://claude.ai/code', 'https://claude.ai/code/session_', 'http://claude.ai/code/session_x',
+    'https://claude.ai.evil.example/code/session_x', 'https://evil.example/?https://claude.ai/code/session_x',
+    'https://claude.ai/code/session_x/../../settings', 'https://claude.ai/code/session_x#y', 'https://claude.ai/code/session_x ',
+    'https://claude.ai/code?environment=env_x&next=https://evil.example', 'javascript:alert(1)//https://claude.ai/code/session_x',
+  ])
+    assert.equal(isClaudeCodeLink(bad), false, String(bad));
 });

@@ -64,6 +64,8 @@ before(() => {
   process.env.ANTHROPIC_AUTH_TOKEN = 'leak-auth';
   process.env.ANTHROPIC_BASE_URL = 'https://elsewhere.invalid';
   process.env.CLAUDE_CODE_OAUTH_TOKEN = 'leak-oauth';
+  process.env.CLAUDE_CODE_USE_BEDROCK = '1';
+  process.env.DISABLE_GROWTHBOOK = '1'; // not a credential, but Remote Control does not register with it
   const mk = (w: string, job: string) => startPhone({ workerDir: path.join(home, 'workers', w), beethovenHome: home, claudeHome: cfg, root, claude: fake, node: `node-${w}`, job, log: (m: string) => logs.push(`${w}: ${m}`) });
   A = mk('wa', '101');
   B = mk('wb', '202');

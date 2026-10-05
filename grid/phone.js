@@ -32,12 +32,53 @@ const { spawn, spawnSync } = require('child_process');
 const ANSI = /\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b\[[0-9;?]*[ -\/]*[@-~]|\x1b[()][A-Za-z0-9]|\r/g;
 const URL_RE = /https:\/\/claude\.(?:com|ai)\/[^\s\x07\x1b\]"'<>]+/g;
 const CONSENT_RE = /\(y\/n\)|\[y\/n\]|\[Y\/n\]|\[y\/N\]|yes\/no/i;
-const AUTH_VARS = ['CLAUDE_CODE_OAUTH_TOKEN', 'ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_BASE_URL', 'CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR', 'CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR', 'CLAUDE_CODE_USE_BEDROCK', 'CLAUDE_CODE_USE_VERTEX', 'CLAUDE_CODE_USE_FOUNDRY'];
+// the key, token, gateway and cloud-provider variables: hpcworker's list, the same as beethovend.js's (a test compares them)
+const AUTH_VARS = ['ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_BASE_URL', 'CLAUDE_CODE_OAUTH_TOKEN', 'CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR', 'CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR', 'CLAUDE_CODE_USE_BEDROCK', 'CLAUDE_CODE_USE_VERTEX', 'CLAUDE_CODE_USE_FOUNDRY', 'CLAUDE_CODE_USE_ANTHROPIC_AWS', 'CLAUDE_CODE_USE_ANTHROPIC_GOOGLE_CLOUD', 'CLAUDE_CODE_USE_MANTLE', 'CLAUDE_CODE_USE_GATEWAY', 'CLAUDE_CODE_OAUTH_REFRESH_TOKEN', 'CLAUDE_CODE_OAUTH_SCOPES'];
 
 function clean(s) {
   return String(s).replace(ANSI, '');
 }
-const isSubscription = (j) => !!j.loggedIn && j.authMethod === 'claude.ai' && (j.apiProvider ?? 'firstParty') === 'firstParty';
+// apiKeySource rules a sign-in out by its presence alone, its value never read (beethovend.js, hpcworker's rule)
+const isSubscription = (j) => !!j.loggedIn && !Object.prototype.hasOwnProperty.call(j, 'apiKeySource') && j.authMethod === 'claude.ai' && (j.apiProvider ?? 'firstParty') === 'firstParty';
+
+/**
+ * Claude Code's first-run settings in <dir>/.claude.json, the three keys the rule allows (onboarding done, a
+ * theme, trust for one folder) and nothing else: only added when missing, nothing written when they are there,
+ * and a file that exists but does not parse (Claude Code writing it this moment, or damaged) is left as it is,
+ * never replaced by those keys alone, which would lose the student's Remote Control answer, account and other
+ * settings. hpcworker's seed keeps the same rule; the beethoven command and login_relay.sh carry it as a line.
+ * -> 'seeded' | 'already' | 'unreadable'
+ */
+function seedClaudeJson(dir, trusted) {
+  const f = path.join(dir, '.claude.json');
+  let j = {};
+  try {
+    j = JSON.parse(fs.readFileSync(f, 'utf8'));
+  } catch (e) {
+    if (!e || e.code !== 'ENOENT') return 'unreadable';
+  }
+  if (!j || typeof j !== 'object' || Array.isArray(j)) return 'unreadable';
+  let changed = false;
+  if (j.hasCompletedOnboarding !== true) {
+    j.hasCompletedOnboarding = true;
+    changed = true;
+  }
+  if (!j.theme) {
+    j.theme = 'dark';
+    changed = true;
+  }
+  j.projects = j.projects || {};
+  const pr = j.projects[trusted] || {};
+  if (pr.hasTrustDialogAccepted !== true) {
+    j.projects[trusted] = { ...pr, hasTrustDialogAccepted: true };
+    changed = true;
+  }
+  if (!changed) return 'already';
+  fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+  fs.writeFileSync(f + '.part', JSON.stringify(j, null, 1), { mode: 0o600 });
+  fs.renameSync(f + '.part', f);
+  return 'seeded';
+}
 const NOT_SUBSCRIPTION = 'Claude on the grid is signed in, but not with a Claude subscription, and phone access runs only on your own subscription: sign in again with it: beethoven claude login (Beethoven: Sign in to Claude on the grid)';
 
 function startPhone(o) {
@@ -87,7 +128,8 @@ function startPhone(o) {
     const e = { ...process.env, CLAUDE_CONFIG_DIR: CFG, BROWSER: '/bin/false', DISABLE_AUTOUPDATER: '1', TERM: 'xterm-256color' };
     // no other credential may override the student's own login; ANTHROPIC_BASE_URL also disables Remote Control
     for (const k of AUTH_VARS) delete e[k];
-    delete e.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC; // it switches Remote Control off
+    delete e.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC; // either switches Remote Control off
+    delete e.DISABLE_GROWTHBOOK;
     return e;
   }
   function claudeCmd(args) {
@@ -110,6 +152,7 @@ function startPhone(o) {
       const s = r.stdout || '';
       const field = (k) => (new RegExp(`"${k}":\\s*"([^"]*)"`).exec(s) || [])[1];
       j = { loggedIn: /"loggedIn":\s*true/.test(s), authMethod: field('authMethod'), apiProvider: field('apiProvider') };
+      if (/"apiKeySource"\s*:/.test(s)) j.apiKeySource = true; // a key behind the sign-in: noticed, its value not kept
     }
     const v = isSubscription(j || {});
     loggedInCache = { at: Date.now(), value: v, other: !v && !!(j && j.loggedIn) };
@@ -126,20 +169,7 @@ function startPhone(o) {
   }
   function pretrust() {
     // Remote Control refuses an untrusted folder; mark the phone folder trusted in this login's config
-    const f = path.join(CFG, '.claude.json');
-    let j = {};
-    try {
-      j = JSON.parse(fs.readFileSync(f, 'utf8'));
-    } catch {
-      /* new */
-    }
-    j.hasCompletedOnboarding = true;
-    j.theme = j.theme || 'dark';
-    j.projects = j.projects || {};
-    j.projects[PROJ] = { ...(j.projects[PROJ] || {}), hasTrustDialogAccepted: true };
-    fs.mkdirSync(CFG, { recursive: true, mode: 0o700 });
-    fs.writeFileSync(f + '.part', JSON.stringify(j, null, 1), { mode: 0o600 });
-    fs.renameSync(f + '.part', f);
+    if (seedClaudeJson(CFG, PROJ) === 'unreadable') log('phone: Claude Code\'s settings file (.claude.json) could not be read; left as it is');
   }
   function startSession() {
     pretrust();
@@ -285,4 +315,4 @@ function startPhone(o) {
   };
 }
 
-module.exports = { startPhone, clean, URL_RE, AUTH_VARS };
+module.exports = { startPhone, clean, URL_RE, AUTH_VARS, isSubscription, seedClaudeJson };

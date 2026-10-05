@@ -14,6 +14,18 @@
 
 export const PROTOCOL_VERSION = 1;
 
+// The two shapes of a Claude Code link a worker reports (the same rule as the desktop edition's
+// contract.ts): the link to one session, or to the worker's Remote Control environment. Only a link of
+// exactly one of these shapes is ever handed to the system's browser; anything else in a status file is
+// shown as text or not at all.
+const ENVIRONMENT_URL = /https:\/\/claude\.(?:ai|com)\/code\?environment=env_[A-Za-z0-9_-]+/;
+const SESSION_URL = /https:\/\/claude\.(?:ai|com)\/code\/session_[A-Za-z0-9_-]+/;
+const CLAUDE_CODE_LINK = new RegExp(`^(?:${ENVIRONMENT_URL.source}|${SESSION_URL.source})$`);
+
+export function isClaudeCodeLink(url: unknown): url is string {
+  return typeof url === 'string' && CLAUDE_CODE_LINK.test(url);
+}
+
 export type PermissionMode = 'default' | 'acceptEdits' | 'plan' | 'bypassPermissions';
 
 export interface BeethovenRequest {

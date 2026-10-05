@@ -7,7 +7,8 @@
 #
 #   login_relay.sh start            start the sign-in (prints the link once it appears)
 #   login_relay.sh screen           show the current screen of the sign-in
-#   login_relay.sh send <file>      paste the code in <file> into the sign-in, then delete the file
+#   login_relay.sh send <file>      paste the code in <file> into the sign-in; the file is deleted only when
+#                                   it is in ~/.beethoven/tmp, this script's own folder
 #   login_relay.sh stop             end the session
 set -euo pipefail
 BEETHOVEN="$(dirname "$0")/beethoven"; [ -r "$BEETHOVEN" ] || BEETHOVEN="$HOME/.beethoven/bin/beethoven"
@@ -26,16 +27,18 @@ case "${1:-}" in
   start)
     if tm has-session -t "$SESSION" 2>/dev/null; then echo "already running"; exec "$0" screen; fi
     mkdir -p "$ROOT/workspaces/phone" "$CLAUDE_HOME"; chmod 700 "$CLAUDE_HOME"
-    # same first-run settings seed as `beethoven claude login` (settings, never credentials), kept in a
-    # file so that no quoting layer touches it
+    # same first-run settings seed as `beethoven claude login` (settings, never credentials; a file that does
+    # not parse is left as it is), kept in a file so that no quoting layer touches it
     cat > "$KEEP/seed.js" <<'JS'
-const fs=require("fs"),p=process.env.CLAUDE_CONFIG_DIR+"/.claude.json";let j={};try{j=JSON.parse(fs.readFileSync(p,"utf8"))}catch{};j.hasCompletedOnboarding=true;j.theme=j.theme||"dark";j.projects=j.projects||{};j.projects[process.cwd()]=Object.assign({},j.projects[process.cwd()]||{},{hasTrustDialogAccepted:true});fs.writeFileSync(p,JSON.stringify(j,null,1),{mode:0o600});
+const fs=require("fs"),p=process.env.CLAUDE_CONFIG_DIR+"/.claude.json",no=function(){console.error("Claude Code settings file "+p+" could not be read; Beethoven left it as it is");process.exit(0)};let j={};try{j=JSON.parse(fs.readFileSync(p,"utf8"))}catch(e){if(!e||e.code!=="ENOENT")no()}if(!j||typeof j!=="object"||Array.isArray(j))no();let ch=false;if(j.hasCompletedOnboarding!==true){j.hasCompletedOnboarding=true;ch=true}if(!j.theme){j.theme="dark";ch=true}j.projects=j.projects||{};const d=process.cwd(),pr=j.projects[d]||{};if(pr.hasTrustDialogAccepted!==true){j.projects[d]=Object.assign({},pr,{hasTrustDialogAccepted:true});ch=true}if(ch){fs.writeFileSync(p+".part",JSON.stringify(j,null,1),{mode:0o600});fs.renameSync(p+".part",p)};
 JS
     chmod 600 "$KEEP/seed.js"
     inner="cd '$ROOT/workspaces/phone' && node '$KEEP/seed.js' && exec '$CLAUDE_BIN' auth login"
-    # the key, token, gateway and cloud-provider variables are removed as in `beethoven claude login`
+    # the key, token, gateway and cloud-provider variables are removed as in `beethoven claude login` (the
+    # same list as there, beethovend.js and phone.js; a test compares them), and the two Remote Control switches
+    auth_unset="-u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN -u ANTHROPIC_BASE_URL -u CLAUDE_CODE_OAUTH_TOKEN -u CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR -u CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR -u CLAUDE_CODE_USE_BEDROCK -u CLAUDE_CODE_USE_VERTEX -u CLAUDE_CODE_USE_FOUNDRY -u CLAUDE_CODE_USE_ANTHROPIC_AWS -u CLAUDE_CODE_USE_ANTHROPIC_GOOGLE_CLOUD -u CLAUDE_CODE_USE_MANTLE -u CLAUDE_CODE_USE_GATEWAY -u CLAUDE_CODE_OAUTH_REFRESH_TOKEN -u CLAUDE_CODE_OAUTH_SCOPES"
     # shellcheck disable=SC2086
-    cmd="$RUNTIME exec $BINDS '$SANDBOX' env -u CLAUDE_CODE_OAUTH_TOKEN -u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN -u ANTHROPIC_BASE_URL -u CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR -u CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR -u CLAUDE_CODE_USE_BEDROCK -u CLAUDE_CODE_USE_VERTEX -u CLAUDE_CODE_USE_FOUNDRY -u CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC HOME='$HOME' CLAUDE_CONFIG_DIR='$CLAUDE_HOME' TERM=xterm-256color BROWSER=/bin/false bash -c \"$inner\""
+    cmd="$RUNTIME exec $BINDS '$SANDBOX' env $auth_unset -u CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC -u DISABLE_GROWTHBOOK HOME='$HOME' CLAUDE_CONFIG_DIR='$CLAUDE_HOME' TERM=xterm-256color BROWSER=/bin/false bash -c \"$inner\""
     printf '%s\n' "$cmd" > "$KEEP/login_cmd.sh"; chmod 600 "$KEEP/login_cmd.sh"
     j=$(jid); [ -n "$j" ] || { echo "no running worker" >&2; exit 2; }
     # the tmux server lives inside a step of the worker's allocation; the step stays up while the session exists
@@ -52,7 +55,10 @@ JS
     tm capture-pane -p -J -t "$SESSION" -S -200 | sed -e 's/[[:space:]]*$//' | awk 'NF{blank=0} !NF{blank++} blank<2';;
   send)
     f="${2:?file with the code}"; [ -s "$f" ] || { echo "no code in $f" >&2; exit 2; }
-    tr -d '\r\n' < "$f" > "$KEEP/code.buf"; chmod 600 "$KEEP/code.buf"; rm -f "$f"
+    tr -d '\r\n' < "$f" > "$KEEP/code.buf"; chmod 600 "$KEEP/code.buf"
+    # the caller's file is removed only from this script's own folder: a path anywhere else (a workspace, a
+    # sign-in folder) is never deleted from here
+    case "$(readlink -f -- "$f")" in "$(readlink -f -- "$KEEP")"/*) rm -f -- "$f";; *) echo "(left $f where it is: delete it yourself once the sign-in is done)" >&2;; esac
     tm load-buffer -b code "$KEEP/code.buf"; rm -f "$KEEP/code.buf"
     tm paste-buffer -b code -d -t "$SESSION"; sleep 1; tm send-keys -t "$SESSION" Enter
     sleep 6; exec "$0" screen;;

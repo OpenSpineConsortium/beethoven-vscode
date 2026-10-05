@@ -1,6 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { upsertBlock, renderBlock, stripBlock, hasBlock, definesHost, nodeHost, remoteUri, BLOCK_START, BLOCK_END } from './sshConfig';
+import { keyMadeByBeethoven } from './wizard';
 
 const T = { accessId: 'ab1234', loginHost: 'warrior.grid.wayne.edu', alias: 'wsu-grid', nodeDomain: 'nas.grid.wayne.edu', identityFile: '~/.ssh/id_ed25519_wsu', includeGridAlias: true };
 
@@ -83,4 +88,44 @@ test('a block written before the rename (Ashley for VS Code) is replaced, never 
   assert.ok(!out.includes('# >>> ashley'), 'the old block is gone');
   assert.ok(out.includes('Host github.com'), 'the student\'s own lines stay');
   assert.equal(stripBlock(old).trim(), 'Host github.com\n    User git');
+});
+
+test('a start marker without its own end keeps every line after it: those hosts are the student\'s', () => {
+  const lone = `Host a\n    User b\n${BLOCK_START}\nHost wsu-grid grid\n    HostName warrior.grid.wayne.edu\n\nHost github.com\n    User git\n`;
+  assert.equal(stripBlock(lone), lone, 'nothing is dropped');
+  const out = upsertBlock(lone, T);
+  assert.ok(out.startsWith(BLOCK_START), 'the block goes first as always');
+  assert.ok(out.includes('Host github.com\n    User git'), 'the host after the lone marker stays');
+  assert.equal(upsertBlock(out, T), out, 'and stays put on the next run');
+  // a lone start before a whole block: the lines between them stay too
+  const two = `${BLOCK_START}\nHost mine\n    User me\n${renderBlock(T)}Host after\n`;
+  const s = stripBlock(two);
+  assert.ok(s.includes('Host mine') && s.includes('Host after'), s);
+  assert.ok(!s.includes(BLOCK_END) && !s.includes('ProxyJump'), 'the whole block went');
+});
+
+test('Reset deletes a key only when the SSH key step made it: any other key at that path is the student\'s', () => {
+  const body = 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl';
+  assert.equal(keyMadeByBeethoven(`${body} ab1234@wayne.edu beethoven\n`), true, 'made by the step');
+  assert.equal(keyMadeByBeethoven(`${body} ab1234@wayne.edu ashley\n`), true, 'made by the step before the rename');
+  assert.equal(keyMadeByBeethoven(`${body} @wayne.edu beethoven\n`), true, 'made before an AccessID was set');
+  for (const theirs of [`${body} student@laptop\n`, `${body} ab1234@wayne.edu\n`, `${body} ab1234@wayne.edu beethoven-not\n`, `${body}\n`, 'ssh-rsa AAAAB3Nza ab1234@wayne.edu beethoven\n', '']) {
+    assert.equal(keyMadeByBeethoven(theirs), false, JSON.stringify(theirs));
+  }
+});
+
+test('and it recognises what ssh-keygen writes with the step\'s own arguments', { skip: spawnSync('ssh-keygen', ['-?'], { encoding: 'utf8' }).error ? 'no ssh-keygen here' : false }, () => {
+  const h = fs.mkdtempSync(path.join(os.tmpdir(), 'beethoven-key-'));
+  try {
+    const gen = (name: string, extra: string[]) => {
+      const k = path.join(h, name);
+      const r = spawnSync('ssh-keygen', ['-q', '-t', 'ed25519', '-N', '', ...extra, '-f', k], { encoding: 'utf8' });
+      assert.equal(r.status, 0, r.stderr);
+      return fs.readFileSync(k + '.pub', 'utf8');
+    };
+    assert.equal(keyMadeByBeethoven(gen('ours', ['-C', 'ab1234@wayne.edu beethoven'])), true); // stepSshKey's arguments
+    assert.equal(keyMadeByBeethoven(gen('theirs', [])), false); // ssh-keygen's own default comment, user@host
+  } finally {
+    fs.rmSync(h, { recursive: true, force: true });
+  }
 });

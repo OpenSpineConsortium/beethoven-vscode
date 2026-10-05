@@ -168,7 +168,7 @@ server.registerTool(
   'beethoven_read_file',
   {
     title: 'Read a small file on the grid',
-    description: 'Read up to max_bytes of a file in the student\'s grid home (logs, results, CSV heads). Reading is cheap on the login node; large data is not.',
+    description: 'Read up to max_bytes of a file in the student\'s grid home (logs, results, CSV heads). Reading is cheap on the login node; large data is not. A Claude sign-in folder, ~/.ssh and files named like a credential, key or token are never read, and credential-shaped text is removed.',
     inputSchema: { path: z.string(), max_bytes: z.number().int().min(1).max(2_000_000).default(200_000) },
   },
   async (a) => text((await grid.readFile(a.path, a.max_bytes)).text),
@@ -176,7 +176,7 @@ server.registerTool(
 
 server.registerTool(
   'beethoven_list_dir',
-  { title: 'List a directory on the grid', description: 'ls -la of a directory in the grid home.', inputSchema: { path: z.string() } },
+  { title: 'List a directory on the grid', description: 'ls -la of a directory in the grid home (never inside a Claude sign-in folder or ~/.ssh).', inputSchema: { path: z.string() } },
   async (a) => text((await grid.listDir(a.path)).text),
 );
 

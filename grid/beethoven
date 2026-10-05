@@ -22,9 +22,10 @@
 #   beethoven result [--worker N] <id>
 #   beethoven tail [--worker N] <id>
 #   beethoven sessions [--json]
-#   beethoven claude login|status|remote-consent|forget      your Claude sign-in on the grid (Claude Code's own flow)
+#   beethoven claude login|status|remote-consent      your Claude sign-in on the grid (Claude Code's own flow; never deleted or signed out)
 #   beethoven accounts list|remove --yes                          your Claude sign-in; remove deletes an old API key (none used since grid scripts 8)
 #   beethoven bootstrap [--resubmit] [--update]
+#   beethoven uninstall --yes           what install put in place; your Claude sign-in, accounts, history and work folder stay
 #   beethoven version
 set -uo pipefail
 # BEETHOVEN_HOME, else ASHLEY_HOME (its name before 2026-09-30, still set by older job files), else ~/.beethoven
@@ -39,11 +40,12 @@ die() { echo "beethoven: $*" >&2; exit 1; }
 json_str() { # escape a string for JSON (control characters dropped)
   local s; s=$(printf '%s' "$1" | tr -d '\000-\010\013\014\016-\037'); s=${s//\\/\\\\}; s=${s//\"/\\\"}; s=${s//$'\n'/\\n}; s=${s//$'\r'/}; s=${s//$'\t'/\\t}; printf '"%s"' "$s"
 }
-# Destructive commands (uninstall, claude forget) are for a person at a terminal. A Claude Code
+# Destructive commands (uninstall, accounts remove) are for a person at a terminal. A Claude Code
 # session (CLAUDECODE is set in every shell it runs) or a worker request must never remove the
-# student's installation or their sign-in: on 2026-09-28 the whole grid folder (then ~/.ashley)
-# vanished while a Remote Control session was open, with the sign-in inside it. A worker sets
-# BEETHOVEN_REQUEST_ID and BEETHOVEN_WORKER in Claude's shell, and the ASHLEY_ twins for older readers.
+# student's installation: on 2026-09-28 the whole grid folder (then ~/.ashley) vanished while a
+# Remote Control session was open, with the sign-in inside it. Since grid scripts 9 no command here
+# can delete a sign-in at all (see cmd_uninstall). A worker sets BEETHOVEN_REQUEST_ID and
+# BEETHOVEN_WORKER in Claude's shell, and the ASHLEY_ twins for older readers.
 refuse_destructive_from_agent() { # $1 what
   if [ -n "${CLAUDECODE:-}" ] || [ -n "${BEETHOVEN_REQUEST_ID:-}" ] || [ -n "${BEETHOVEN_WORKER:-}" ] || [ -n "${ASHLEY_REQUEST_ID:-}" ] || [ -n "${ASHLEY_WORKER:-}" ]; then
     die "refusing to $1 from inside a Claude Code session or worker: a person runs this at a terminal (beethoven $1 --yes)"
@@ -78,6 +80,14 @@ SHARED="$(dirname "$LIBRARY_ROOT")"      # the lab folder: students read it, nev
 ACCESS_ROOT="$SHARED/access"
 lib_file() { echo "$LIBRARY_ROOT/library.json"; }
 lib_readable() { [ -r "$(lib_file)" ]; }
+# Readable is not approved: the lab's folder stays readable to every account the volume root lets in
+# (hpcworker's shared copy lives there too), and the root also lets in an applicant whose request is pending,
+# denied or removed (the pass-through to their status file). Their lead's decision rules; an account with no
+# decision and a readable library is one the grid's own list let in.
+lib_granted() {
+  lib_readable || return 1
+  case "$(status_field "$USER" state)" in pending|denied|removed) return 1;; esac
+}
 lib_field() { # NAME FIELD -> value (string fields only; python-free)
   local name="$1" field="$2"
   tr -d '\n' < "$(lib_file)" | grep -o "\"$name\": *{[^}]*}" | grep -o "\"$field\": *\"[^\"]*\"" | head -1 | sed 's/.*: *"\([^"]*\)"$/\1/'
@@ -102,7 +112,10 @@ cmd_library() {
       [[ "$name" =~ ^[A-Za-z0-9_.-]+$ ]] || die "library publish needs --name"
       mkdir -p "$LIBRARY_ROOT" "$BEETHOVEN_HOME/log" || die "cannot create $LIBRARY_ROOT"
       # the purpose travels in the environment (--export=ALL): inside --export a comma would cut it
-      chmod 2750 "$LIBRARY_ROOT" 2>/dev/null   # group reads, only the admin writes; approved students read by ACL
+      # group and other read, only the admin writes. Other is only who the volume root's list lets in (its
+      # other::--- is the gate), and hpcworker's shared copy and the lab's image live in this folder too:
+      # closing it to other shuts every student of the browser and desktop editions out (grid scripts 9)
+      chmod 2755 "$LIBRARY_ROOT" 2>/dev/null
       local id; id=$(cd "$BEETHOVEN_HOME/log" && PURPOSE="$purpose" sbatch --parsable --partition="$part" --qos="$qos" --export="ALL,LIBRARY=1,ROOT_OVERRIDE=$LIBRARY_ROOT,LIB_NAME=$name,IMAGE=$image,GPU=$gpu" "$BIN/bootstrap.sbatch" 2>&1) || die "sbatch failed: $id"
       echo "publish job ${id%%;*} submitted: $name from $image into $LIBRARY_ROOT (log $BEETHOVEN_HOME/log/bootstrap_${id%%;*}.out)";;
     *) die "library: list|publish";;
@@ -111,6 +124,7 @@ cmd_library() {
 cmd_adopt() { # use a shared container instead of building: writes config.env + READY
   local name="${1:-}"
   lib_readable || die "no shared library readable at $LIBRARY_ROOT"
+  lib_granted || die "the lab's container comes with your lead's approval, and your lab access is $(status_field "$USER" state)"
   [ -n "$name" ] || name=$(lib_default)
   local sandbox claude runtime ver
   sandbox=$(lib_field "$name" sandbox); claude=$(lib_field "$name" claude_bin); runtime=$(lib_field "$name" runtime); ver=$(lib_field "$name" claude_version)
@@ -163,8 +177,11 @@ migrate_home() { # [--merge]: 0 when ~/.beethoven is the folder and ~/.ashley le
     [ -e "$e" ] || [ -L "$e" ] || continue
     b=$(basename "$e"); t="$NEW_HOME/$b"
     if [ "$b" = bin ]; then kept="$kept bin"; continue; fi   # the new scripts are already in place
-    # an empty placeholder the installer made (folders only, no file inside) gives way
-    if [ -d "$t" ] && [ ! -L "$t" ] && [ -z "$(find "$t" ! -type d -print -quit 2>/dev/null)" ]; then find "$t" -depth -type d -empty -delete 2>/dev/null; fi
+    # an empty placeholder the installer made (folders only, no file inside) gives way, but never one of the
+    # folders other tools keep here: a sign-in folder hpcworker or the engine made empty is still theirs
+    case "$b" in claude|accounts|engine|projects) ;; *)
+      if [ -d "$t" ] && [ ! -L "$t" ] && [ -z "$(find "$t" ! -type d -print -quit 2>/dev/null)" ]; then find "$t" -depth -type d -empty -delete 2>/dev/null; fi;;
+    esac
     if [ ! -e "$t" ] && [ ! -L "$t" ]; then mv "$e" "$t" || kept="$kept $b"; else kept="$kept $b"; fi
   done
   aside="$HOME/.ashley.before-beethoven.$(date +%Y%m%d-%H%M%S)"
@@ -180,8 +197,21 @@ old_names() { # the scripts' names before grid scripts 7, as links beside the ne
 # recognised, so an old block is replaced where it stands and never duplicated.
 BASHRC_START='^# >>> (beethoven|ashley)'; BASHRC_END='^# <<< (beethoven|ashley)'
 has_bashrc_block() { grep -Eq "$BASHRC_START" "${1:-$HOME/.bashrc}" 2>/dev/null; }
-bashrc_without_blocks() { # FILE: the file without any of the blocks
-  awk -v s="$BASHRC_START" -v e="$BASHRC_END" '$0 ~ s {skip=1; next} skip && $0 ~ e {skip=0; next} !skip {print}' "$1"
+# A block is a start line and the next end line with no other start line between them. A start line with no
+# end of its own (deleted or mistyped by hand) stays where it stands with every line after it: those are the
+# student's (conda init, aliases), never ours to drop.
+bashrc_without_blocks() { # FILE [BLOCK]: FILE without our blocks; with BLOCK, the first replaced by it where it stands (appended when none)
+  awk -v s="$BASHRC_START" -v e="$BASHRC_END" -v blk="${2:-}" '
+    NR == FNR { if ($0 ~ s) o = FNR; else if (o && $0 ~ e) { c[o] = 1; o = 0 }; next }
+    !skip && (FNR in c) { skip = 1; if (blk != "" && !done) { while ((getline l < blk) > 0) print l; done = 1 }; next }
+    skip { if ($0 ~ e) skip = 0; next }
+    { print }
+    END { if (blk != "" && !done) { print ""; while ((getline l < blk) > 0) print l } }' "$1" "$1"
+}
+bashrc_rewrite() { # FILE [BLOCK]: FILE through bashrc_without_blocks, written into the file a link leads to (the link stays)
+  local real; real=$(readlink -f -- "$1") && [ -f "$real" ] || return 1
+  bashrc_without_blocks "$real" "${2:-}" > "$real.beethoven.tmp" || { rm -f -- "$real.beethoven.tmp"; return 1; }
+  chmod --reference="$real" "$real.beethoven.tmp" 2>/dev/null; mv -- "$real.beethoven.tmp" "$real"
 }
 
 cmd_install() {
@@ -202,18 +232,19 @@ cmd_install() {
   load_cfg
   mkdir -p "$ROOT" 2>/dev/null || die "cannot create ROOT=$ROOT"
   # bashrc block (VS Code glibc sysroot + PATH), idempotent by markers: the first block (new or old
-  # marker) is replaced where it stands, any further one is dropped
+  # marker) is replaced where it stands, any further one is dropped, a start line without its end is kept
   local rc="$HOME/.bashrc" blk="$BIN/bashrc.block"
   touch "$rc"
   if has_bashrc_block "$rc"; then
-    awk -v blk="$blk" -v s="$BASHRC_START" -v e="$BASHRC_END" 'BEGIN{skip=0; done=0} $0 ~ s {skip=1; if (!done) {while ((getline l < blk) > 0) print l; done=1}; next} skip && $0 ~ e {skip=0; next} skip==0{print}' "$rc" > "$rc.beethoven.tmp" && mv "$rc.beethoven.tmp" "$rc"
+    bashrc_rewrite "$rc" "$blk" || echo "note: could not rewrite $rc; its Beethoven block is as it was" >&2
   else
     { echo; cat "$blk"; } >> "$rc"
   fi
   echo "installed beethoven $VERSION at $BEETHOVEN_HOME (ROOT=$ROOT); bashrc block written"
+  restart_old_workers
   if is_ready; then echo "grid already ready: $(cat "$BEETHOVEN_HOME/READY")"; return 0; fi
   # the shared library first: instant, consistent across the lab, no storage used
-  if [ $build_own -eq 0 ] && lib_readable && cmd_adopt "$(lib_default)" 2>/dev/null; then return 0; fi
+  if [ $build_own -eq 0 ] && lib_granted && cmd_adopt "$(lib_default)" 2>/dev/null; then return 0; fi
   # Not readable yet. When the lab runs access requests, the container arrives with access (the
   # wizard's last step): do not spend 1.8 GB and seven minutes of the student's space on a copy.
   if [ $build_own -eq 0 ] && lab_mode; then
@@ -222,6 +253,22 @@ cmd_install() {
     return 0
   fi
   cmd_bootstrap "${pass[@]}"
+}
+
+# A running worker keeps the daemon it started with (node holds it in memory) until its job ends, whatever
+# was uploaded since. One from before grid scripts 9 moves Claude Code's transcripts inside the sign-in folder
+# and runs on a sign-in with an API key behind it, so install restarts every running worker whose own
+# heartbeat lacks "scripts" (beethovend.js writes it since 9) onto the scripts just installed; a request it
+# had claimed is taken up again by the new daemon.
+restart_old_workers() {
+  local wk wd jid out
+  for wk in $(worker_dirs); do wd="$BEETHOVEN_HOME/workers/$wk"; jid=$(cat "$wd/job.id" 2>/dev/null || echo "")
+    [ -n "$jid" ] && [ -s "$wd/state.json" ] && grep -q "\"job\": *\"$jid\"" "$wd/state.json" || continue
+    grep -q '"scripts":' "$wd/state.json" && continue
+    [ "$(job_state "$jid")" = RUNNING ] || continue
+    if out=$( ( cmd_worker restart --name "$wk" ) 2>&1 ); then echo "restarted worker $wk: it ran grid scripts older than $VERSION"
+    else echo "worker $wk ran grid scripts older than $VERSION and was stopped, but did not start again ($(printf '%s' "$out" | tail -1)): start it again (Beethoven: Start a worker)" >&2; fi
+  done
 }
 
 cmd_bootstrap() {
@@ -288,7 +335,7 @@ license_fp() { # first 16 hex digits of the license key's SHA-256 (the laptop co
 cmd_status() {
   local as_json=0; [ "${1:-}" = "--json" ] && as_json=1
   load_cfg
-  if ! is_ready && lib_readable; then ( cmd_adopt "$(lib_default)" ) >/dev/null 2>&1; load_cfg; fi
+  if ! is_ready && lib_granted; then ( cmd_adopt "$(lib_default)" ) >/dev/null 2>&1; load_cfg; fi
   local ready=false cv="" bst=""
   is_ready && ready=true
   [ -s "$BEETHOVEN_HOME/READY" ] && cv=$(grep -o '"claude_version":"[^"]*"' "$BEETHOVEN_HOME/READY" | cut -d'"' -f4)
@@ -296,7 +343,7 @@ cmd_status() {
   read -r used soft < <(home_quota)
   if [ $as_json -eq 1 ]; then
     local awaiting=false
-    case "$bst" in PENDING|RUNNING|CONFIGURING) ;; *) if [ "$ready" = false ] && ! lib_readable && lab_mode; then awaiting=true; fi;; esac
+    case "$bst" in PENDING|RUNNING|CONFIGURING) ;; *) if [ "$ready" = false ] && ! lib_granted && lab_mode; then awaiting=true; fi;; esac
     printf '{"version":%s,"host":%s,"ready":%s,"awaiting_access":%s,"root":%s,"runtime":%s,"claude_version":%s,"container":%s,"source":%s,"library":%s,"bootstrap_job":%s,"bootstrap_state":%s,"home_used_gb":%s,"home_soft_gb":%s,"workers":[' \
       "$(json_str "$VERSION")" "$(json_str "$(hostname)")" "$ready" "$awaiting" "$(json_str "$ROOT")" "$(json_str "$RUNTIME")" "$(json_str "$cv")" "$(json_str "${CONTAINER:-own}")" "$(json_str "${SOURCE:-own}")" "$(lib_readable && echo true || echo false)" "$(json_str "$BOOTSTRAP_JOB")" "$(json_str "$bst")" "${used:-0}" "${soft:-0}"
     local first=1; for w in $(worker_dirs); do [ $first -eq 1 ] || printf ','; first=0; worker_json "$w"; done
@@ -322,8 +369,9 @@ cmd_doctor() {
   [ -n "$ROOT" ] && [ -w "$ROOT" ] && ok "ROOT $ROOT writable" || bad "ROOT not writable (${ROOT:-unset})"
   if is_ready; then ok "READY: $(cat "$BEETHOVEN_HOME/READY")"; else bad "not ready (bootstrap job ${BOOTSTRAP_JOB:-none}: $(job_state "$BOOTSTRAP_JOB"))"; fi
   [ -n "$RUNTIME" ] && [ -x "$RUNTIME" ] && ok "runtime $RUNTIME" || bad "runtime missing on this host (fine on the login node if the compute nodes have it)"
-  if claude_login_other "$(claude_login_json)"; then bad "Claude on the grid is signed in, but not with a Claude subscription; Beethoven runs only on your own subscription (beethoven claude login)"
-  elif [ -s "$CLAUDE_HOME/.credentials.json" ]; then ok "Claude signed in on the grid (Claude Code's own store in $CLAUDE_HOME)"; else bad "Claude not signed in on the grid (beethoven claude login)"; fi
+  local lj; lj=$(claude_login_json)
+  if claude_login_other "$lj"; then bad "Claude on the grid is signed in, but not with a Claude subscription; Beethoven runs only on your own subscription (beethoven claude login)"
+  elif [ -s "$CLAUDE_HOME/.credentials.json" ]; then ok "Claude signed in on the grid (Claude Code's own store in $CLAUDE_HOME)$(claude_login_old_rule "$lj" && echo "; a worker started before grid scripts 9 does not yet look for an API key behind the sign-in: restart it")"; else bad "Claude not signed in on the grid (beethoven claude login)"; fi
   [ -s "$BEETHOVEN_HOME/secrets.env" ] && ok "secrets.env present ($(stat -c %a "$BEETHOVEN_HOME/secrets.env")): $(cmd_verify_tokens 2>/dev/null | tr '\n' ';')" || bad "secrets.env missing (GitHub / Hugging Face tokens for the worker)"
   read -r used soft < <(home_quota); ok "home quota ${used:-?}/${soft:-?} GB"
   for w in $(worker_dirs); do echo "      worker $(worker_json "$w")"; done
@@ -344,9 +392,11 @@ cmd_worker() {
   case "$sub" in
     start)
       # access granted since the last install: adopt the lab's container on the spot
-      if ! is_ready && lib_readable; then ( cmd_adopt "$(lib_default)" ) >/dev/null 2>&1; load_cfg; fi
-      if ! is_ready && ! lib_readable && lab_mode; then die "no container yet: it comes with lab access (the last setup step; your lead approves it)"; fi
+      if ! is_ready && lib_granted; then ( cmd_adopt "$(lib_default)" ) >/dev/null 2>&1; load_cfg; fi
+      if ! is_ready && ! lib_granted && lab_mode; then die "no container yet: it comes with lab access (the last setup step; your lead approves it)"; fi
       is_ready || die "grid not ready yet (bootstrap job ${BOOTSTRAP_JOB:-none}: $(job_state "${BOOTSTRAP_JOB:-}")); try again when 'beethoven status' says ready=true"
+      # the lab's container stays readable after a lead denies or removes access; the decision still holds
+      [ "${SOURCE:-}" != shared ] || lib_granted || die "your lab access is $(status_field "$USER" state), and the lab's container comes with it: ask your lead"
       [ -s "$BEETHOVEN_HOME/license.key" ] || die "no Beethoven license on the grid yet: run the setup's grid step in VS Code (it copies your license here)"
       mkdir -p "$w"/{inbox,outbox,log}
       rm -f "$w/stop"
@@ -473,17 +523,10 @@ cmd_sessions() {
   if [ $as_json -eq 1 ]; then printf '{"sessions":['; local first=1; for f in "$BEETHOVEN_HOME"/sessions/*.json; do [ -s "$f" ] || continue; [ $first -eq 1 ] || printf ','; first=0; tr -d '\n' < "$f"; done; printf ']}\n'
   else for f in "$BEETHOVEN_HOME"/sessions/*.json; do [ -s "$f" ] && { basename "$f" .json; sed 's/^/    /' "$f"; }; done; fi
 }
-share_transcripts() { # the sign-in folder's projects/ links to ~/.beethoven/projects, the history every earlier account shared (see beethovend.js)
-  local p="$1/projects" s="$BEETHOVEN_HOME/projects" proj f
-  mkdir -p "$s" && chmod 700 "$s"
-  [ -L "$p" ] && return 0
-  if [ -d "$p" ]; then
-    for proj in "$p"/*/; do [ -d "$proj" ] || continue; mkdir -p "$s/$(basename "$proj")"
-      for f in "$proj"*; do [ -e "$f" ] || continue; [ -e "$s/$(basename "$proj")/$(basename "$f")" ] || mv "$f" "$s/$(basename "$proj")/"; done; done
-    mv "$p" "$p.before-sharing.$(date +%s)"
-  fi
-  ln -s "$s" "$p"
-}
+# Up to grid scripts 8 the sign-in folder's projects/ was turned into a link to ~/.beethoven/projects, its
+# transcripts moved out first, so a request moved to the API key account could resume there. There is one
+# account now, and nothing of ours moves or renames anything inside a sign-in folder: a link made then
+# stays (the sessions kept behind it still resume), and a projects/ folder Claude Code made stays its own.
 # The Anthropic API key overflow (add-key and its switches, up to grid scripts 7) is gone: it was paid
 # usage beyond the student's subscription, which the maintainer ruled out for everyone on 2026-10-04.
 # The key is not read from stdin, so a laptop of 4.0.0 that still pipes one gets a refusal and stores nothing.
@@ -502,10 +545,11 @@ cmd_accounts() {
     list) accounts_json; echo;;
     add-token) die "Beethoven no longer stores Claude tokens. Sign in on the grid through Claude Code's own flow: beethoven claude login";;
     add-key|enable|disable) die "Beethoven no longer uses an Anthropic API key: your worker runs only on your own Claude subscription and, when its window is spent, answers with the time it resets. A key an earlier version stored is never used; beethoven accounts remove --yes deletes it.";;
-    remove) # the student's own deliberate step; the key file only (the folder may hold session history kept aside by share_transcripts)
+    remove) # the student's own deliberate step; the key file only, never a link or a folder (accounts/ is also
+      # where the engine keeps the student's other sign-ins, and a label may be any word, apikey included)
       [ "${2:-}" = "--yes" ] || die "this deletes the API key an earlier version stored in $d (Beethoven never uses it; revoke the key itself in your Anthropic Console): beethoven accounts remove --yes"
       refuse_destructive_from_agent "accounts remove"
-      [ -e "$d/apikey" ] || die "no API key is stored"
+      [ -f "$d/apikey" ] && [ ! -L "$d/apikey" ] || die "no API key is stored"
       rm -f "$d/apikey"; echo "removed $d/apikey";;
     *) die "accounts: list|remove --yes";;
   esac
@@ -516,20 +560,40 @@ claude_in_alloc() { # run Claude Code interactively inside the container, in a r
   load_cfg; is_ready || die "the lab container is not adopted yet (lab access is the step before this)"
   local jid="" wk; for wk in $(worker_dirs); do local j; j=$(cat "$BEETHOVEN_HOME/workers/$wk/job.id" 2>/dev/null); [ "$(job_state "$j")" = RUNNING ] && { jid=$j; break; }; done
   local cwd="$ROOT/workspaces/phone"; mkdir -p "$cwd" "$CLAUDE_HOME"; chmod 700 "$CLAUDE_HOME"
-  # first-run settings so Claude Code asks no onboarding questions in the terminal (settings, not credentials)
+  # first-run settings so Claude Code asks no onboarding questions in the terminal (settings, not credentials):
+  # the three keys only added when missing, nothing written when they are there, and a file that does not parse
+  # (Claude Code writing it, or damaged) left as it is (hpcworker's seed; seedClaudeJson in phone.js)
   # shellcheck disable=SC2016
-  local seed='const fs=require("fs"),p=process.env.CLAUDE_CONFIG_DIR+"/.claude.json";let j={};try{j=JSON.parse(fs.readFileSync(p,"utf8"))}catch{};j.hasCompletedOnboarding=true;j.theme=j.theme||"dark";j.projects=j.projects||{};j.projects[process.cwd()]=Object.assign({},j.projects[process.cwd()]||{},{hasTrustDialogAccepted:true});fs.writeFileSync(p,JSON.stringify(j,null,1),{mode:0o600});'
+  local seed='const fs=require("fs"),p=process.env.CLAUDE_CONFIG_DIR+"/.claude.json",no=function(){console.error("Claude Code settings file "+p+" could not be read; Beethoven left it as it is");process.exit(0)};let j={};try{j=JSON.parse(fs.readFileSync(p,"utf8"))}catch(e){if(!e||e.code!=="ENOENT")no()}if(!j||typeof j!=="object"||Array.isArray(j))no();let ch=false;if(j.hasCompletedOnboarding!==true){j.hasCompletedOnboarding=true;ch=true}if(!j.theme){j.theme="dark";ch=true}j.projects=j.projects||{};const d=process.cwd(),pr=j.projects[d]||{};if(pr.hasTrustDialogAccepted!==true){j.projects[d]=Object.assign({},pr,{hasTrustDialogAccepted:true});ch=true}if(ch){fs.writeFileSync(p+".part",JSON.stringify(j,null,1),{mode:0o600});fs.renameSync(p+".part",p)}'
   local inner="cd '$cwd' && node -e '$seed' && exec '$CLAUDE_BIN' $*"
+  # a sign-in is judged in the same session, before anything else runs on it: exit 4 when it is not the
+  # student's Claude subscription (signin_kind, this file run inside the container)
+  [ "$*" = "auth login" ] && inner="cd '$cwd' && node -e '$seed' && '$CLAUDE_BIN' auth login && { [ \"\$('$CLAUDE_BIN' auth status 2>/dev/null | bash '$BIN/beethoven' signin-kind)\" != other ] || exit 4; }"
   # every variable that would put Claude Code on a key, a token, a gateway or a cloud provider instead of
-  # the sign-in it keeps (the daemon's AUTH_VARS, the same list)
-  local auth_unset=(-u CLAUDE_CODE_OAUTH_TOKEN -u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN -u ANTHROPIC_BASE_URL -u CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR -u CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR -u CLAUDE_CODE_USE_BEDROCK -u CLAUDE_CODE_USE_VERTEX -u CLAUDE_CODE_USE_FOUNDRY)
+  # the sign-in it keeps: hpcworker's list (CLEAN_ENV in its worker template, framework 17), the same in
+  # beethovend.js and phone.js (AUTH_VARS), login_relay.sh and the laptop's CLAUDE_CREDENTIAL_ENV; a test
+  # compares the five. The two Remote Control switches after it are not credentials, and removed here too.
+  local auth_unset=(-u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN -u ANTHROPIC_BASE_URL -u CLAUDE_CODE_OAUTH_TOKEN -u CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR -u CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR -u CLAUDE_CODE_USE_BEDROCK -u CLAUDE_CODE_USE_VERTEX -u CLAUDE_CODE_USE_FOUNDRY -u CLAUDE_CODE_USE_ANTHROPIC_AWS -u CLAUDE_CODE_USE_ANTHROPIC_GOOGLE_CLOUD -u CLAUDE_CODE_USE_MANTLE -u CLAUDE_CODE_USE_GATEWAY -u CLAUDE_CODE_OAUTH_REFRESH_TOKEN -u CLAUDE_CODE_OAUTH_SCOPES)
   # shellcheck disable=SC2086
   if [ -n "$jid" ]; then
-    srun --jobid="$jid" --overlap -N1 -n1 --pty "$RUNTIME" exec $BINDS "$SANDBOX" env "${auth_unset[@]}" -u CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC HOME="$HOME" CLAUDE_CONFIG_DIR="$CLAUDE_HOME" TERM="${TERM:-xterm-256color}" BROWSER=/bin/false bash -c "$inner"
+    srun --jobid="$jid" --overlap -N1 -n1 --pty "$RUNTIME" exec $BINDS "$SANDBOX" env "${auth_unset[@]}" -u CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC -u DISABLE_GROWTHBOOK HOME="$HOME" CLAUDE_CONFIG_DIR="$CLAUDE_HOME" TERM="${TERM:-xterm-256color}" BROWSER=/bin/false bash -c "$inner"
   else
     echo "(no worker is running: asking Slurm for a short session on a compute node; this can take a minute)"
-    srun -p secp -q secondary -t 00:30:00 -N1 -n1 --mem=2G -J beethoven_claude --pty "$RUNTIME" exec $BINDS "$SANDBOX" env "${auth_unset[@]}" -u CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC HOME="$HOME" CLAUDE_CONFIG_DIR="$CLAUDE_HOME" TERM="${TERM:-xterm-256color}" BROWSER=/bin/false bash -c "$inner"
+    srun -p secp -q secondary -t 00:30:00 -N1 -n1 --mem=2G -J beethoven_claude --pty "$RUNTIME" exec $BINDS "$SANDBOX" env "${auth_unset[@]}" -u CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC -u DISABLE_GROWTHBOOK HOME="$HOME" CLAUDE_CONFIG_DIR="$CLAUDE_HOME" TERM="${TERM:-xterm-256color}" BROWSER=/bin/false bash -c "$inner"
   fi
+}
+signin_kind() { # stdin: what `claude auth status` printed -> subscription | other | none
+  # hpcworker's rule (hpcw_claude_signin in its common.sh): loggedIn true, authMethod "claude.ai",
+  # apiProvider "firstParty" or absent, and no apiKeySource. apiKeySource is there only when a key is behind
+  # the sign-in, and Claude Code reports the Console's own key as authMethod "claude.ai" beside it, so its
+  # presence alone decides; its value is not read. Four keys are read and nothing else.
+  local t li am ap; t=$(tr -d '\n')
+  li=$(printf '%s' "$t" | grep -o '"loggedIn": *\(true\|false\)' | head -1 | grep -o 'true\|false')
+  [ "$li" = true ] || { echo none; return 0; }
+  printf '%s' "$t" | grep -q '"apiKeySource":' && { echo other; return 0; }
+  am=$(printf '%s' "$t" | grep -o '"authMethod": *"[^"]*"' | head -1 | cut -d'"' -f4)
+  ap=$(printf '%s' "$t" | grep -o '"apiProvider": *"[^"]*"' | head -1 | cut -d'"' -f4)
+  if [ "$am" = claude.ai ] && { [ -z "$ap" ] || [ "$ap" = firstParty ]; }; then echo subscription; else echo other; fi
 }
 # The student's answer to Claude Code's one-time Remote Control question, when Claude Code has not
 # recorded it itself: .beethoven-remote-consent, and .ashley-remote-consent (its name before grid
@@ -548,7 +612,12 @@ claude_login_json() { # what the newest running worker's Claude Code said about 
 # only a Claude subscription counts: a sign-in through an API key, a token or a cloud provider gets no
 # work (beethovend.js); a heartbeat without the subscription field (a daemon from before it) is not judged here
 claude_login_other() { # $1 what claude_login_json printed -> true when signed in, but not with a subscription
-  echo "$1" | grep '"subscription": *false' | grep '"loggedIn": *true' >/dev/null
+  echo "$1" | grep '"loggedIn": *true' | grep -E '"subscription": *false|"apiKey": *true' >/dev/null
+}
+# a daemon of grid scripts 8 or older judges the sign-in without looking for a key behind it (apiKeySource);
+# its heartbeat lacks "apiKey", and only a restart puts the worker on the daemon of this version
+claude_login_old_rule() { # $1 what claude_login_json printed
+  echo "$1" | grep '"loggedIn": *true' | grep -v '"apiKey":' >/dev/null
 }
 cmd_claude() {
   local sub="${1:-status}"; shift || true
@@ -565,7 +634,9 @@ Claude will print a link: Ctrl+click it (or copy it into your browser), sign in 
 account you made with your Wayne State e-mail, press Authorize, then paste the code the page shows
 back here. Use one Claude account only: the one that is yours.
 EOT
-      claude_in_alloc auth login
+      claude_in_alloc auth login; local rc=$?
+      [ $rc = 4 ] && die "Claude on the grid is signed in, but not with a Claude subscription, and Beethoven runs only on your own Claude subscription: run beethoven claude login again and sign in with your Claude subscription. Nothing runs on this sign-in."
+      [ $rc = 0 ] || die "Claude Code's sign-in did not complete (exit $rc); run beethoven claude login again"
       if consent_given; then
         echo; echo "Done. Your workers pick the sign-in up by themselves; phone access is already enabled."
       else
@@ -596,11 +667,9 @@ EOT
       local present=false consent=false; [ -s "$CLAUDE_HOME/.credentials.json" ] && present=true; consent_given && consent=true
       if [ "${1:-}" = "--json" ]; then printf '{"dir_present":%s,"consent":%s,"login":%s}\n' "$present" "$consent" "$(claude_login_json)"
       else echo "sign-in file present: $present; Remote Control consent: $consent; a running worker says: $(claude_login_json)"; fi;;
-    forget)
-      [ "${1:-}" = "--yes" ] || die "this deletes Claude Code's stored sign-in in $CLAUDE_HOME (your workers stop until you sign in again): beethoven claude forget --yes"
-      refuse_destructive_from_agent "claude forget"
-      rm -rf "$CLAUDE_HOME"; echo "removed $CLAUDE_HOME";;
-    *) die "claude: login|status [--json]|remote-consent|forget --yes";;
+    forget) # the command of grid scripts 8 and older deleted the sign-in folder; that is never done again
+      die "Beethoven never deletes or signs out a Claude sign-in. To sign out, run claude auth logout yourself on a compute node.";;
+    *) die "claude: login|status [--json]|remote-consent";;
   esac
 }
 
@@ -666,10 +735,15 @@ cmd_relay() {
 # status file only the admin can write and only that student can read, and gives the applicant a
 # traverse-only ACL on the path to it. Approval = POSIX ACLs (CephFS honours them; the admin owns
 # the volume): read-only on SHARED and everything under it except access/. The volume root is not
-# open to other users at all.
+# open to other users at all: its other::--- and its named entries are the gate, and the entries are
+# also the approved list hpcworker's tools/grid_access.sh keeps (user:<id>:rwx). Below the gate the
+# lab's shared folder (shared/beethoven: hpcworker's shared copy, the lab's image) stays readable by
+# other, because the browser and desktop editions' students reach it through the gate alone; access
+# init and library publish never close it (grid scripts 9).
 #   /rs/rs_grp_oschome      2770 + per-user --x ACLs    (default ACL o::--- for new entries)
-#   shared/                 2750 + per-user r-x/--x     (group reads, only the admin writes)
-#   shared/<anything>       2750 + per-user r-X         (containers, datasets, software)
+#   shared/                 2755 + per-user r-x/--x     (group and other read, only the admin writes)
+#   shared/beethoven        2755, other's r-X kept      (hpcworker's copy, containers, library.json)
+#   shared/<anything else>  2750 + per-user r-X         (datasets, software)
 #   shared/access           2710 + per-user --x
 #   shared/access/status    2710 + per-user --x; status/<id>.json 600 + ACL u:<id>:r--
 #   shared/access/requests  2700  the admin's decision log
@@ -695,15 +769,25 @@ write_status() { # ID STATE NOTE MESSAGE REQUESTED JOB
       "$(json_str "$1")" "$(json_str "$(getent passwd "$1" | cut -d: -f5)")" "$(json_str "$2")" "$(json_str "$3")" "$(json_str "$4")" "$(json_str "$5")" "$(json_str "$6")" "$(json_str "$(date -u +%FT%TZ)")" "$(json_str "$USER")" > "$f.part" && mv "$f.part" "$f" )
   setfacl -m "u:$1:r--" "$f" 2>/dev/null || chmod 644 "$f"
 }
+# On the volume root an entry is added only where the user has none, and only the --x one this file adds
+# is ever taken away: an rwx entry is hpcworker's list, lowered or removed it would stop that student
+# making their own folder there
+vol_entry() { getfacl -cp "$VOL" 2>/dev/null | grep "^user:$1:" | head -1 | cut -d: -f3 | cut -c1-3; }
+vol_traverse() { # ID add|remove
+  local e; e=$(vol_entry "$1")
+  if [ "$2" = add ]; then [ -n "$e" ] || setfacl -m "u:$1:--x" "$VOL"
+  else [ "$e" != --x ] || setfacl -x "u:$1" "$VOL"; fi
+}
 path_traverse() { # ID add|remove: pass-through to the applicant's own status file
   local d
-  for d in "$VOL" "$SHARED" "$ACCESS_ROOT" "$STATUS_DIR"; do
+  vol_traverse "$1" "$2" 2>/dev/null
+  for d in "$SHARED" "$ACCESS_ROOT" "$STATUS_DIR"; do
     if [ "$2" = add ]; then setfacl -m "u:$1:--x" "$d" 2>/dev/null; else setfacl -x "u:$1" "$d" 2>/dev/null; fi
   done
 }
 acl_grant() { # ID: read-only on everything in the lab folder except access/; returns the failure count
   local fails=0 c
-  setfacl -m "u:$1:--x" "$VOL" || fails=$((fails + 1))
+  vol_traverse "$1" add || fails=$((fails + 1))
   setfacl -m "u:$1:r-x" "$SHARED" && setfacl -d -m "u:$1:r-X" "$SHARED" || fails=$((fails + 1))
   for c in "$SHARED"/*; do
     [ "$c" = "$ACCESS_ROOT" ] && continue
@@ -735,7 +819,7 @@ curl_auth_code() { # TOKEN URL [extra header lines...] -> HTTP status code
   { printf 'header = "Authorization: Bearer %s"\n' "$tok"; for h in "$@"; do printf 'header = "%s"\n' "$h"; done; } | curl -s -m 15 -o /dev/null -w '%{http_code}' -K - "$url"
 }
 student_state() { # none | filed | pending | approved | approved_unreadable | denied | removed
-  if lib_readable; then echo approved; return; fi
+  if lib_granted; then echo approved; return; fi
   local s; s=$(status_field "$USER" state)
   case "$s" in
     approved) echo approved_unreadable;;
@@ -772,12 +856,17 @@ cmd_access() {
         if [ "$(stat -c %U "$e")" = "$USER" ]; then chmod o-rwx "$e"; elif [ -n "$(find "$e" -maxdepth 0 -perm /o=rwx 2>/dev/null)" ]; then others="$others $e"; fi
       done
       [ -n "$others" ] && echo "note: these entries belong to other members and are open to others; their owners can close them with chmod o-rwx:$others"
-      chmod 2750 "$SHARED" && setfacl -d -m u::rwx,g::r-x,o::--- "$SHARED" && echo "chmod 2750 $SHARED (group reads, only you write; new entries closed to others)"
+      # other below the gate is only who the volume root lets in; the lab's shared folder must stay readable to
+      # them (hpcworker's copy, the image), so shared/ is entered and listed by other and that folder keeps
+      # other's read and enter, while everything else here stays closed to other as before
+      chmod 2755 "$SHARED" && setfacl -d -m u::rwx,g::r-x,o::--- "$SHARED" && echo "chmod 2755 $SHARED (group and other read, only you write; new entries closed to others)"
       for e in "$SHARED"/*; do
         [ "$e" = "$ACCESS_ROOT" ] && continue; [ -L "$e" ] && continue
-        chmod -R g-w,o-rwx "$e" 2>/dev/null; find "$e" -type d -exec chmod g+s {} + 2>/dev/null
+        if [ "$e" = "$LIBRARY_ROOT" ] || [ "$e" = "$SHARED/beethoven" ]; then chmod -R g-w,o-w "$e" 2>/dev/null
+        else chmod -R g-w,o-rwx "$e" 2>/dev/null; fi
+        find "$e" -type d -exec chmod g+s {} + 2>/dev/null
       done
-      echo "lab folder contents: group read-only, closed to others"
+      echo "lab folder contents: group read-only; $LIBRARY_ROOT readable by the accounts the volume root lets in, the rest closed to others"
       mkdir -p "$STATUS_DIR" "$LOG_DIR"
       rm -rf "$ACCESS_ROOT/inbox" && echo "removed the old world-writable drop-box"
       chmod 2710 "$ACCESS_ROOT" "$STATUS_DIR"; chmod 2700 "$LOG_DIR"
@@ -788,12 +877,12 @@ cmd_access() {
     whoami)
       local adm st; adm=$(access_admin); st=$(is_admin && echo admin || student_state)
       is_admin || tidy_request_job
-      if [ "${1:-}" = "--json" ]; then printf '{"user":%s,"admin":%s,"lab_admin":%s,"granted":%s,"state":%s}\n' "$(json_str "$USER")" "$(is_admin && echo true || echo false)" "$(json_str "$adm")" "$(lib_readable && echo true || echo false)" "$(json_str "$st")"
+      if [ "${1:-}" = "--json" ]; then printf '{"user":%s,"admin":%s,"lab_admin":%s,"granted":%s,"state":%s}\n' "$(json_str "$USER")" "$(is_admin && echo true || echo false)" "$(json_str "$adm")" "$(lib_granted && echo true || echo false)" "$(json_str "$st")"
       else echo "user $USER; lab admin $adm; state $st"; fi;;
     status)
       local st; st=$(student_state); tidy_request_job
       if [ "${1:-}" = "--json" ]; then
-        printf '{"granted":%s,"state":%s,"message":%s,"decided":%s}\n' "$(lib_readable && echo true || echo false)" "$(json_str "$st")" "$(json_str "$(status_field "$USER" message)")" "$(json_str "$(status_field "$USER" decided)")"
+        printf '{"granted":%s,"state":%s,"message":%s,"decided":%s}\n' "$(lib_granted && echo true || echo false)" "$(json_str "$st")" "$(json_str "$(status_field "$USER" message)")" "$(json_str "$(status_field "$USER" decided)")"
       else echo "lab access: $st$([ -n "$(status_field "$USER" message)" ] && echo " ($(status_field "$USER" message))")"; fi;;
     requirements)
       # A request is the LAST step: everything the lab works with must already work. The shared
@@ -839,7 +928,11 @@ cmd_access() {
           local fails=0; acl_grant "$id" || fails=$?
           write_status "$id" approved "$(status_field "$id" note)" "" "$(status_field "$id" requested)" "$(status_field "$id" job)"
           decision_log "$id" approved "failures=$fails"
-          if [ "$fails" -gt 0 ]; then echo "$id approved, but $fails part(s) of the lab folder could not be opened (not owned by you?)"; else echo "$id approved: reads the lab folder $SHARED"; fi;;
+          if [ "$fails" -gt 0 ]; then echo "$id approved, but $fails part(s) of the lab folder could not be opened (not owned by you?)"; else echo "$id approved: reads the lab folder $SHARED"; fi
+          # the volume root's full entries are the grid's approved list, which hpcworker's tools/grid_access.sh keeps
+          # equal to its roster and which removes every other named entry, the enter-only one this approval
+          # needs included; until one list holds both, say so where the decision is made
+          [ "$(vol_entry "$id")" = rwx ] || echo "note: $id is not on the grid's approved list (hpcworker's roster); its next sync removes the entry that lets $id into $VOL, and with it the lab folder: add $id to that list too";;
         deny|remove)
           local id="${1:?$act ID}" msg=""; shift; while [ $# -gt 0 ]; do case "$1" in --message) msg="$2"; shift 2;; *) shift;; esac; done
           msg=$(sanitize_note "$msg")
@@ -935,10 +1028,11 @@ cmd_diag() {
   local code; code=$(printf 'url = "https://api.anthropic.com/"\n' | curl -s -m 12 -o /dev/null -w '%{http_code}' -K - 2>/dev/null)
   if [ -n "$code" ] && [ "$code" != 000 ]; then diag_emit grid.internet true false false "api.anthropic.com answers (HTTP $code); curl reads secrets from stdin"; else diag_emit grid.internet false false false "no HTTPS from the login node, or curl -K - unsupported"; fi
   # /tmp on the login node is not for user files (C&IT, 2026-09-28); container builds left rootfs-* there once.
+  # Reported, never removed: repair runs over ssh with no one at a terminal, and a big file there may be the
+  # student's own (grid scripts 9)
   local leftovers; leftovers=$(find /tmp -maxdepth 1 -user "$USER" \( -name 'rootfs-*' -o -name 'build-temp-*' -o -name 'apptainer*' -o -name 'singularity*' -o -name 'sbuild-*' -o -size +50M \) 2>/dev/null | head -8 | tr '\n' ' ')
   if [ -z "$leftovers" ]; then diag_emit grid.login-tmp true false false "nothing of yours left under /tmp on $(hostname -s)"
-  elif [ $repair = 1 ] && rm -rf $leftovers 2>/dev/null && [ -z "$(find /tmp -maxdepth 1 -user "$USER" \( -name 'rootfs-*' -o -name 'build-temp-*' -o -name 'apptainer*' -o -name 'singularity*' -o -name 'sbuild-*' -o -size +50M \) 2>/dev/null)" ]; then diag_emit grid.login-tmp true false true "removed your container leftovers from /tmp on $(hostname -s): $leftovers"
-  else diag_emit grid.login-tmp false false false "files of yours under /tmp on the login node: $leftovers (C&IT asks that /tmp here stays free; repair removes them)"; fi
+  else diag_emit grid.login-tmp false false false "files of yours under /tmp on the login node: $leftovers (C&IT asks that /tmp here stays free: delete the ones you no longer need, in a terminal on the grid; Beethoven deletes nothing there)"; fi
   if command -v setfacl >/dev/null && command -v getfacl >/dev/null; then diag_emit grid.acl-tools true false false "setfacl/getfacl present"; else diag_emit grid.acl-tools false false false "setfacl/getfacl missing"; fi
   read -r used soft < <(home_quota)
   if [ -n "${soft:-}" ] && [ "${soft%.*}" -gt 0 ] 2>/dev/null; then
@@ -956,28 +1050,26 @@ cmd_diag() {
   # the Claude sign-in: Claude Code's own answer from a running worker; the file's presence otherwise
   local lj; lj=$(claude_login_json)
   if claude_login_other "$lj"; then diag_emit grid.claude-login false false false "Claude Code on the grid is signed in, but not with a Claude subscription, and Beethoven runs only on your own subscription: sign in again with it (Beethoven: Sign in to Claude on the grid)"
+  elif claude_login_old_rule "$lj"; then diag_emit grid.claude-login true true false "Claude Code on the grid is signed in$(echo "$lj" | grep -o '"email": *"[^"]*"' | cut -d'"' -f4 | sed 's/^/ as /'), but the worker that says so was started before grid scripts 9 and does not yet look for an API key behind the sign-in: restart it (Beethoven: Stop a worker, then Start)"
   elif echo "$lj" | grep '"loggedIn": *true' >/dev/null; then diag_emit grid.claude-login true false false "Claude Code on the grid is signed in$(echo "$lj" | grep -o '"email": *"[^"]*"' | cut -d'"' -f4 | sed 's/^/ as /')"
   elif [ "$lj" != null ] && echo "$lj" | grep '"loggedIn": *false' >/dev/null; then diag_emit grid.claude-login false false false "Claude Code on the grid is not signed in: run Beethoven: Sign in to Claude on the grid"
   elif [ -s "$CLAUDE_HOME/.credentials.json" ]; then diag_emit grid.claude-login true true false "a sign-in is stored; a running worker will confirm it"
   else diag_emit grid.claude-login false false false "not signed in on the grid yet: run Beethoven: Sign in to Claude on the grid"; fi
-  # accounts: no stored Claude tokens (the tool stopped storing them before the rename), the sign-in's session history linked to ~/.beethoven/projects
-  local legacy="" unshared="" fixed="" ad
+  # accounts: no stored Claude tokens (the tool stopped storing them before the rename). Only reported: accounts/
+  # is also where the engine keeps the student's other sign-ins, and nothing of ours deletes there (grid scripts 9)
+  local legacy="" fixed="" ad
   for ad in "$BEETHOVEN_HOME"/accounts/*/; do [ -d "$ad" ] || continue
     { [ -s "$ad/token" ] || [ -s "$ad/.credentials.json" ]; } && legacy="$legacy $(basename "$ad")"
   done
-  [ -d "$CLAUDE_HOME" ] && [ ! -L "$CLAUDE_HOME/projects" ] && unshared=" $(basename "$CLAUDE_HOME")"
   # the API key an earlier version stored for its paid overflow: never read since grid scripts 8, and never
   # deleted here (repair runs over ssh with no one at a terminal); only its presence is checked
   local retired="" live=""; [ -e "$BEETHOVEN_HOME/accounts/apikey/apikey" ] && retired=1
   [ -n "$retired" ] && [ ! -e "$BEETHOVEN_HOME/accounts/apikey/disabled" ] && live=1
-  if [ -n "$legacy" ] && [ $repair = 1 ]; then for ad in $legacy; do rm -f "$BEETHOVEN_HOME/accounts/$ad/token" "$BEETHOVEN_HOME/accounts/$ad/minted_at" "$BEETHOVEN_HOME/accounts/$ad/.credentials.json"; rmdir "$BEETHOVEN_HOME/accounts/$ad" 2>/dev/null; done; fixed="removed stored Claude tokens of$legacy"; legacy=""; fi
-  if [ -n "$unshared" ] && [ $repair = 1 ]; then share_transcripts "$CLAUDE_HOME"; fixed="${fixed:+$fixed; }linked the session history of$unshared"; unshared=""; fi
-  if [ -n "$live" ] && [ $repair = 1 ]; then retire_apikey; fixed="${fixed:+$fixed; }marked the stored API key disabled, so a worker of an earlier version cannot use it (nothing deleted)"; live=""; fi
-  if [ -n "$legacy" ]; then diag_emit grid.accounts false false false "Claude tokens stored by an earlier version are still in accounts/:$legacy (repair deletes them; Beethoven no longer stores Claude credentials)"
-  elif [ -n "$unshared" ]; then diag_emit grid.accounts false false false "session history is not shared for:$unshared (repair links it)"
-  elif [ -n "$live" ]; then diag_emit grid.accounts false false false "an Anthropic API key an earlier version stored is in ~/.beethoven/accounts/apikey and is not marked disabled, so a worker started by that version could still spend on it (repair marks it disabled and deletes nothing; beethoven accounts remove --yes deletes it)"
+  if [ -n "$live" ] && [ $repair = 1 ]; then retire_apikey; fixed="marked the stored API key disabled, so a worker of an earlier version cannot use it (nothing deleted)"; live=""; fi
+  if [ -n "$live" ]; then diag_emit grid.accounts false false false "an Anthropic API key an earlier version stored is in ~/.beethoven/accounts/apikey and is not marked disabled, so a worker started by that version could still spend on it (repair marks it disabled and deletes nothing; beethoven accounts remove --yes deletes it)"
   elif [ -n "$retired" ]; then diag_emit grid.accounts true true false "an Anthropic API key an earlier version stored is still in ~/.beethoven/accounts/apikey; Beethoven never uses or sends it (it is marked disabled). To delete it: beethoven accounts remove --yes (and revoke the key in your Anthropic Console)" "$fixed"
-  else diag_emit grid.accounts true false false "no stored Claude tokens; session history shared" "$fixed"; fi
+  elif [ -n "$legacy" ]; then diag_emit grid.accounts true true false "Claude tokens an earlier version stored are still in ~/.beethoven/accounts:$legacy. Beethoven never uses them and deletes nothing in that folder, which may hold your other Claude sign-ins now" "$fixed"
+  else diag_emit grid.accounts true false false "no stored Claude tokens" "$fixed"; fi
   # lab access and the container
   if is_admin; then diag_emit grid.lab-access true false false "you are the lab admin"
   else case "$(student_state)" in
@@ -988,8 +1080,8 @@ cmd_diag() {
     *) diag_emit grid.lab-access false false false "not requested yet (the wizard's last step)";;
   esac; fi
   if is_ready; then diag_emit grid.container true false false "${CONTAINER:-own} ready: $(basename "$SANDBOX")"
-  elif lib_readable && [ $repair = 1 ] && ( cmd_adopt "$(lib_default)" ) >/dev/null 2>&1 && is_ready; then diag_emit grid.container true false false "adopted the lab container" "ran beethoven adopt"
-  elif lib_readable; then diag_emit grid.container false false false "the lab container is readable but not adopted (repair runs beethoven adopt)"
+  elif lib_granted && [ $repair = 1 ] && ( cmd_adopt "$(lib_default)" ) >/dev/null 2>&1 && is_ready; then diag_emit grid.container true false false "adopted the lab container" "ran beethoven adopt"
+  elif lib_granted; then diag_emit grid.container false false false "the lab container is readable but not adopted (repair runs beethoven adopt)"
   else diag_emit grid.container false false false "no container yet: it comes with lab access"; fi
   if [ -n "$RUNTIME" ] && [ -x "$RUNTIME" ]; then diag_emit grid.runtime true false false "$RUNTIME"
   else
@@ -1047,7 +1139,7 @@ cmd_diag() {
     [ -d "$ACCESS_ROOT/inbox" ] && bad="$bad old-drop-box"
     # links are left out: a link's own mode is always rwxrwxrwx (shared/ashley -> beethoven, the old name)
     [ -n "$(find "$SHARED" -maxdepth 1 ! -type l -perm /o=w 2>/dev/null)" ] && bad="$bad world-writable-in-shared"
-    if [ -z "$bad" ]; then diag_emit grid.lab-folder true false false "lab folder closed to other users; requests via Slurm"
+    if [ -z "$bad" ]; then diag_emit grid.lab-folder true false false "the volume root closed to other users (its list of approved accounts is the gate), nothing writable by others in shared/; requests via Slurm"
     elif [ $repair = 1 ] && cmd_access init >/dev/null 2>&1; then diag_emit grid.lab-folder true false false "layout restored" "ran beethoven access init"
     else diag_emit grid.lab-folder false false false "layout drifted:$bad"; fi
   else diag_emit grid.lab-folder true false true "admin only"; fi
@@ -1087,21 +1179,40 @@ cmd_verify_tokens() { # prove the stored tokens work, from the login node (tiny 
     [ -n "$gl" ] && echo "GITHUB_TOKEN ok ($gl)" || echo "GITHUB_TOKEN rejected or unreachable"
   else echo "GITHUB_TOKEN missing"; fi
 }
-cmd_uninstall() { # what a brand-new grid account looks like to Beethoven
+cmd_uninstall() { # takes away what `beethoven install` put in place, and only that
+  # Up to grid scripts 8 this removed all of ~/.beethoven, and --purge-root the work folder. ~/.beethoven also
+  # holds the Claude sign-in hpcworker's workers use (claude/), the engine's sign-ins and account list
+  # (accounts/, engine/) and the session history (projects/, sessions/); on 2026-09-28 the whole folder,
+  # sign-in included, vanished while a Remote Control session was open. Nothing of ours deletes those, the
+  # work folder, or anything install did not make.
+  case " $* " in *" --purge-root "*) die "your work folder is yours: Beethoven never deletes it. Nothing was removed.";; esac
+  [ "${1:-}" = "--yes" ] || die "this stops your workers and removes Beethoven's scripts, settings, logs, worker folders and its block in ~/.bashrc; your Claude sign-in, your other accounts, your session history and your work folder stay: beethoven uninstall --yes"
   refuse_destructive_from_agent uninstall
-  local purge=0; [ "${1:-}" = "--purge-root" ] && purge=1
   load_cfg
+  # only the folder this command runs from, found through any link, never the home folder itself
+  local real here; real=$(cd "$BEETHOVEN_HOME" 2>/dev/null && pwd -P) || real=""
+  here=$(cd "$(dirname "$0")" 2>/dev/null && pwd -P) || here=""
+  case "$real" in ""|/|"$HOME"|"$(cd "$HOME" && pwd -P)") die "refusing to remove anything in '$BEETHOVEN_HOME' (resolves to '${real:-nothing}')";; esac
+  [ "$here" = "$real/bin" ] || die "refusing: this command runs from ${here:-?}, not from $real/bin; nothing removed"
   for w in $(worker_dirs); do local jid; jid=$(cat "$BEETHOVEN_HOME/workers/$w/job.id" 2>/dev/null || echo ""); [ -n "$jid" ] && scancel "$jid" 2>/dev/null && echo "cancelled worker $w (job $jid)"; done
   local rc="$HOME/.bashrc"
-  if [ -f "$rc" ] && has_bashrc_block "$rc"; then bashrc_without_blocks "$rc" > "$rc.beethoven.tmp" && mv "$rc.beethoven.tmp" "$rc"; echo "bashrc block removed"; fi
-  if [ $purge -eq 1 ] && [ -n "$ROOT" ] && [ -d "$ROOT" ]; then rm -rf "$ROOT" && echo "removed $ROOT"; fi
-  # the folder itself, found through any link (~/.ashley leads to ~/.beethoven); links are removed as
-  # links, never followed by rm
-  local real; real=$(cd "$BEETHOVEN_HOME" 2>/dev/null && pwd -P) || real=""
-  case "$real" in ""|/|"$HOME"|"$(cd "$HOME" && pwd -P)") die "refusing to remove '$BEETHOVEN_HOME' (resolves to '${real:-nothing}')";; esac
-  local l; for l in "$OLD_HOME" "$NEW_HOME" "$BEETHOVEN_HOME"; do [ -L "$l" ] && [ "$(cd "$l" 2>/dev/null && pwd -P)" = "$real" ] && rm -f "$l" && echo "removed the link $l"; done
-  # remove ourselves last; the shell keeps running the already-read script
-  rm -rf "$real" && echo "removed $real; Beethoven is uninstalled for $USER"
+  if [ -f "$rc" ] && has_bashrc_block "$rc"; then bashrc_rewrite "$rc" && echo "bashrc block removed"; fi
+  # what install made, by name; rm on a link removes the link, and the scripts go last (bash has read this one)
+  local e; for e in workers log config.env config.env.part READY READY.part bin; do
+    [ -e "$real/$e" ] || [ -L "$real/$e" ] || continue
+    rm -rf -- "${real:?}/$e" && echo "removed $real/$e"
+  done
+  # the folder, and the old name that led to it, only when nothing else is left in it
+  if rmdir "$real" 2>/dev/null; then
+    echo "removed $real"
+    local l; for l in "$OLD_HOME" "$NEW_HOME" "$BEETHOVEN_HOME"; do [ -L "$l" ] && [ ! -e "$l" ] && rm -f "$l" && echo "removed the link $l"; done
+  else
+    # some of it Beethoven made (the copies of the tokens and the license key, the folders install made), and it
+    # stays all the same: the sign-ins, the accounts and the history are never ours to delete, the tokens are
+    # the student's to delete (LICENSE 5(a))
+    echo "kept in $real: $(ls -A "$real" 2>/dev/null | tr '\n' ' ')(Beethoven removes only what install put in place; your Claude sign-in (claude), your other accounts (accounts, engine), your history (projects, sessions) and the copies of your tokens and license key (secrets.env, license.key) stay until you delete them yourself)"
+  fi
+  echo "Beethoven is uninstalled for ${USER:-$(id -un)}${ROOT:+; your work folder $ROOT is untouched}"
 }
 
 case "${1:-help}" in
@@ -1128,6 +1239,7 @@ case "${1:-help}" in
   sessions) shift; cmd_sessions "$@";;
   accounts) shift; cmd_accounts "$@";;
   claude) shift; cmd_claude "$@";;
+  signin-kind) signin_kind;;   # run inside the container by `claude login`, on what `claude auth status` printed
   version) echo "$VERSION";;
   help|-h|--help) awk 'NR > 1 && /^set -uo pipefail/ { exit } NR > 1' "$0";;
   *) die "unknown command '$1' (beethoven help)";;

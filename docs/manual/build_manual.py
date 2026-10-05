@@ -46,7 +46,7 @@ arch = demote(arch).split("\n", 1)[1]
 # insert the rendered figures beside the ASCII sketch and the queue section
 arch = arch.replace("## Topology\n", "## Topology\n" + figure("../figures/topology.svg", "The three places and what runs in each; every laptop action is one ssh to the login node."), 1)
 arch = arch.replace("## The request queue\n", "## The request queue\n" + figure("../figures/lifecycle.svg", "One request, from the laptop's ssh to the RESULT line."), 1)
-arch = arch.replace("## Credentials\n", "## Credentials\n" + figure("../figures/accounts.svg", "One sign-in, the student's own subscription; a spent window becomes a wait for its reset, not a failure."), 1)
+arch = arch.replace("## Credentials\n", "## Credentials\n" + figure("../figures/accounts.svg", "The student's own sign-ins, each on their own subscription; a spent window becomes a wait for its reset, not a failure."), 1)
 parts.append("# How it works\n\n" + arch)
 parts.append("# What you can ask, and what you cannot\n\n" + demote(read("LIMITS.md")).split("\n", 1)[1])
 parts.append("# Installing and building\n\n" + demote(read("INSTALL.md")).split("\n", 1)[1])

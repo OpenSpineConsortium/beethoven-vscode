@@ -7,7 +7,7 @@
 // Like Claude Code 2.1.283 (measured), it keeps transcripts in
 // <CLAUDE_CONFIG_DIR>/projects/<cwd with every non-alphanumeric replaced by '-'>/<session>.jsonl,
 // creates that file as soon as a run starts, and refuses --resume when it is not there
-// ("No conversation found with session ID: ..."), so tests catch a resume that looks in a folder without the shared history.
+// ("No conversation found with session ID: ..."), so tests catch a resume that looks in another sign-in folder than the one that ran.
 // For phone access it also answers `auth status`, `auth login` (code 'goodcode' signs in) and
 // `remote-control` (prints a session link, records its environment, runs until killed).
 const fs = require('fs');
@@ -22,14 +22,17 @@ if (args[0] === '--version') {
   console.log('9.9.9 (fake claude)');
   process.exit(0);
 }
-const AUTH_VARS = ['CLAUDE_CODE_OAUTH_TOKEN', 'ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_BASE_URL', 'CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR', 'CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR', 'CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC'];
+// what Remote Control must never see: the strip list (grid/phone.js AUTH_VARS) and the two switches that keep it from registering
+const AUTH_VARS = ['ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_BASE_URL', 'CLAUDE_CODE_OAUTH_TOKEN', 'CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR', 'CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR', 'CLAUDE_CODE_USE_BEDROCK', 'CLAUDE_CODE_USE_VERTEX', 'CLAUDE_CODE_USE_FOUNDRY', 'CLAUDE_CODE_USE_ANTHROPIC_AWS', 'CLAUDE_CODE_USE_ANTHROPIC_GOOGLE_CLOUD', 'CLAUDE_CODE_USE_MANTLE', 'CLAUDE_CODE_USE_GATEWAY', 'CLAUDE_CODE_OAUTH_REFRESH_TOKEN', 'CLAUDE_CODE_OAUTH_SCOPES', 'CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC', 'DISABLE_GROWTHBOOK'];
 if (args[0] === 'auth' && args[1] === 'status') {
-  // like Claude Code 2.1.283: JSON with loggedIn and authMethod; the e-mail when signed in. fake_auth_method and
-  // fake_api_provider stand for a sign-in that is not a subscription (a token from the environment, a cloud provider)
+  // like Claude Code 2.1.283: JSON with loggedIn and authMethod; the e-mail when signed in. fake_auth_method,
+  // fake_api_provider and fake_api_key_source stand for a sign-in that is not a subscription (a token from the
+  // environment, a cloud provider, an API key behind a claude.ai sign-in)
   const on = fs.existsSync(path.join(cfg, 'fake_logged_in'));
   const read = (f) => (fs.existsSync(path.join(cfg, f)) ? fs.readFileSync(path.join(cfg, f), 'utf8').trim() : undefined);
   const provider = read('fake_api_provider');
-  console.log(JSON.stringify(on ? { loggedIn: true, authMethod: read('fake_auth_method') ?? 'claude.ai', ...(provider ? { apiProvider: provider } : {}), email: 'ab1234@wayne.edu', subscriptionType: 'pro' } : { loggedIn: false, authMethod: 'none' }));
+  const keySource = read('fake_api_key_source');
+  console.log(JSON.stringify(on ? { loggedIn: true, authMethod: read('fake_auth_method') ?? 'claude.ai', ...(provider ? { apiProvider: provider } : {}), ...(keySource ? { apiKeySource: keySource } : {}), email: 'ab1234@wayne.edu', subscriptionType: 'pro' } : { loggedIn: false, authMethod: 'none' }));
   process.exit(0);
 }
 if (args[0] === 'auth' && args[1] === 'login') {

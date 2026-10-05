@@ -11,13 +11,21 @@ import { BeethovenStore, findClaudeExecutable } from './store';
 import { VsCodeUI } from './ui';
 import { run } from '../core/shell';
 import { withoutClaudeCredentials } from '../core/services';
+import { accountProcessEnv } from '../core/accounts';
 import { localClaudeStatus } from '../core/wizard';
+
+/** the fix that only opens the Settings editor: a person changes the value, and the change starts the check */
+const SETTINGS_COMMAND = 'workbench.action.openSettings';
+/** the nodes a changed beethoven.account or account list can turn */
+const ACCOUNT_NODES = ['account.list', 'account.choice', 'account.claude', 'vscode.mcp-bridge'];
 
 export class Troubleshooter implements vscode.Disposable {
   private item: vscode.StatusBarItem;
   private last: DiagReport | null = null;
   private running = false;
   private timer: NodeJS.Timeout | undefined;
+  /** the open troubleshooter panel, so a check started elsewhere (a changed setting) can repaint it */
+  private panel: vscode.WebviewPanel | undefined;
 
   constructor(
     private context: vscode.ExtensionContext,
@@ -134,6 +142,10 @@ export class Troubleshooter implements vscode.Disposable {
     const p = vscode.window.createWebviewPanel('beethoven.troubleshoot', 'Beethoven troubleshooter', vscode.ViewColumn.One, { enableScripts: true });
     p.iconPath = vscode.Uri.joinPath(this.context.extensionUri, 'media', 'beethoven.svg');
     p.webview.html = this.html(p.webview.cspSource);
+    this.panel = p;
+    p.onDidDispose(() => {
+      if (this.panel === p) this.panel = undefined;
+    });
     p.webview.onDidReceiveMessage(async (m) => {
       if (m?.type === 'log') this.output.show(true);
       else if (m?.type === 'claude') await this.investigate();
@@ -159,8 +171,24 @@ export class Troubleshooter implements vscode.Disposable {
     } catch (e) {
       this.output.appendLine(`fix for ${id} (${fc.command}): ${(e as Error).message}`);
     }
+    // the Settings editor is open now and nothing is changed yet: the check runs when the setting
+    // changes (recheckAfterAccountChange), not now, when it could only fail again
+    if (fc.command === SETTINGS_COMMAND) return;
     const rep = await this.run({ repair: true, quick: false, quiet: true });
     if (rep) p.webview.postMessage({ type: 'done', rep });
+  }
+
+  /**
+   * The account setting or the engine's list changed. When the last report had something to say about the
+   * account (one of its checks failed or warned; blocked and skipped ones wait on something else, which the
+   * change cannot fix), check again quietly (no repairs, no node probe), so the status bar does not keep, until
+   * the next hourly sweep, a state the change has just fixed. An open panel keeps its full report, which a quick
+   * one would turn half into skipped rows, and is told to check again. Overlapping calls are dropped by run().
+   */
+  async recheckAfterAccountChange(): Promise<void> {
+    if (!this.last?.reports.some((r) => ACCOUNT_NODES.includes(r.id) && (r.status === 'fail' || r.status === 'warn'))) return;
+    const rep = await this.run({ repair: false, quick: true, quiet: true });
+    if (rep) this.panel?.webview.postMessage({ type: 'note', text: `Your Claude account changed; the status bar shows the new result (${rep.ok ? 'everything works' : rep.rootCauses.map((r) => r.title).join(', ')}). Press "Check and repair again" to see every check here.` });
   }
 
   private async openReport(rep: DiagReport): Promise<void> {
@@ -172,9 +200,10 @@ export class Troubleshooter implements vscode.Disposable {
   async investigate(): Promise<void> {
     if (!this.last || this.last.ok) return void vscode.window.showInformationMessage('Nothing is broken right now.');
     const causes = this.last.rootCauses.map((r: NodeReport) => ({ id: r.id, title: r.title, detail: r.detail, manual_fix: r.manualFix, repair_tried: r.repair }));
-    // only on the student's own subscription: an API key or token in VS Code's environment would bill it instead
+    // only on the student's own subscription: an API key or token in VS Code's environment would bill it instead;
+    // under the account beethoven.account names, like every Claude Code the edition starts on this laptop
     const exe = findClaudeExecutable();
-    const env = withoutClaudeCredentials();
+    const env = { ...withoutClaudeCredentials(), ...accountProcessEnv(this.store.accountChoice()) };
     const lc = await localClaudeStatus(exe, env);
     if (!lc.subscription) return void vscode.window.showWarningMessage(`Investigating with Claude runs only on your own Claude Pro or Max subscription, and Claude Code on this laptop is ${lc.ok ? lc.detail : 'not ready'}. Sign in with your subscription (Beethoven: Sign in to Claude on this laptop), then try again.`);
     const prompt = [
@@ -222,14 +251,15 @@ let layer='';
 function row(r){ if(r.layer!==layer){layer=r.layer;$('list').insertAdjacentHTML('beforeend','<h2>'+esc(layer)+'</h2>')}
  $('list').insertAdjacentHTML('beforeend','<div class="row"><span class="i '+r.status+'">'+icon[r.status]+'</span><span>'+esc(r.title)+'</span><span>'+esc(r.detail)+(r.rootCause?' <i>(because of '+esc(r.rootCause)+')</i>':'')+(r.repair?' <b>repair:</b> '+esc(r.repair):'')+'</span></div>')}
 window.addEventListener('message',e=>{const m=e.data;
+ if(m.type==='note'){$('sub').textContent=m.text}
  if(m.type==='node'){row(m.r);$('bar').style.width=Math.round(100*m.done/m.total)+'%';$('sub').textContent='Checked '+m.done+' of '+m.total}
  if(m.type==='done'){const rep=m.rep;$('bar').style.width='100%';$('sub').textContent='Finished '+new Date(rep.finished).toLocaleTimeString();
   $('ok').style.display=rep.ok?'block':'none';
-  $('causes').innerHTML=rep.rootCauses.map(c=>'<div class="cause"><b>'+esc(c.title)+'</b>'+esc(c.detail)+(c.repair?'<div class="fix">Tried: '+esc(c.repair)+'</div>':'')+(c.manualFix?'<div class="fix">What to do: '+esc(c.manualFix)+'</div>':'')+(c.fixCommand?'<div class="fix"><button class="fixbtn" data-id="'+esc(c.id)+'">'+esc(c.fixCommand.title)+'</button></div>':'')+'</div>').join('');
-  document.querySelectorAll('.fixbtn').forEach(b=>b.onclick=()=>fix(b.dataset.id));
-  if(!document.querySelector('.row')){layer='';rep.reports.forEach(row)} }});
+  $('causes').innerHTML=rep.rootCauses.map(c=>'<div class="cause"><b>'+esc(c.title)+'</b>'+esc(c.detail)+(c.repair?'<div class="fix">Tried: '+esc(c.repair)+'</div>':'')+(c.manualFix?'<div class="fix">What to do: '+esc(c.manualFix)+'</div>':'')+(c.fixCommand?'<div class="fix"><button class="fixbtn" data-id="'+esc(c.id)+'" data-settings="'+(c.fixCommand.command==='${SETTINGS_COMMAND}'?'1':'')+'">'+esc(c.fixCommand.title)+'</button></div>':'')+'</div>').join('');
+  document.querySelectorAll('.fixbtn').forEach(b=>b.onclick=()=>fix(b.dataset.id,b.dataset.settings==='1'));
+  $('list').innerHTML='';layer='';rep.reports.forEach(row) }});
 function clear(){$('list').innerHTML='';layer='';$('causes').innerHTML='';$('ok').style.display='none'}
-function fix(id){clear();$('sub').textContent='Checking again once that is done...';vscode.postMessage({type:'fix',id})}
+function fix(id,settings){if(settings){$('sub').textContent='Change the setting; Beethoven checks again when it changes.'}else{clear();$('sub').textContent='Checking again once that is done...'}vscode.postMessage({type:'fix',id})}
 $('again').onclick=()=>{clear();vscode.postMessage({type:'again'})};
 $('claude').onclick=()=>vscode.postMessage({type:'claude'});$('copy').onclick=()=>vscode.postMessage({type:'copy'});$('log').onclick=()=>vscode.postMessage({type:'log'});
 </script></body></html>`;

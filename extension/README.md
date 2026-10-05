@@ -54,7 +54,17 @@ Read this before installing. It is the complete list.
   typed in a terminal on the grid, from the grid.
 - **No Claude credential.** Beethoven never reads, stores or copies a Claude credential. You sign in
   to Claude Code yourself, on the laptop and once in a terminal on the grid; Beethoven only reads
-  Claude Code's yes-or-no answer about whether it is signed in.
+  Claude Code's own report of the sign-in and counts only your Claude subscription with no API key
+  behind it. It never deletes a sign-in or signs one out (`claude auth logout` is yours to run), and
+  removing it from the grid (`Beethoven: Reset`, or `beethoven uninstall --yes`) takes away only
+  what it installed: your sign-ins, your accounts, your history and your work folder stay.
+- **Your own Claude accounts.** If the engine's `bee account add <label>` keeps an account list on
+  this computer (`~/.beethoven/engine/accounts.json`), Beethoven reads it and never writes it, so
+  the setting `beethoven.account` can pick which of your own accounts Claude Code uses in every
+  integrated terminal of a local VS Code window, the ones you open yourself included (Beethoven
+  sets `CLAUDE_CONFIG_DIR` and `BEE_ACCOUNT` there, as `bee-use` does; a remote window is left as
+  it is). Nothing is read inside a sign-in folder and nothing is copied between accounts; your grid
+  worker's account is not changed by the setting.
 - **Terminals and SSH.** Beethoven writes a managed block in `~/.ssh/config`, creates an SSH key,
   opens terminals that run `ssh` to your grid account, and installs its scripts there
   (`~/.beethoven/bin`). It starts Slurm jobs in your account: a persistent worker that runs the
@@ -63,7 +73,9 @@ Read this before installing. It is the complete list.
 - **Remote-SSH.** Beethoven sets `remote.SSH.connectTimeout` and `remote.SSH.remotePlatform` for the
   node it connects you to.
 - **MCP.** Beethoven registers an MCP server named `beethoven` with the Claude Code extension
-  (`claude mcp add-json`, user scope) so the Claude on your laptop can hand work to the worker.
+  (`claude mcp add-json`, user scope, under the account `beethoven.account` names when it names
+  one: Claude Code keeps its servers per sign-in folder and writes them there itself) so the Claude
+  on your laptop can hand work to the worker.
 - **Access check.** Beethoven verifies your access key offline against signing keys shipped with it,
   and fetches a signed list of withdrawn keys once a day from the address published with the
   support site (`services.json`, or the setting `beethoven.licenseRevocationUrl`). Obtaining a key

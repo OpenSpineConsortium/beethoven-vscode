@@ -415,6 +415,13 @@
           "default": true,
           "description": "Put GITHUB_TOKEN and HF_TOKEN into every integrated terminal. ANTHROPIC_API_KEY is never injected: it would switch the local Claude Code from your subscription to pay-per-use."
         },
+        "beethoven.account": {
+          "type": "string",
+          "default": "",
+          "pattern": "^([a-z0-9][a-z0-9-]{0,31})?$",
+          "patternErrorMessage": "An account label is lower-case letters, digits and hyphens, not starting with a hyphen, up to 32 characters. Empty means Claude Code's own sign-in.",
+          "markdownDescription": "Which of your own Claude accounts Claude Code uses on this laptop, by its label in your account list: the list that `bee account add <label>` keeps on this computer (Beethoven reads it and never writes it). Empty: Claude Code's own sign-in, as before. With a label, every integrated terminal of a local VS Code window, the ones you open yourself included, gets that account's sign-in folder as `CLAUDE_CONFIG_DIR` and the label as `BEE_ACCOUNT` (only the label for an account at Claude Code's default place), the same as `bee-use <label>` in a terminal, so Beethoven and the command line pick the same account; **Beethoven: Sign in to Claude on this laptop**, Beethoven's checks of Claude Code and its bridge for Claude Code (registered with `claude mcp`) use that account too. A remote window (Remote-SSH, WSL, a container) is left as it is: its terminals run on another computer. A label that is not in the list changes nothing and Beethoven says so once; an account the engine took out of its rotation is still used, as `bee-use` does. Every account is your own; nothing is ever copied between them. Your grid worker's account is not changed by this setting."
+        },
         "beethoven.container": {
           "type": "string",
           "default": "auto",

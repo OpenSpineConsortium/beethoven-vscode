@@ -112,6 +112,12 @@ new integer.
 - Marketplace review: the extension makes no network request until the terms are accepted; it
   loads no remote code; the only third-party endpoints are Microsoft (sign-in), GitHub, Hugging Face,
   the lab's access service and the support site. Keep that true; it is what keeps the listing.
+- Not yet measured, to check on a real machine before 5.0.0 goes up: with `beethoven.account` set
+  to a listed label, does the Claude Code extension's own panel, and not only the integrated
+  terminals, run under that account's folder (`CLAUDE_CONFIG_DIR` from the terminal environment;
+  Cloak's known limitation, `docs/ARCHITECTURE.md`, "Several accounts of one person")? If the
+  extension ignores it, the setting's description and that section must say that only the terminals
+  and the processes Beethoven starts follow the setting.
 
 ## After publishing
 

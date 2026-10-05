@@ -4,7 +4,8 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
 // Integration tests run inside a real VS Code (downloaded once to .vscode-test/).
-// 'unit' (default): no network; the license files live in a fresh temporary folder.
+// 'unit' (default): no network; the license files and the engine's account list live in fresh temporary
+//   folders (the list never the real one of this machine).
 // 'live': runs the whole troubleshooter against the real grid, read-only, using this machine's
 //   SSH setup and license; run with: npx vscode-test --label live
 // 'package': the packaged extension, unpacked (tools/release.mjs does this), minified and trusting
@@ -17,7 +18,7 @@ export default defineConfig([
     version: 'stable',
     workspaceFolder: './test-fixtures/workspace',
     launchArgs: ['--disable-extensions', '--disable-gpu'],
-    env: { BEETHOVEN_LICENSE_DIR: scratch('beethoven-vsc-lic-') },
+    env: { BEETHOVEN_LICENSE_DIR: scratch('beethoven-vsc-lic-'), BEE_REGISTRY_DIR: scratch('beethoven-vsc-engine-') },
     mocha: { ui: 'tdd', timeout: 60_000 },
   },
   {

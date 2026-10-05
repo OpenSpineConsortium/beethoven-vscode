@@ -9,7 +9,29 @@ replaces 4.0.0. The packages of 2.0.0, 3.0.0 and 4.0.0 ask for an API key and we
 tree on 2026-10-04, their records kept (`dist/release/README.md`), so pass 28's step "the maintainer
 uploads 4.0.0" no longer stands: the Marketplace upload is 5.0.0 (`docs/MARKETPLACE.md`). The
 withdrawal and the rest of that day's sweep for API keys are not committed: the maintainer reviews
-and commits. The pass 29 and pass 28 paragraphs that follow are kept as they were.
+and commits. Later that day, on the branch `wip/account` for the maintainer's review: the setting
+`beethoven.account` (one person, their own accounts; `docs/ARCHITECTURE.md`, "Several accounts of
+one person"), with the agreements and the privacy statement at version 7 and `TERMS_VERSION` 7
+(the texts say that every integrated terminal of a local window gets the account); it ships in
+5.0.0. On the same branch, grid scripts 9, a safety fix that ships in 5.0.0 too: `beethoven
+uninstall --yes` removes only what install made and keeps `claude/`, `accounts/`, `engine/`,
+`projects/` and the work folder (`--purge-root` refused), `beethoven claude forget` refuses, Reset
+offers nothing more and runs the uninstall in a terminal, the troubleshooter reports where it used to
+delete, the worker no longer moves `projects/`; a sign-in with `apiKeySource` is not a subscription
+anywhere (hpcworker's rule; workers started before 9 need a restart to apply it); the five strip
+lists equal hpcworker's; `access init` and `library publish` keep other's read and enter on
+`shared/beethoven`. The texts at version 7 say so. Not run here: `tools/grid_tests.sh` on the grid
+and the VS Code integration suite. The bundled manual (`extension/media/manual.html`, `docs/manual.html`)
+was edited by hand for that section, since pandoc was not at hand: `docs/manual.pdf` and a pandoc
+rebuild (`python -X utf8 docs/manual/build_manual.py`) wait on the maintainer. The diagnostics
+graph (`docs/diagnostics_graph.json`, `docs/DIAGNOSTICS.md`) was regenerated without VS Code, from
+`buildGraph()` bundled with an inert stand-in for the `vscode` module (the same method reproduces the
+graph committed in 710d74e byte for byte); the VS Code integration suite (`npm run test:vscode`),
+with its two new account tests, has not run on this change and waits on the maintainer too, and
+its graph test rewrites both files. Whether the Claude
+Code extension honours `CLAUDE_CONFIG_DIR` from the terminal environment is not yet measured and is
+on the pre-publish list in `docs/MARKETPLACE.md`. The pass 29 and pass 28 paragraphs that follow are
+kept as they were.
 
 **As of pass 29 (2026-09-30, 16:55 UTC).** The newest entry is "What pass 29 changed" below: the
 browser edition's 8.0.0 is released and the site's history purged (both pushed by the maintainer);

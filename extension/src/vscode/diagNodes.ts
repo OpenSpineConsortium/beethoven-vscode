@@ -8,6 +8,7 @@ import { DiagNode, CheckResult } from '../core/diagnostics';
 import { run, ssh, gridCli } from '../core/shell';
 import { WizardEnv, stepWsuSignIn, stepGithub, stepHuggingFace, stepSshKey, stepSshConfig, stepGridInstall, testConnection, pushTokens, licenseFingerprint, stepClaudeLocal } from '../core/wizard';
 import { GridRelay } from '../core/relay';
+import { ACCOUNT_LABEL, ADD_COMMAND, DEFAULT_PLACE, accountPlace, accountProcessEnv, inheritedConfigDir, readAccounts } from '../core/accounts';
 import { BeethovenStore, findClaudeExecutable } from './store';
 import { isMcpRegistered, registerMcp } from './mcpRegister';
 import { TERMS_VERSION } from '../core/terms';
@@ -257,9 +258,50 @@ export function buildGraph(): DiagNode<DiagCtx>[] {
   });
   add(tokenNode('account.github', stepGithub, 'GitHub token'));
   add(tokenNode('account.huggingface', stepHuggingFace, 'Hugging Face token'));
-  add({ id: 'account.claude', title: 'Claude on this laptop', layer: 'account', dependsOn: ['account.wsu', 'vscode.claude-binary'],
-    assumption: 'Claude Code on this laptop is signed in with the student\'s own Claude Pro or Max subscription (Beethoven reads status only)',
-    manualFix: 'sign in to Claude Code on this laptop (setup step "Claude on this laptop")', futureRisk: 'claude auth status changing its output; plan names changing', source: 'extension/src/core/wizard.ts (stepClaudeLocal)',
+  // the student's own Claude accounts (beethoven.account): the engine's list, read and never written, and the one
+  // label chosen from it. A label the list does not offer leaves the terminals on the usual sign-in, which is
+  // checked as before, so these two warn and never block the sign-in check or the grid below it.
+  add({
+    id: 'account.list', title: 'Your Claude account list', layer: 'account', dependsOn: ['laptop.os'],
+    assumption: `the account list the engine's bee command keeps on this computer (~/.beethoven/engine/accounts.json, or under BEE_REGISTRY_DIR or BEETHOVEN_HOME as the engine reads it) is absent, or present and readable; Beethoven reads it and never writes it`,
+    manualFix: `add an account with "${ADD_COMMAND} <label>" in a terminal; a list that does not read is the engine's to repair, never Beethoven's`,
+    futureRisk: 'the engine moving the list or changing its rows', source: 'extension/src/core/accounts.ts (readAccounts)',
+    async check(ctx) {
+      const list = readAccounts();
+      if (list.ok) return ok(list.accounts.length ? `${list.accounts.length}: ${list.accounts.map((a) => a.label + (a.path === null ? ` (${DEFAULT_PLACE})` : '') + (a.enabled ? '' : ' (out of the rotation)')).join(', ')}` : 'present, empty');
+      // the engine's bee refuses a list it cannot read too; with a label in the setting account.choice warns about
+      // it already, together with what that means for the label, so one problem gives one warning
+      if (list.reason === 'unreadable') {
+        const c = ctx.store.accountChoice();
+        return ok(`${list.file} could not be read (${list.detail}); bee refuses it as well`, !(c.kind === 'invalid' && ACCOUNT_LABEL.test(c.label)));
+      }
+      return ok(`no account list on this computer (${list.file})`);
+    },
+  });
+  add({
+    id: 'account.choice', title: 'Claude account for the terminals', layer: 'account', dependsOn: ['laptop.os', 'account.list'],
+    assumption: `the setting beethoven.account is empty (Claude Code's own sign-in, as before) or names a listed account, whose directory every integrated terminal of a local window gets as CLAUDE_CONFIG_DIR with the label as BEE_ACCOUNT (the label alone for an account at ${DEFAULT_PLACE}); a remote window's terminals get neither`,
+    manualFix: `Settings > Beethoven > Account: pick a label from your account list, add the account with "${ADD_COMMAND} <label>" in a terminal, or leave the setting empty`,
+    fixCommand: { command: 'workbench.action.openSettings', title: 'Open the setting', arguments: ['beethoven.account'] },
+    futureRisk: 'the Claude Code VS Code extension not reading CLAUDE_CONFIG_DIR from the terminal environment (not yet measured on a real machine)',
+    source: 'extension/src/core/accounts.ts (chooseAccount), extension/src/vscode/store.ts (accountChoice)',
+    async check(ctx) {
+      // the store brings the terminals' variables in line as it reads, so this reports what the next terminal gets
+      const c = ctx.store.accountChoice();
+      const inherited = inheritedConfigDir(c);
+      if (c.kind === 'default') return ok(inherited ? `the setting is empty; ${inherited}` : "the default: Claude Code's own sign-in on this laptop");
+      if (c.kind === 'remote') return ok(c.problem);
+      if (c.kind === 'invalid') return ok(inherited ? `${c.problem} ${inherited}.` : c.problem, true);
+      const notes: string[] = [];
+      if (c.outOfRotation) notes.push(`the engine has it out of its rotation; the terminals use it all the same, as bee-use does, and "bee account enable ${c.label}" puts it back once it is signed in`);
+      if (c.hibernateUntil && Date.parse(c.hibernateUntil) > Date.now()) notes.push(`the engine rests this account until ${new Date(c.hibernateUntil).toLocaleString()}`);
+      if (inherited) notes.push(inherited);
+      return ok(`as ${c.label}: ${accountPlace(c)}${notes.length ? `; ${notes.join('; ')}` : ''}`, notes.length > 0);
+    },
+  });
+  add({ id: 'account.claude', title: 'Claude on this laptop', layer: 'account', dependsOn: ['account.wsu', 'vscode.claude-binary', 'account.choice'],
+    assumption: 'Claude Code on this laptop, in the directory the account setting names, is signed in with the student\'s own Claude Pro or Max subscription (Beethoven reads status only)',
+    manualFix: 'sign in to Claude Code on this laptop (setup step "Claude on this laptop"; it signs in under the chosen account)', futureRisk: 'claude auth status changing its output; plan names changing', source: 'extension/src/core/wizard.ts (stepClaudeLocal)',
     fixCommand: { command: 'beethoven.claudeLocalSignIn', title: 'Sign in' },
     check: (ctx) => stepCheck(stepClaudeLocal, ctx) });
 
@@ -312,7 +354,7 @@ export function buildGraph(): DiagNode<DiagCtx>[] {
     } });
   add(gridNode('grid.bashrc-block', 'Beethoven block in ~/.bashrc', ['grid.scripts'], 'the block exporting the VS Code sysroot variables and PATH', 'ssh wsu-grid "~/.beethoven/bin/beethoven install"', 'a new default .bashrc from C&IT'));
   add(gridNode('grid.vscode-sysroot', 'VS Code compatibility libraries (C&IT sysroot)', ['grid.bashrc-block'], '/wsu/apps/vscode sysroot and patchelf exist at the paths in the block', 'ask hpc@wayne.edu where the VS Code sysroot moved', 'Wayne State moving or upgrading the sysroot (repair rediscovers it)'));
-  add(gridNode('grid.login-tmp', 'Nothing of yours left under /tmp on the login node', ['grid.scripts'], 'no container build leftovers (rootfs-*, build-temp-*, apptainer*) or files over 50 MB of yours under /tmp on the login node, which C&IT keeps free of user files; Beethoven builds containers only inside Slurm jobs with node-local temp and cache', 'ssh wsu-grid and remove your files under /tmp (repair removes the recognisable leftovers)', 'a container command run by hand on the login node; a build job killed before its cleanup trap'));
+  add(gridNode('grid.login-tmp', 'Nothing of yours left under /tmp on the login node', ['grid.scripts'], 'no container build leftovers (rootfs-*, build-temp-*, apptainer*) or files over 50 MB of yours under /tmp on the login node, which C&IT keeps free of user files; Beethoven builds containers only inside Slurm jobs with node-local temp and cache', 'ssh wsu-grid and remove your files under /tmp yourself (Beethoven reports them and deletes nothing there)', 'a container command run by hand on the login node; a build job killed before its cleanup trap'));
   add(gridNode('grid.slurm', 'Slurm commands', ['grid.scripts'], 'sbatch, squeue, sacct, scancel work on the login node', 'contact hpc@wayne.edu', 'a Slurm upgrade changing output formats'));
   add(gridNode('grid.slurm-visibility', 'Access requests visible to the admin', ['grid.slurm'], 'Slurm PrivateData=none (the admin sees the held access-request jobs)', 'the admin can grant directly without a request', 'C&IT enabling PrivateData=jobs'));
   add(gridNode('grid.qos', 'Slurm partitions and QoS', ['grid.slurm'], 'the account has the requeue or secondary QoS', 'ask your lead / hpc@wayne.edu for the QoS', 'QoS renamed by C&IT'));
@@ -322,7 +364,7 @@ export function buildGraph(): DiagNode<DiagCtx>[] {
   const pushRepair: DiagNode<DiagCtx>['repair'] = async (ctx) => { const r = await pushTokens(ctx.env); await ctx.grid(true); return r; };
   add(gridNode('grid.token-github', 'GitHub token on the grid', ['grid.internet', 'account.github'], 'the grid copy of the GitHub token verifies', 'press Renew next to GitHub', 'GitHub token expiry policies', pushRepair));
   add(gridNode('grid.token-hf', 'Hugging Face token on the grid', ['grid.internet', 'account.huggingface'], 'the grid copy of the Hugging Face token verifies', 'press Renew next to Hugging Face', 'Hugging Face token changes', pushRepair));
-  add({ ...gridNode('grid.claude-login', 'Claude signed in on the grid', ['grid.scripts', 'account.claude'], 'Claude Code on the grid reports its own sign-in (made by the student with beethoven claude login; Beethoven never touches the credential)', 'run Beethoven: Sign in to Claude on the grid (the sign-in lasts about a month)', 'Anthropic changing the login flow or its lifetime', undefined),
+  add({ ...gridNode('grid.claude-login', 'Claude signed in on the grid', ['grid.scripts', 'account.claude'], 'Claude Code on the grid reports its own sign-in with a Claude subscription and no API key behind it (made by the student with beethoven claude login; Beethoven never touches the credential, never deletes it and never signs it out)', 'run Beethoven: Sign in to Claude on the grid (the sign-in lasts about a month)', 'Anthropic changing the login flow or its lifetime', undefined),
     fixCommand: { command: 'beethoven.claudeSignIn', title: 'Sign in on the grid' } });
   add({
     id: 'grid.license', title: 'Beethoven license on the grid', layer: 'grid-login', dependsOn: ['grid.scripts', 'account.license-identity'],
@@ -341,12 +383,12 @@ export function buildGraph(): DiagNode<DiagCtx>[] {
     },
     repair: pushRepair,
   });
-  add(gridNode('grid.accounts', 'Claude accounts on the grid', ['grid.claude-login'], 'your own Claude sign-in only (Beethoven keeps no Claude token and uses no API key), no copied logins, its session history in one shared folder, and an API key an earlier version stored marked disabled', 'Troubleshoot and repair links the history and marks an API key an earlier version stored disabled (it deletes nothing); ssh -t wsu-grid "beethoven accounts remove --yes" deletes the key', 'Claude Code moving where --resume looks for transcripts', undefined));
+  add(gridNode('grid.accounts', 'Claude accounts on the grid', ['grid.claude-login'], 'your own Claude sign-in only (Beethoven keeps no Claude token and uses no API key), no copied logins, and an API key an earlier version stored marked disabled; nothing in a sign-in folder is moved, linked or deleted', 'Troubleshoot and repair marks an API key an earlier version stored disabled (it deletes nothing); ssh -t wsu-grid "beethoven accounts remove --yes" deletes the key, and Claude tokens an earlier version stored are yours to delete by hand', 'Claude Code moving where --resume looks for transcripts', undefined));
   add(gridNode('grid.lab-access', 'Lab access', ['account.claude', 'grid.token-github', 'grid.token-hf', 'grid.slurm'], 'the lab folder is readable (approved), or a request is pending', 'the last wizard step: Join the lab', 'the lab folder moving'));
   add(gridNode('grid.runtime', 'Container runtime (Apptainer)', ['grid.scripts'], 'the configured apptainer executable exists (repair switches to the current module)', 'ask your lead to republish the container', 'Wayne State upgrading or removing the apptainer module'));
   add(gridNode('grid.container', 'Lab Claude container', ['grid.lab-access', 'grid.runtime'], 'the lab container is adopted (repair runs beethoven adopt)', 'wait for lab access', 'a republished container at a new path'));
   add(gridNode('grid.relay', 'Prompt relay on the login node', ['grid.scripts'], 'beethoven relay answers PING', 'reinstall Beethoven on the grid', 'bash changes on the login node'));
-  add(gridNode('grid.lab-folder', 'Lab folder layout (admin)', ['grid.acl-tools'], 'the lab folder is closed to other users and requests go through Slurm', 'ssh wsu-grid "beethoven access init"', 'someone widening permissions by hand'));
+  add(gridNode('grid.lab-folder', 'Lab folder layout (admin)', ['grid.acl-tools'], 'the volume root is closed to other users (its list of approved accounts is the gate), nothing in shared/ is writable by others, and requests go through Slurm; shared/beethoven stays readable below the gate for the browser and desktop editions', 'ssh wsu-grid "beethoven access init"', 'someone widening permissions by hand'));
   add({
     id: 'grid.worker', title: 'Claude workers', layer: 'grid-slurm', dependsOn: ['grid.container', 'grid.qos'],
     assumption: 'every running worker job has a daemon that answers (heartbeat under 90 s)', manualFix: 'Beethoven: Stop a worker, then Start a worker',
@@ -392,11 +434,15 @@ export function buildGraph(): DiagNode<DiagCtx>[] {
 
   // ---------------------------------------------------------------- the bridge to the local Claude
   add({
-    id: 'vscode.mcp-bridge', title: 'Claude Code bridge to the grid (MCP)', layer: 'vscode', dependsOn: ['vscode.claude-binary', 'network.grid-login'],
-    assumption: 'the beethoven MCP server is registered with Claude Code and connects', manualFix: 'Beethoven: Connect the Claude Code extension to the grid',
+    id: 'vscode.mcp-bridge', title: 'Claude Code bridge to the grid (MCP)', layer: 'vscode', dependsOn: ['vscode.claude-binary', 'network.grid-login', 'account.choice'],
+    assumption: 'the beethoven MCP server is registered with Claude Code, under the account the setting names when it names one (Claude Code keeps its servers per sign-in folder), and connects', manualFix: 'Beethoven: Connect the Claude Code extension to the grid',
     futureRisk: 'claude mcp CLI changes; Electron-as-node removed from VS Code', source: 'extension/src/vscode/mcpRegister.ts',
-    async check() { return (await isMcpRegistered()) ? ok('registered') : fail('not registered'); },
-    async repair(ctx) { const r = await registerMcp(ctx.extensionPath, ctx.env.settings.sshAlias, ctx.log); return { ok: r.ok, detail: `${r.how}: ${r.detail.split('\n')[0]}` }; },
+    async check(ctx) {
+      const c = ctx.store.accountChoice();
+      const as = c.kind === 'account' ? ` for ${c.label}` : '';
+      return (await isMcpRegistered(accountProcessEnv(c))) ? ok(`registered${as}`) : fail(`not registered${as}`);
+    },
+    async repair(ctx) { const r = await registerMcp(ctx.extensionPath, ctx.env.settings.sshAlias, ctx.log, accountProcessEnv(ctx.store.accountChoice())); return { ok: r.ok, detail: `${r.how}: ${r.detail.split('\n')[0]}` }; },
   });
   return G;
 }

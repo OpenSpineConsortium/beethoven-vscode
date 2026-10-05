@@ -1,8 +1,9 @@
 // The "Beethoven" view in the activity bar: connection, grid install, workers, accounts, tokens.
 import * as vscode from 'vscode';
-import { GridApi, GridStatus, GridClaudeStatus } from '../core/gridApi';
+import { GridApi, GridStatus, GridClaudeStatus, judgedByOldRule } from '../core/gridApi';
 import { BeethovenStore } from './store';
 import { testConnection, localClaudeStatus } from '../core/wizard';
+import { accountPlace, accountProcessEnv, asLabel, inheritedConfigDir } from '../core/accounts';
 
 type Kind = 'root' | 'worker' | 'account' | 'token' | 'job' | 'info';
 
@@ -161,17 +162,30 @@ export class BeethovenTree implements vscode.TreeDataProvider<Item> {
     return items;
   }
 
-  /** Claude Code's own sign-in on this laptop (status only, the wizard's step "Claude on this laptop"). */
+  /** Claude Code's own sign-in on this laptop (status only, the wizard's step "Claude on this laptop"), under the account beethoven.account names when it names one. */
   private async claudeOnLaptop(claudeExecutable: string): Promise<Item> {
-    const lc = await localClaudeStatus(claudeExecutable);
-    const tooltip = 'Claude Code on this laptop, signed in with your own Claude Pro or Max subscription. Beethoven only checks; it stores nothing';
-    if (!lc.ok) return new Item('Claude on this laptop', 'account', { description: lc.detail, icon: 'warning', tooltip });
-    if (lc.loggedIn && lc.subscription) return new Item('Claude on this laptop', 'account', { description: lc.detail, icon: 'pass', tooltip });
+    // the store brings the terminals' variables in line as it reads, so the row shows what the next terminal gets
+    const choice = this.store.accountChoice();
+    const inherited = inheritedConfigDir(choice);
+    const base = 'Claude Code on this laptop, signed in with your own Claude Pro or Max subscription. Beethoven only checks; it stores nothing';
+    const tooltip =
+      choice.kind === 'account'
+        ? `${base}. The setting "account" picks ${choice.label}: every integrated terminal of this window uses that account's sign-in (${accountPlace(choice)})${inherited ? `. ${inherited}` : ''}`
+        : choice.kind === 'invalid' || choice.kind === 'remote'
+          ? `${choice.problem}${inherited ? ` ${inherited}.` : ''}`
+          : `${base}${inherited ? `. ${inherited}` : ''}`;
+    const lc = await localClaudeStatus(claudeExecutable, accountProcessEnv(choice));
+    const as = asLabel(choice);
+    // a label that is not applied: the usual sign-in is what the terminals use, so that is what the row shows, with why
+    if (choice.kind === 'invalid') return new Item('Claude on this laptop', 'account', { description: `${lc.detail}; the account setting "${choice.label}" is not used: click to fix it`, icon: 'warning', tooltip, command: { command: 'workbench.action.openSettings', title: 'Open the setting', arguments: ['beethoven.account'] } });
+    const remote = choice.kind === 'remote' ? `; the account setting "${choice.label}" is not applied in a remote window` : '';
+    if (!lc.ok) return new Item('Claude on this laptop', 'account', { description: lc.detail + as + remote, icon: 'warning', tooltip });
+    if (lc.loggedIn && lc.subscription) return new Item('Claude on this laptop', 'account', { description: lc.detail + as + remote, icon: 'pass', tooltip });
     return new Item('Claude on this laptop', 'account', {
-      description: `${lc.detail}: click to sign in`,
+      description: `${lc.detail}${as}${remote}${remote ? '' : ': click to sign in'}`,
       icon: lc.loggedIn ? 'warning' : 'circle-outline',
       tooltip,
-      command: { command: 'beethoven.claudeLocalSignIn', title: 'Sign in to Claude on this laptop' },
+      command: remote ? undefined : { command: 'beethoven.claudeLocalSignIn', title: 'Sign in to Claude on this laptop' },
     });
   }
 
@@ -188,6 +202,7 @@ export class BeethovenTree implements vscode.TreeDataProvider<Item> {
     if (!cs) return new Item('Claude on the grid', 'account', { description: 'the grid did not answer', icon: 'warning', tooltip });
     const phone = cs.consent ? '; phone access enabled' : '';
     if (cs.login?.loggedIn && cs.login.subscription === false) return new Item('Claude on the grid', 'account', { description: 'signed in, but not with a Claude subscription: click to sign in again', icon: 'warning', tooltip, command: signIn });
+    if (judgedByOldRule(cs.login)) return new Item('Claude on the grid', 'account', { description: 'signed in, but your running worker is from an earlier version that does not check for an API key behind the sign-in: restart it (Install on the grid in the setup restarts it)', icon: 'warning', tooltip, command: { command: 'beethoven.setup', title: 'Set up' } });
     if (cs.login?.loggedIn) return new Item('Claude on the grid', 'account', { description: `signed in${cs.login.email ? ` as ${cs.login.email}` : ''}${phone}`, icon: 'pass', tooltip });
     if (cs.login && cs.login.loggedIn === false && cs.dir_present) return new Item('Claude on the grid', 'account', { description: 'sign-in ended: click to sign in', icon: 'warning', tooltip, command: signIn });
     if (cs.dir_present) return new Item('Claude on the grid', 'account', { description: `signed in (a running worker will confirm it)${phone}`, icon: 'pass', tooltip });
