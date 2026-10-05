@@ -372,9 +372,9 @@ own home), so one copy serves the whole lab. `/rs/rs_grp_oschome/shared/beethove
   entries. How the two approved lists are reconciled is not decided here (the maintainer's call).
 - **The request is refused until the environment works the way the lab works:** every earlier step
   done; the Claude Code and Remote-SSH extensions and the bridge present; and, checked on the grid
-  by `beethoven access requirements`, a Claude subscription token the API accepts (`GET /v1/models`
-  with the OAuth token must answer 200; 401 means invalid or revoked; `claude setup-token` only
-  issues tokens to paid plans), and GitHub and Hugging Face tokens that verify. The shared container
+  by `beethoven access requirements`, the `.bashrc` block in place and GitHub and Hugging Face
+  tokens that verify. No Claude token is asked for or checked: the Claude sign-in is the student's
+  own `claude auth login` on a compute node, judged only by `claude auth status`. The shared container
   is what access gives, never a precondition; students are never offered a private build (`beethoven
   install --build-own` is for the admin only).
 - **Token checks never put a token on a command line:** `curl -K -` reads the header from stdin, so
