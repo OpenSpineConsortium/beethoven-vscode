@@ -7,10 +7,14 @@ until 3.0.0; from 4.0.0 it is **Beethoven for VS Code**, Marketplace item
 (Desktop/ashley-bridge, to be renamed beethoven). The access service that keeps the approved list,
 issues keys to approved people and publishes withdrawn ones is its own repository too since
 2026-10-07, `OpenSpineConsortium/beethoven-access` (it was `tools/intake/` here); nothing here reads
-or runs its code, and the only client of it left here is `tools/license/publish.sh`, which carries
-this edition's revocations to it over HTTP. Vendor: Gregory Schwing, trading as
-OpenSpineConsortium (an LLC is planned). Private repository `OpenSpineConsortium/beethoven-vscode`;
-the Desktop folder is `ashley` until the maintainer renames it. The code is proprietary.
+or runs its code. This edition reaches it over HTTP only, and depends on what it answers: the
+extension asks `/trial` for a trial key, reads `/revoked` and sends `/report` (and reads
+`/allowlist` only where a setting or `services.json` names it), and `grid/license.js` verifies what
+`/trial` and `/revoked` sign; the one maintainer's tool here that calls it is
+`tools/license/publish.sh` (`/admin/revoke-lid`), which carries this edition's revocations to it.
+Vendor: Gregory Schwing, trading as OpenSpineConsortium (an LLC is planned). Private repository
+`OpenSpineConsortium/beethoven-vscode`; the Desktop folder is `ashley` until the maintainer renames
+it. The code is proprietary.
 
 ## Read first
 

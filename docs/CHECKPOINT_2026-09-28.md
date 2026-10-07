@@ -38,7 +38,14 @@ record of where the service was when it was written: it is now its own repositor
 `OpenSpineConsortium/beethoven-access`, with the deploy workflow that was
 `.github/workflows/deploy-access.yml`, and this repository reaches it only over HTTP. What stayed
 here is the VS Code edition's own client of its admin API, `tools/license/publish.sh`,
-`publish_revoked.mjs` and `service.mjs`.
+`publish_revoked.mjs` and `service.mjs`. One thing waits on the order of steps: the maintainer's
+scheduled grid task (hpcworker's `tools/grid_access_task.ps1`, its `docs/guides/LAB_LEAD.md`
+section 9) runs this checkout's `tools/intake/admin.mjs roster` and `readers`, which this change
+removes, and beethoven-access's `admin.mjs` reads two routes the deployed Worker does not answer yet.
+So deploy beethoven-access, register the task again on its `admin.mjs` and run it once as a dry run,
+and only then pull this change onto the machine that runs the task; the other way round every run
+refuses and changes nothing, and someone taken off the approved list keeps their entry on the volume
+(beethoven-access's README, "Lab storage, read only").
 
 **As of pass 29 (2026-09-30, 16:55 UTC).** The newest entry is "What pass 29 changed" below: the
 browser edition's 8.0.0 is released and the site's history purged (both pushed by the maintainer);
