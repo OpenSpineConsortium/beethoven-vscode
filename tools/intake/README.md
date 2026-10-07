@@ -21,11 +21,13 @@ address. The same code runs under two Worker names, `beethoven-access` and `ashl
 | `GET` and `POST /decide?t=<token>` | the links in the e-mails: Approve for Beethoven, Lab membership only, Deny; Move the approval, Withdraw approval; Done, invited (on the Approve page and in the daily reminder) | GET shows one question and one button; the button POSTs the decision. Each link acts only on the version of the request or refusal e-mail it was sent for ([The link](#the-request-portal)) |
 | `GET` and `POST /confirm?t=<token>` | the student's "Confirm it is you" link, when `MAIL_STUDENTS` is `"1"` | GET shows the request and one button; the button confirms it and sends it to the maintainer |
 | `GET` and `POST /cv?t=<token>` | the CV link in the maintainer's e-mail | GET shows what the file is and one button; the button answers the file, once |
+| `POST /storage_request` | the lab storage page, `https://openspineconsortium.com/beethoven/storage.html` | someone asks to read named folders of the lab's storage on the grid: stored as a storage request, e-mailed to the maintainer with an Approve read access and a Deny link ([Lab storage, read only](#lab-storage-read-only)); answers pending, approved (they read every folder asked for already) or denied |
+| `GET` and `POST /storage_decide?t=<token>` | the two links in a lab storage e-mail | as `/decide`, for storage decisions only: GET asks, the button decides |
 | `POST /trial` | Beethoven for VS Code (`beethoven.licenseServiceUrl`; `ashley.licenseServiceUrl` in 3.0.0) | a key for a signed-in person approved for Beethoven; three a day at most; the key's id is written to the approved record |
 | `POST /access_check` | Beethoven (`access_check` in `https://openspineconsortium.com/beethoven/services.json`; 4.0.0 to 6.0.0 read `/ashley/services.json`) | is this one account approved, on this installation? Yes or no, from the same list; contract in [ACCESS_CHECK.md](ACCESS_CHECK.md) |
 | `GET /revoked` | every installation, daily | the signed revocation list |
 | `POST /report` | installations that allow error reports | an issue labelled `diagnostic-report`; repeats add a count |
-| `/admin/*` | `https://openspineconsortium.com/beethoven/admin.html`, `publish.sh`, `admin.mjs` | `list`, `approve` (optional `grants`), `deny`, `add` (optional `grants`), `remove`, `invited`, `grant`, `seat`, `reset-seat`, `seat-rule`, `cv`, `revoke-lid`, `notify-test`, behind the bearer token `ADMIN_TOKEN`. The admin page's contract (every field of `list`, every write) is in [ACCESS_CHECK.md, "The admin routes"](ACCESS_CHECK.md#the-admin-routes-the-admin-pages-contract) |
+| `/admin/*` | `https://openspineconsortium.com/beethoven/admin.html`, `publish.sh`, `admin.mjs` | `list`, `approve` (optional `grants`), `deny`, `add` (optional `grants`), `remove`, `invited`, `grant`, `seat`, `reset-seat`, `seat-rule`, `cv`, `revoke-lid`, `notify-test`, and for lab storage `storage-list`, `storage-approve`, `storage-deny`, `storage-add`, `storage-remove`, behind the bearer token `ADMIN_TOKEN`. The admin page's contract (every field of `list` and `storage-list`, every write) is in [ACCESS_CHECK.md, "The admin routes"](ACCESS_CHECK.md#the-admin-routes-the-admin-pages-contract) |
 | cron, `0 13 * * *` | Cloudflare, once a day | the invitation reminder: one e-mail listing the approvals for Beethoven not marked invited to the Google Group Beethoven-users after an hour ([The private listing](#the-private-listing)) |
 | `GET /health` | you | `{"ok":true}` |
 
@@ -480,6 +482,31 @@ different links of one e-mail (Approve, then Deny) pressed within the minute cou
 minute, or check the admin page, before pressing a second link of the same e-mail. Making "once" hold at
 once needs a strongly consistent store for spending a link (a Durable Object); it is not built.
 
+## Lab storage, read only
+
+Added 2026-10-07 (`storage.js`). Some people need to read lab data on the grid without running Beethoven,
+and ask to be put in the Unix group `oschome` for it, which is C&IT's to change and is not the lab's
+approved list. They ask on the lab storage page instead (`https://openspineconsortium.com/beethoven/storage.html`,
+hidden like the request page): their AccessID, name, the folders under `/rs/rs_grp_oschome` they need
+(eight at most, one a line, like `go2432/data`; `STORAGE_ROOT` names another root) and what for. The
+request is e-mailed to the maintainer with two links, **Approve read access** and **Deny**, made and
+checked as the access links are (signed with `DECIDE_KEY`, 14 days, one use, tied to the version of the
+request), but answered at `/storage_decide` only: `/decide` takes neither, and `/storage_decide` takes none
+of `/decide`'s. The admin page's section **Lab storage, read only** lists the requests, the readers and the
+denials; there the maintainer approves fewer folders than asked for, denies with a reason, adds a reader
+directly, sets a reader's folders, or takes a reader off (`storage-approve`, `storage-deny`, `storage-add`,
+`storage-remove`; the same with `admin.mjs`). The person asking is never e-mailed; the page tells them the
+lab lead decides and lets them know.
+
+Nothing here reaches the grid. `node tools/intake/admin.mjs readers` prints the readers, one `<AccessID>
+<folder>` a line, and `tools/grid_access.sh` in the `hpcworker` repository reads it on each run, beside
+`admin.mjs roster` (the approved list): each reader gets `--x` on the root and the lab group's read on their
+folders by named ACL entries, never write and never a default entry, and a reader taken off loses them at
+the next run. What a reader gets and never gets is that tool's header and `docs/guides/LAB_LEAD.md`
+section 9 there. A service deployed before this answers `storage-list` with 404, and `admin.mjs readers`
+then ends with exit 1 and says to deploy, so the grid tool refuses rather than taking a reader's entries
+away: deploy the service (both names) before the grid tool that reads the readers.
+
 ## Publishing your own revocation list
 
 Keys you issued with `beethoven-license.mjs` (its old name, `ashley-license.mjs`, still runs it) are
@@ -520,6 +547,10 @@ withdrew reach installations through `/revoked`.
 | ACCESS | `notify_versions:<AccessID>:<day>` | e-mails that day about new versions of this person's request (3 at most) | 2 days |
 | ACCESS | `invite_reminder:<day>` | when that day's invitation reminder went (one a day) | 2 days |
 | ACCESS | `decide:<nonce>` | a used e-mail link (a decision, a CV view, a confirmation, a Done, invited): AccessID, decision, when | 30 days (a link lives 14 days at most) |
+| ACCESS | `storage_pending:<AccessID>` | a lab storage request: name, e-mail, note (what for), `folders`, `requested_at`, `submitted_at`, `ref`, `mailbox: "not_verified"` | until approved, denied or removed |
+| ACCESS | `storage:<AccessID>` | a reader: name, e-mail, note, `folders`, `approved_at`, the request decided (`requested_at`, `submitted_at`, `mailbox`, `ref`), `decided_at`, `decision` (`approve` or `add`), `by` | until removed |
+| ACCESS | `storage_denied:<AccessID>` | the request denied, with `denied_at`, `decided_at`, `decision: "deny"`, `by` and why | until removed, or lifted by `storage-add` |
+| ACCESS | `storage_req:<hash>:<day>`, `storage_notified:<AccessID>`, `storage_notify_versions:<AccessID>:<day>`, `storage_decide:<nonce>` | as `req:`, `notified:`, `notify_versions:` and `decide:`, for lab storage requests and their links | 2 days, 24 hours, 2 days, 30 days |
 | ACCESS | `seen:<product>:<AccessID>` | the last access check for that product and account: portal, version, time of the first and the last check, how many, the salted hash of the address, the decision and its reason, when the decision last changed | until the account is removed (Remove or Withdraw approval deletes it for every product) |
 | ACCESS | `chk:<AccessID>:<day>`, `chkip:<hash>:<day>` | access checks that day per account (120 at most) and per connection (2000 at most) | 2 days |
 | TRIALS | `<AccessID>` | the last key issued: time, key id, e-mail, end date | for the record |
@@ -585,5 +616,10 @@ approved at localhost from two installations and refused, with nothing written a
 from `ondemand.grid.wayne.edu` and any other portal that is not local; absent from the approved list;
 refused by `/trial`; left out of the reminder; still on the admin list; and an ordinary approval
 unaffected on every one of those routes; and the public `GET /allowlist` naming nobody, whoever asks, while
-`GET /admin/allowlist` gives the maintainer the list behind the admin token. `vendor.test.mjs` checks the order in which the vendor folder
-is found.
+`GET /admin/allowlist` gives the maintainer the list behind the admin token. Since 2026-10-07 also lab
+storage: the request's fields and folders (never a part that starts with a dot or a dash, never a folder
+outside the root or the root itself), its own limit per connection, the maintainer's e-mail and its two
+links (refused at `/decide`, as `/decide`'s are refused at `/storage_decide`), approve and deny once,
+versions replaced, the admin routes, and `admin.mjs readers` and `roster` run against the Worker behind a
+local server (and failing, with exit 1, against a service that has no storage list). `vendor.test.mjs`
+checks the order in which the vendor folder is found.
