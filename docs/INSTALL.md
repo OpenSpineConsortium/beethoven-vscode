@@ -145,8 +145,9 @@ Access is by the lab's approval. A student asks on
 `https://openspineconsortium.com/beethoven/request.html`; the request is e-mailed to the maintainer
 with an Approve and a Deny link, and is listed on the admin page
 (`https://openspineconsortium.com/beethoven/admin.html`); once approved, the wizard obtains the
-student's access key by itself (`docs/LICENSING.md`, `tools/intake/README.md`). The list bundled in
-the VSIX is the fallback when no access service is configured:
+student's access key by itself (`docs/LICENSING.md`; the service is its own repository,
+`OpenSpineConsortium/beethoven-access`). The list bundled in the VSIX is the fallback when no access
+service is configured:
 
 ```bash
 python tools/allow.py add ab1234 cd5678

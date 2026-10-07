@@ -33,6 +33,13 @@ Code extension honours `CLAUDE_CONFIG_DIR` from the terminal environment is not 
 on the pre-publish list in `docs/MARKETPLACE.md`. The pass 29 and pass 28 paragraphs that follow are
 kept as they were.
 
+**Where the access service lives now (2026-10-07).** Every mention of `tools/intake/` below is a
+record of where the service was when it was written: it is now its own repository,
+`OpenSpineConsortium/beethoven-access`, with the deploy workflow that was
+`.github/workflows/deploy-access.yml`, and this repository reaches it only over HTTP. What stayed
+here is the VS Code edition's own client of its admin API, `tools/license/publish.sh`,
+`publish_revoked.mjs` and `service.mjs`.
+
 **As of pass 29 (2026-09-30, 16:55 UTC).** The newest entry is "What pass 29 changed" below: the
 browser edition's 8.0.0 is released and the site's history purged (both pushed by the maintainer);
 the access service's afternoon work is deployed on both Worker names and framework 9 is published to

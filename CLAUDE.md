@@ -4,7 +4,11 @@ A licensed VS Code extension (plus CLI and MCP server) that sets up a medical st
 the Wayne State HPC grid and runs a Claude Code worker there. It was called **Ashley for VS Code**
 until 3.0.0; from 4.0.0 it is **Beethoven for VS Code**, Marketplace item
 `openspineconsortium.beethoven`. Its sibling, the Beethoven browser extension, is another repository
-(Desktop/ashley-bridge, to be renamed beethoven). Vendor: Gregory Schwing, trading as
+(Desktop/ashley-bridge, to be renamed beethoven). The access service that keeps the approved list,
+issues keys to approved people and publishes withdrawn ones is its own repository too since
+2026-10-07, `OpenSpineConsortium/beethoven-access` (it was `tools/intake/` here); nothing here reads
+or runs its code, and the only client of it left here is `tools/license/publish.sh`, which carries
+this edition's revocations to it over HTTP. Vendor: Gregory Schwing, trading as
 OpenSpineConsortium (an LLC is planned). Private repository `OpenSpineConsortium/beethoven-vscode`;
 the Desktop folder is `ashley` until the maintainer renames it. The code is proprietary.
 

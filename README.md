@@ -18,7 +18,8 @@ extension/   the VS Code extension (TypeScript): wizard, secrets, Remote-SSH, Be
 grid/        what gets installed in ~/.beethoven/bin on the grid: the beethoven CLI (bash), the worker daemon (Node), job scripts
 cli/         ten-line ssh forwarders for laptops without Node (macOS/Linux bash, Windows PowerShell)
 docs/        manual (HTML + PDF), pitch, architecture, limits, install, research notes, figures
-tools/       release, license and access-service tooling (maintainer only)
+tools/       release and license tooling, maintainer only (the access service is its own repository,
+             OpenSpineConsortium/beethoven-access)
 dist/        the release records, and the built .vsix of each release from 5.0.0
 ```
 

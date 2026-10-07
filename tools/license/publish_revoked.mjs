@@ -1,15 +1,16 @@
 #!/usr/bin/env node
-// Sends the ids in extension/media/revoked.txt to the service (POST /admin/revoke-lid, all in one call) and
-// checks that GET /revoked then lists every one of them. The bundled list is verified against
-// grid/license_keys.json first, so a tampered file is not published; either spelling of the list's
-// prefix (ASHLEYREV1, BEETHOVENREV1) is read (grid/license.js). The admin token is read from the vendor
-// folder (../license/vendor.mjs), never from the command line; the service address is argv[2], else
+// Sends the ids in extension/media/revoked.txt to the access service (POST /admin/revoke-lid, all in one
+// call) and checks that GET /revoked then lists every one of them. The service is
+// OpenSpineConsortium/beethoven-access and this tool knows it only by those two addresses. The bundled list
+// is verified against grid/license_keys.json first, so a tampered file is not published; either spelling of
+// the list's prefix (ASHLEYREV1, BEETHOVENREV1) is read (grid/license.js). The admin token is read from the
+// vendor folder (vendor.mjs), never from the command line; the service address is argv[2], else
 // service.mjs.
 import { createRequire } from 'node:module';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { vendorFolder } from '../license/vendor.mjs';
+import { vendorFolder } from './vendor.mjs';
 import { serviceOrigin } from './service.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -35,7 +36,7 @@ if (!mine.ok) die(`${listFile}: ${mine.detail}`);
 const { origin, from } = process.argv[2] ? { origin: new URL(process.argv[2]).origin, from: 'the argument' } : serviceOrigin();
 process.stderr.write(`service: ${origin} (from ${from})\n`);
 const tokenFile = path.join(VENDOR, 'admin_token');
-if (!fs.existsSync(tokenFile)) die(`no admin token at ${tokenFile} (README.md: openssl rand -base64 32 > ${tokenFile})`);
+if (!fs.existsSync(tokenFile)) die(`no admin token at ${tokenFile}: put there the value the service holds as its secret ADMIN_TOKEN (OpenSpineConsortium/beethoven-access)`);
 const token = fs.readFileSync(tokenFile, 'utf8').trim();
 
 // all the ids in one call: the Worker reads its list, adds them and writes it back once. One call per id
