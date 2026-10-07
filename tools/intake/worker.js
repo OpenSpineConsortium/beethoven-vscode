@@ -66,6 +66,9 @@
 //                    (ACCESS_CHECK.md, "The admin routes", is the page's contract). Behind a bearer
 //                    token (secret ADMIN_TOKEN); put Cloudflare Access in front of it as a second wall. Every
 //                    write leaves an audit line (KV ACCESS audit:<time>:<4 hex>).
+//   /storage_request, /storage_decide, /admin/storage-*  lab storage, read only: who may read which folders
+//                    of the lab's storage on the grid, asked for on the website's storage page and decided
+//                    the same way as access (storage.js says how; tools/grid_access.sh in hpcworker applies it).
 // Everything a student sends is treated as hostile input: sizes are capped, strings are cleaned,
 // nothing is interpolated into anything but JSON or escaped HTML, and a CV is served only with a type the
 // service chose. Nothing here logs a token, an e-mail or an IP address, and an IP is stored only as a
@@ -74,6 +77,8 @@
 // for VS Code 4.0.0 on) and ashley-service (kept deployed because Ashley for VS Code 3.0.0 and Beethoven
 // 4.0.0 to 6.0.0 were built with that address and know no other), bound to the same KV namespaces and
 // given the same secrets, so both answer from one approved list.
+
+import { storageService } from './storage.js';
 const MAX_REPORT_BYTES = 64 * 1024;
 const MAX_BODY_BYTES = 8 * 1024;
 // a v2 request with a CV: 5 MB of file is about 6.7 MB of base64, and the other fields are small
@@ -1665,6 +1670,8 @@ async function admin(request, env, url, ctx) {
   const given = (request.headers.get('authorization') || '').replace(/^Bearer\s+/i, '').trim();
   if (!(await sameSecret(given, env.ADMIN_TOKEN))) return reply(401, { error: 'admin token missing or wrong' });
   const route = url.pathname.slice('/admin/'.length);
+  // lab storage, read only: its own records and routes (storage.js)
+  if (route.startsWith('storage-')) return STORAGE.admin(request, env, route, reply);
   if (request.method === 'GET' && route === 'list') {
     const [pending, approved, denied, revoked, checks, seats, conflicts, installed] = await Promise.all([records(env, 'pending'), records(env, 'approved'), records(env, 'denied'), env.ACCESS.get('revoked', 'json'), checkRecords(env), records(env, 'seat'), records(env, 'conflict'), records(env, 'installed')]);
     const nowMs = Date.now();
@@ -1879,6 +1886,9 @@ async function report(request, env) {
   return json(202, { ok: true, issue: issue.number });
 }
 
+// lab storage, read only (storage.js): its routes answer, check links and write records with these
+const STORAGE = storageService({ json, esc, oneLine, clean, today, newNonce, siteOrigin, adminPage, readableTime, sentence, siteCors, readJson, records, audit, countToday, sendMail, decideToken, readDecideToken, linkForm, decidePage, sha256, hex, ACCESS_ID, DECIDE_DAYS, DECIDE_NONCE_TTL, REQUESTS_PER_IP_PER_DAY, NOTIFY_EVERY_SECONDS });
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -1891,6 +1901,8 @@ export default {
     if (p === '/decide') return decide(request, env, url, ctx);
     if (p === '/confirm') return confirmRoute(request, env, url, ctx);
     if (p === '/cv') return cvRoute(request, env, url);
+    if (p === '/storage_request') return STORAGE.request(request, env, ctx);
+    if (p === '/storage_decide') return STORAGE.decide(request, env, url);
     if (p.startsWith('/admin/')) return admin(request, env, url, ctx);
     if (request.method === 'POST' && p === '/trial') return trial(request, env);
     if (request.method === 'POST' && p === '/report') return report(request, env);

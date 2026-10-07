@@ -319,6 +319,44 @@ A **denial** (`denied`): `accessId`, `name`, `email`, `google_account`, `note`, 
 The page never sees an installation identifier or a decision link: the lists carry dates, counts and
 stages only, and the links in the e-mails stay in the e-mails.
 
+### Lab storage, read only (`storage.js`, 2026-10-07)
+
+The admin page's section **Lab storage, read only** and `admin.mjs storage-*` and `readers`. Same address,
+token, origin, CORS and error shapes as above. A **folder** is a path under the root (`/rs/rs_grp_oschome`
+unless `STORAGE_ROOT` names another) as `tools/grid_access.sh` takes it: parts of letters, digits, dots,
+dashes and underscores, each starting with a letter, a digit or an underscore, joined by `/`, 200
+characters at most; a list holds one to eight, sorted, without repeats. A write's `folders` may be a list
+or one text with a folder a line; the root written in front is taken off, and anything else absolute is
+refused with 400.
+
+**`GET /admin/storage-list`** answers 200 (404 from a service deployed before it; the page then hides the
+section):
+
+```
+{
+  "now": "<ISO time>",
+  "root": "/rs/rs_grp_oschome",
+  "pending": [ { accessId, name, email, note, folders, requested_at, submitted_at, ref, mailbox: "not_verified", age_hours } ... ],
+  "readers": [ { accessId, name, email, note, folders, approved_at, decided_at, decision: "approve"|"add", by,
+                 requested_at?, submitted_at?, mailbox?, ref? } ... ],
+  "denied":  [ { accessId, name, email, note, folders, requested_at, submitted_at, ref, mailbox, denied_at, decided_at,
+                 decision: "deny", by, reason } ... ]
+}
+```
+
+each sorted by `accessId`. `note` is what the person said they need the folders for.
+
+| Route | Body | Answer | What it does |
+|---|---|---|---|
+| `storage-approve` | `{ accessId, folders? }` | `{ status: "approved", accessId, added, record }`; 404 when there is no request | adds `folders` (the request's when absent; fewer, or others, when given) to what the reader reads; the request goes, and so does a denial |
+| `storage-deny` | `{ accessId, reason? }` | `{ status: "denied", accessId, reads? }`; 404 when there is no request | the request becomes a denial; a reader keeps their folders (`reads`); the storage page answers "denied" while the denial is on record |
+| `storage-add` | `{ accessId, folders, name?, note? }` | `{ status: "approved", accessId, record }` | a reader without a request, or a reader's folders set exactly (an empty list is refused: use `storage-remove`); a request or a denial on record goes |
+| `storage-remove` | `{ accessId }` | `{ status: "removed", accessId, folders? }`; 404 when there is no storage record | every storage record of the person: their folders, a request and a denial |
+
+`admin.mjs readers` prints `<accessId> <folder>` for each reader and folder, sorted, and nothing else: what
+`tools/grid_access.sh` in `hpcworker` applies. Against a service without `storage-list` it prints nothing
+and ends with exit 1.
+
 ## Proof, 2026-09-29 afternoon (before the public name changed)
 
 This one predates Beethoven: a no then named Ashley's request page for product `bridge`. The proof

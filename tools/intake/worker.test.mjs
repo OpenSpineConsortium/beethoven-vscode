@@ -10,6 +10,9 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
+import { execFile } from 'node:child_process';
+import * as http from 'node:http';
+import * as os from 'node:os';
 import worker from './worker.js';
 
 const require = createRequire(import.meta.url);
@@ -2683,4 +2686,347 @@ test('GROUP_MODE "workspace" with MAIL_STUDENTS "1": a student the service added
   assert.ok(formAction(b.page.text, 'Done, invited'));
   assert.ok(b.page.text.includes('told to watch for the invitation'));
   for (const x of ['Watch for the Google Groups invitation at a.student@gmail.com', 'the invitation e-mail has the link', 'If the invitation has not come within two days']) assert.ok(b.text.includes(x), x);
+});
+
+// ---- Lab storage, read only (storage.js): who may read which folders of the lab's storage on the grid ----
+
+const SV = { v: 1, access_id: 'rd5678', name: 'A. Reader', email: 'rd5678@wayne.edu', folders: ['lab', 'shared/access'], purpose: 'reading the lab\'s segmentation results' };
+const storageRequest = (env, over = {}, opts = {}) => call(env, 'POST', '/storage_request', { body: { ...SV, ...over }, ip: freshIp(), ...opts }).then(asJson);
+const storageList = (env) => call(env, 'GET', '/admin/storage-list', { headers: ADMIN }).then(asJson);
+// the two links of a storage e-mail, by the label on their line
+const storageLinks = (text) => ({ approve: (/^Approve read access: (\S+)$/m.exec(text) || [])[1] || null, deny: (/^Deny: (\S+)$/m.exec(text) || [])[1] || null });
+const openStorage = (env, t, method = 'GET') => call(env, method, `/storage_decide?t=${t}`, { origin: null }).then(asPage);
+const pressStorage = (env, t, form = 'confirm=1') => call(env, 'POST', `/storage_decide?t=${t}`, { origin: null, headers: FORM, body: form }).then(asPage);
+const storageMails = () => mails.filter((m) => m.body.subject.startsWith('Beethoven lab storage request'));
+
+test('POST /storage_request checks every field, takes folders as the grid tool does, and stores the request', async () => {
+  const env = mailEnv();
+  const bad = [
+    [{ v: 2 }, 'v is 1'],
+    [{ access_id: 'rd567' }, 'the AccessID is two letters and four digits, like ab1234'],
+    [{ email: 'ashley@wayne.edu' }, 'the e-mail must be rd5678@wayne.edu'],
+    [{ name: 'A' }, 'please give your name (2 to 80 characters)'],
+    [{ purpose: '' }, 'please say what you need to read them for'],
+    [{ purpose: 'x'.repeat(501) }, 'what you need them for is too long (500 characters at most)'],
+    [{ folders: [] }, 'name at least one folder inside /rs/rs_grp_oschome'],
+    [{ folders: 'lab' + ',x'.repeat(64) }, 'name the folders, one a line'],
+    [{ folders: [1] }, 'name the folders, one a line'],
+    [{ folders: ['/rs/rs_grp_oschome'] }, 'name a folder inside /rs/rs_grp_oschome, not all of it'],
+    [{ folders: ['/rs/rs_grp_oschome/'] }, 'name a folder inside /rs/rs_grp_oschome, not all of it'],
+    [{ folders: ['/home/rd5678'] }, 'only folders inside /rs/rs_grp_oschome can be asked for; write the part after /rs/rs_grp_oschome/, like shared/data'],
+    [{ folders: ['/rs/rs_grp_oschome_other/x'] }, 'only folders inside /rs/rs_grp_oschome can be asked for; write the part after /rs/rs_grp_oschome/, like shared/data'],
+    [{ folders: ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i'] }, '8 folders at most'],
+  ];
+  for (const [over, error] of bad) {
+    const r = await storageRequest(env, over);
+    assert.equal(r.status, 400, error);
+    assert.equal(r.body.error, error);
+  }
+  // never a part that starts with a dot or a dash (so never ".." or a hidden folder), never an empty part
+  for (const f of ['..', 'lab/..', '../etc', '.ssh', 'lab/.cache', '-rf', 'lab/-x', 'lab//data', 'a b', 'lab/da;ta', '~lab', 'x'.repeat(201)]) {
+    const r = await storageRequest(env, { folders: [f] });
+    assert.equal(r.status, 400, f);
+    assert.match(r.body.error, /is not a folder name: letters, digits, dots, dashes and underscores/, f);
+  }
+  assert.equal([...env.ACCESS.m.keys()].filter((k) => k.startsWith('storage_pending:')).length, 0, 'nothing refused is stored');
+  // the root in front, a slash behind, repeats and a text of lines are all taken; the list is sorted
+  mails.length = 0;
+  const r = await storageRequest(env, { access_id: 'RD5678', email: 'RD5678@wayne.edu', folders: '/rs/rs_grp_oschome/shared/access/\r\nlab\nlab/\n\n' });
+  assert.equal(r.status, 202);
+  assert.deepEqual(r.body, { status: 'pending' });
+  assert.equal(r.headers.get('access-control-allow-origin'), SITE);
+  const rec = await env.ACCESS.get('storage_pending:rd5678', 'json');
+  assert.deepEqual({ ...rec, requested_at: 'x', submitted_at: 'x', ref: 'x' }, { name: 'A. Reader', email: 'rd5678@wayne.edu', note: 'reading the lab\'s segmentation results', folders: ['lab', 'shared/access'], requested_at: 'x', submitted_at: 'x', ref: 'x', mailbox: 'not_verified' });
+  assert.match(rec.ref, /^[A-Za-z0-9_-]{22}$/);
+  // a storage request is not an access request, and the other way round
+  assert.equal(await env.ACCESS.get('pending:rd5678'), null);
+  assert.deepEqual((await adminList(env)).body.pending, []);
+  // from the website only; a preflight answered; closed without the salt
+  assert.equal((await storageRequest(env, {}, { origin: 'https://evil.example' })).status, 403);
+  const pre = await call(env, 'OPTIONS', '/storage_request');
+  assert.equal(pre.status, 204);
+  assert.equal(pre.headers.get('access-control-allow-origin'), SITE);
+  assert.equal((await call(env, 'GET', '/storage_request').then(asJson)).status, 405);
+  const closed = mailEnv({ IP_SALT: '' });
+  assert.equal((await storageRequest(closed)).status, 503);
+  assert.equal(closed.ACCESS.m.size, 0);
+  // STORAGE_ROOT moves the root
+  const moved = await storageRequest(mailEnv({ STORAGE_ROOT: '/lab/data/' }), { folders: ['/lab/data/x'] });
+  assert.equal(moved.status, 202);
+});
+
+test('POST /storage_request is limited per connection apart from /request, and never stores the address', async () => {
+  const env = mailEnv();
+  const ip = '198.51.100.40';
+  for (let i = 0; i < 10; i++) assert.equal((await storageRequest(env, { access_id: `rd${1000 + i}`, email: `rd${1000 + i}@wayne.edu` }, { ip })).status, 202);
+  const r = await storageRequest(env, { access_id: 'rd2000', email: 'rd2000@wayne.edu' }, { ip });
+  assert.equal(r.status, 429);
+  assert.equal(r.body.error, 'too many requests from this connection today; try again tomorrow');
+  // the access request page still takes this connection: its count is its own
+  assert.equal((await requestV2(env, {}, { ip })).status, 202);
+  const stored = [...env.ACCESS.m.keys()].join('\n') + [...env.ACCESS.m.values()].map(String).join('\n');
+  assert.ok(!stored.includes(ip), 'the IP address is not in KV');
+  assert.equal([...env.ACCESS.m.keys()].filter((k) => k.startsWith('storage_req:')).length, 1);
+});
+
+test('the maintainer\'s storage e-mail: the folders, what Approve gives, two links of their own that /decide refuses', async () => {
+  const env = mailEnv();
+  mails.length = 0;
+  await storageRequest(env);
+  assert.equal(mails.length, 1, 'one e-mail, to the maintainer; the person asking is not e-mailed');
+  const m = mails[0];
+  assert.deepEqual(m.body.to, ['maintainer@example.edu']);
+  assert.equal(m.body.reply_to, undefined);
+  assert.equal(m.body.subject, 'Beethoven lab storage request: rd5678 (A. Reader)');
+  for (const s of ['A. Reader asked to read folders in the lab\'s storage on the grid.', 'AccessID: rd5678', 'E-mail: rd5678@wayne.edu', 'Folders: lab, shared/access (in /rs/rs_grp_oschome)', 'What for: reading the lab\'s segmentation results', 'Mailbox: not verified. Anyone can type an AccessID', 'their grid account gets the lab group\'s read there and nothing more', 'never write', 'It is not membership of the Unix group oschome, which is C&IT\'s.', 'Where a folder may hold patient data, they read it as the group does.', 'To approve fewer folders than asked for, use the admin page.', `The admin page lists every request: ${ADMIN_PAGE}`, 'The person is not told when you decide; let them know.']) assert.ok(m.body.text.includes(s), s);
+  assert.ok(!m.body.text.includes('Reads already'));
+  const { approve, deny } = storageLinks(m.body.text);
+  for (const l of [approve, deny]) {
+    assert.ok(l.startsWith('https://service.example/storage_decide?t='), l);
+    assert.ok(m.body.html.includes(`href="${l}"`));
+  }
+  const ca = claimOf(tokenOf(approve));
+  const cd = claimOf(tokenOf(deny));
+  assert.deepEqual(Object.keys(ca), ['v', 'access_id', 'decision', 'nonce', 'exp', 'ref']);
+  assert.deepEqual([ca.access_id, ca.decision, cd.decision], ['rd5678', 'storage-approve', 'storage-deny']);
+  assert.equal(ca.nonce, cd.nonce, 'one e-mail, one nonce');
+  assert.equal(ca.ref, (await env.ACCESS.get('storage_pending:rd5678', 'json')).ref);
+  for (const t of [tokenOf(approve), tokenOf(deny)]) assert.equal(t.split('.')[1], sign(t.split('.')[0]));
+  // a storage link is not valid at /decide, and an access link is not valid here
+  const before = snapshot(env);
+  const atDecide = await open(env, tokenOf(approve));
+  assert.equal(atDecide.status, 400);
+  assert.ok(atDecide.text.includes('This link is not valid'));
+  assert.equal((await press(env, tokenOf(approve))).status, 400);
+  assert.equal(snapshot(env), before, '/decide changed nothing');
+  mails.length = 0;
+  await request(env, { accessId: 'cd5678', email: 'cd5678@wayne.edu' });
+  const accessLink = tokenOf(linksIn(mails[0].body.text).approve);
+  assert.equal((await openStorage(env, accessLink)).status, 400);
+  assert.equal((await pressStorage(env, accessLink)).status, 400);
+  // a storage decision signed without a ref is not one of ours either
+  const noRef = mint({ v: 1, access_id: 'rd5678', decision: 'storage-approve', nonce: 'n'.repeat(22), exp: Math.floor(Date.now() / 1000) + 3600 });
+  assert.equal((await pressStorage(env, noRef)).status, 400);
+  assert.equal(await env.ACCESS.get('storage:rd5678'), null);
+  assert.ok(await env.ACCESS.get('storage_pending:rd5678'));
+  // what the person typed is shown as text, never as markup
+  const env2 = mailEnv();
+  mails.length = 0;
+  await storageRequest(env2, { name: '<b>Eve</b> & co', purpose: '<img src=x onerror=alert(1)> data' });
+  assert.ok(!mails[0].body.html.includes('<b>Eve') && !mails[0].body.html.includes('<img'));
+  const q = await openStorage(env2, tokenOf(storageLinks(mails[0].body.text).approve));
+  assert.ok(q.text.includes('Let &lt;b&gt;Eve&lt;/b&gt; &amp; co (rd5678) read lab storage?'));
+  assert.ok(!q.text.includes('<img'));
+});
+
+test('GET /storage_decide changes nothing; the button approves once, by the same code as the admin page, and spends both links', async () => {
+  const env = mailEnv();
+  mails.length = 0;
+  await storageRequest(env);
+  const { approve, deny } = storageLinks(mails[0].body.text);
+  const ta = tokenOf(approve);
+  const before = snapshot(env);
+  for (let i = 0; i < 3; i++) for (const l of [approve, deny]) assert.equal((await openStorage(env, tokenOf(l))).status, 200);
+  assert.equal((await pressStorage(env, ta, '')).status, 200);
+  for (const m of ['PUT', 'DELETE']) assert.equal((await openStorage(env, ta, m)).status, 405, m);
+  assert.equal(snapshot(env), before, 'KV is exactly as it was');
+  const q = await openStorage(env, ta);
+  plainPage(q, 'storage question');
+  for (const s of ['Let A. Reader (rd5678) read lab storage?', 'to read lab, shared/access (in /rs/rs_grp_oschome)', 'Mailbox: not verified.', 'puts them on the readers list for lab, shared/access', 'never write', 'approve it only where they may see that data', 'Nothing has changed yet.', `<form method="post" action="/storage_decide?t=${ta}"><input type="hidden" name="confirm" value="1"><button type="submit">Approve read access</button></form>`]) assert.ok(q.text.includes(s), s);
+  const done = await pressStorage(env, ta);
+  assert.equal(done.status, 200);
+  plainPage(done, 'approved page');
+  for (const s of ['<h1>Approved.</h1>', 'A. Reader (rd5678) is on the readers list for lab, shared/access.', 'at the grid access task&#39;s next run', 'They are not told automatically; let them know.', ADMIN_PAGE]) assert.ok(done.text.includes(s), s);
+  const rec = await env.ACCESS.get('storage:rd5678', 'json');
+  assert.deepEqual({ ...rec, approved_at: 'x', requested_at: 'x', submitted_at: 'x', decided_at: 'x' }, { name: 'A. Reader', email: 'rd5678@wayne.edu', note: 'reading the lab\'s segmentation results', folders: ['lab', 'shared/access'], approved_at: 'x', requested_at: 'x', submitted_at: 'x', mailbox: 'not_verified', ref: claimOf(ta).ref, decided_at: 'x', decision: 'approve', by: 'e-mail link' });
+  assert.equal(await env.ACCESS.get('storage_pending:rd5678'), null);
+  const audits = [...env.ACCESS.m.entries()].filter(([k]) => k.startsWith('audit:')).map(([, v]) => JSON.parse(v));
+  assert.deepEqual(audits, [{ action: 'storage-approve', accessId: 'rd5678', by: 'e-mail link', folders: ['lab', 'shared/access'] }]);
+  assert.equal(env.ACCESS.ttl.get(`storage_decide:${claimOf(ta).nonce}`), 30 * 86400);
+  // the reader is not on the approved list of Beethoven, and Beethoven's check does not let them in
+  assert.deepEqual((await approvedList(env)).body.accessIds, []);
+  // a second press, the deny link, or opening either again: already used, and nothing changes
+  const after = snapshot(env);
+  for (const [why, p] of [['pressed again', await pressStorage(env, ta)], ['the deny link', await pressStorage(env, tokenOf(deny))], ['opened again', await openStorage(env, ta)]]) {
+    assert.equal(p.status, 410, why);
+    assert.ok(p.text.includes('This link was already used'), why);
+    assert.ok(p.text.includes('rd5678 was approved to read lab storage then'), why);
+  }
+  assert.equal(snapshot(env), after);
+  // the request page now answers approved for what they read, folders below included
+  assert.deepEqual((await storageRequest(env, { folders: ['lab/data', 'shared/access'] })).body, { status: 'approved' });
+  assert.equal(await env.ACCESS.get('storage_pending:rd5678'), null);
+});
+
+test('a reader asking for more: the e-mail says what they read; Deny keeps it; the page then says not approved', async () => {
+  const env = mailEnv();
+  await adminPost(env, 'storage-add', { accessId: 'rd5678', name: 'A. Reader', folders: ['shared/data'] });
+  mails.length = 0;
+  const r = await storageRequest(env, { folders: ['lab', 'shared/data'] });
+  assert.equal(r.status, 202);
+  assert.ok(mails[0].body.text.includes('Reads already: shared/data'));
+  const { approve, deny } = storageLinks(mails[0].body.text);
+  const q = await openStorage(env, tokenOf(deny));
+  assert.ok(q.text.includes('Deny the storage request of A. Reader (rd5678)?'));
+  assert.ok(q.text.includes('They read shared/data already.'));
+  assert.ok(q.text.includes('they keep what they read now'));
+  const done = await pressStorage(env, tokenOf(deny));
+  assert.equal(done.status, 200);
+  assert.ok(done.text.includes('<h1>Denied.</h1>'));
+  assert.ok(done.text.includes('The request of A. Reader (rd5678) to read lab, shared/data is not approved; they keep reading shared/data.'));
+  assert.deepEqual((await env.ACCESS.get('storage:rd5678', 'json')).folders, ['shared/data']);
+  const d = await env.ACCESS.get('storage_denied:rd5678', 'json');
+  assert.deepEqual([d.decision, d.by, d.reason, d.folders], ['deny', 'e-mail link', '', ['lab', 'shared/data']]);
+  assert.equal(await env.ACCESS.get('storage_pending:rd5678'), null);
+  assert.equal((await pressStorage(env, tokenOf(approve))).status, 410);
+  assert.deepEqual((await storageRequest(env, { folders: ['lab'] })).body, { status: 'denied' });
+  // storage-add lifts the denial: the folders are set exactly, and the person may ask again
+  await adminPost(env, 'storage-add', { accessId: 'rd5678', folders: ['shared/data'] });
+  assert.equal(await env.ACCESS.get('storage_denied:rd5678'), null);
+  mails.length = 0;
+  assert.equal((await storageRequest(env, { folders: ['lab'] })).status, 202);
+  // approving adds the folders asked for to what they read
+  const added = await pressStorage(env, tokenOf(storageLinks(mails[0].body.text).approve));
+  assert.ok(added.text.includes('A. Reader (rd5678) is on the readers list for lab, beside shared/data.'));
+  const rec = await env.ACCESS.get('storage:rd5678', 'json');
+  assert.deepEqual([rec.folders, rec.decision], [['lab', 'shared/data'], 'approve']);
+});
+
+test('storage links belong to one version of the request: a changed form replaces them, the same form keeps them and e-mails once a day', async () => {
+  const env = mailEnv();
+  mails.length = 0;
+  await storageRequest(env);
+  await storageRequest(env);
+  assert.equal(storageMails().length, 1, 'the same form again: no second e-mail today');
+  const first = storageLinks(mails[0].body.text);
+  const ref1 = (await env.ACCESS.get('storage_pending:rd5678', 'json')).ref;
+  assert.equal(claimOf(tokenOf(first.approve)).ref, ref1);
+  await storageRequest(env, { folders: ['lab'] });
+  assert.equal(storageMails().length, 2, 'a changed form is e-mailed at once');
+  const second = storageMails()[1].body.text;
+  assert.ok(second.includes('Asked again: ') && second.includes('links in an earlier e-mail about rd5678 no longer work'));
+  const ref2 = (await env.ACCESS.get('storage_pending:rd5678', 'json')).ref;
+  assert.notEqual(ref2, ref1);
+  const before = snapshot(env);
+  for (const p of [await openStorage(env, tokenOf(first.approve)), await pressStorage(env, tokenOf(first.approve))]) {
+    assert.equal(p.status, 409);
+    assert.ok(p.text.includes('This request was replaced'));
+  }
+  assert.equal(snapshot(env), before);
+  // the newer links approve the newer folders
+  await pressStorage(env, tokenOf(storageLinks(second).approve));
+  assert.deepEqual((await env.ACCESS.get('storage:rd5678', 'json')).folders, ['lab']);
+  // the older e-mail's links, after that: the request is settled, and they say so without changing anything
+  const late = await pressStorage(env, tokenOf(first.deny));
+  assert.equal(late.status, 409);
+  assert.ok(late.text.includes('is not on record any more'));
+  // three versions a day at most are e-mailed
+  const env2 = mailEnv();
+  mails.length = 0;
+  for (const f of ['a', 'b', 'c', 'd']) await storageRequest(env2, { folders: [f] });
+  assert.equal(storageMails().length, 3);
+  assert.ok(logs.some((l) => l.line.includes('three e-mails about this AccessID\'s storage request today already')));
+  // expired and tampered links decide nothing
+  const exp = mint({ v: 1, access_id: 'rd5678', decision: 'storage-approve', nonce: 'e'.repeat(22), exp: Math.floor(Date.now() / 1000) - 5, ref: ref2 });
+  assert.equal((await pressStorage(env, exp)).status, 410);
+  const t = tokenOf(first.deny);
+  assert.equal((await pressStorage(env, `${t.slice(0, -2)}AA`)).status, 400);
+});
+
+test('/admin/storage-*: the list, approve fewer folders, deny, add, change, remove; token and origin as every admin route', async () => {
+  const env = mailEnv();
+  assert.equal((await call(env, 'GET', '/admin/storage-list').then(asJson)).status, 401);
+  assert.equal((await call(env, 'GET', '/admin/storage-list', { headers: ADMIN, origin: 'https://evil.example' }).then(asJson)).status, 403);
+  await storageRequest(env, { folders: ['lab', 'shared/access', 'shared/data'] });
+  let l = (await storageList(env)).body;
+  assert.deepEqual(Object.keys(l), ['now', 'root', 'pending', 'readers', 'denied']);
+  assert.equal(l.root, '/rs/rs_grp_oschome');
+  assert.deepEqual([l.pending.length, l.pending[0].accessId, l.pending[0].age_hours], [1, 'rd5678', 0]);
+  assert.ok(!JSON.stringify(l).includes('/storage_decide?t='), 'the page never sees a link');
+  // approve fewer folders than asked for
+  assert.deepEqual((await adminPost(env, 'storage-approve', { accessId: 'rd5678', folders: ['../x'] })).status, 400);
+  let r = await adminPost(env, 'storage-approve', { accessId: 'rd5678', folders: ['shared/data'] });
+  assert.equal(r.status, 200);
+  assert.deepEqual([r.body.status, r.body.added, r.body.record.folders, r.body.record.by], ['approved', ['shared/data'], ['shared/data'], 'admin']);
+  assert.equal((await adminPost(env, 'storage-approve', { accessId: 'rd5678' })).status, 404, 'no request left');
+  assert.equal((await adminPost(env, 'storage-deny', { accessId: 'rd5678' })).status, 404);
+  // a second request, denied from the page with a reason
+  await storageRequest(env, { access_id: 'ab1234', email: 'ab1234@wayne.edu', folders: ['lab'] });
+  r = await adminPost(env, 'storage-deny', { accessId: 'ab1234', reason: 'not in the protocol' });
+  assert.deepEqual(r.body, { status: 'denied', accessId: 'ab1234' });
+  // add a reader directly, then change their folders exactly
+  r = await adminPost(env, 'storage-add', { accessId: 'cd5678', name: 'C. D.', folders: ['lab/results', 'shared/data'] });
+  assert.equal(r.status, 200);
+  assert.deepEqual([r.body.record.folders, r.body.record.decision, r.body.record.email], [['lab/results', 'shared/data'], 'add', 'cd5678@wayne.edu']);
+  const since = r.body.record.approved_at;
+  r = await adminPost(env, 'storage-add', { accessId: 'cd5678', folders: ['shared/data'] });
+  assert.deepEqual([r.body.record.folders, r.body.record.name, r.body.record.approved_at], [['shared/data'], 'C. D.', since]);
+  const empty = await adminPost(env, 'storage-add', { accessId: 'cd5678', folders: [] });
+  assert.equal(empty.status, 400);
+  assert.match(empty.body.error, /to take every folder away use storage-remove/);
+  l = (await storageList(env)).body;
+  assert.deepEqual(l.readers.map((x) => [x.accessId, x.folders]), [['cd5678', ['shared/data']], ['rd5678', ['shared/data']]]);
+  assert.deepEqual(l.denied.map((x) => [x.accessId, x.reason]), [['ab1234', 'not in the protocol']]);
+  assert.deepEqual(l.pending, []);
+  // remove: every storage record of the person, and an answer 404 when there is none
+  r = await adminPost(env, 'storage-remove', { accessId: 'cd5678' });
+  assert.deepEqual(r.body, { status: 'removed', accessId: 'cd5678', folders: ['shared/data'] });
+  assert.equal((await adminPost(env, 'storage-remove', { accessId: 'cd5678' })).status, 404);
+  assert.equal((await adminPost(env, 'storage-remove', { accessId: 'ab1234' })).status, 200);
+  assert.equal(await env.ACCESS.get('storage_denied:ab1234'), null);
+  assert.equal((await adminPost(env, 'storage-nothing', { accessId: 'ab1234' })).status, 404);
+  assert.equal((await adminPost(env, 'storage-add', { accessId: 'nobody' })).status, 400);
+  const actions = [...env.ACCESS.m.entries()].filter(([k]) => k.startsWith('audit:')).map(([, v]) => JSON.parse(v).action);
+  assert.deepEqual(actions.sort(), ['storage-add', 'storage-add', 'storage-approve', 'storage-deny', 'storage-remove', 'storage-remove']);
+  // the access lists are untouched by all of it
+  assert.deepEqual(Object.keys((await adminList(env)).body), ['now', 'group', 'pending', 'approved', 'denied', 'revoked', 'checks', 'seats', 'conflicts']);
+  assert.deepEqual((await adminList(env)).body.approved, []);
+});
+
+// admin.mjs readers is what hpcworker's tools/grid_access.sh reads: "<AccessID> <folder>" a line, and a
+// non-zero exit (never an empty list) when the service cannot answer. Run here against the Worker behind a
+// local HTTP server, with a vendor folder of its own holding only the admin token.
+test('admin.mjs readers and roster print what grid_access.sh reads; an older service fails them plainly', async () => {
+  const env = mailEnv();
+  await adminPost(env, 'storage-add', { accessId: 'rd5678', folders: ['shared/access', 'lab'] });
+  await adminPost(env, 'storage-add', { accessId: 'cd5678', folders: ['shared/data'] });
+  await adminPost(env, 'add', { accessId: 'ab1234', name: 'A. Student' });
+  let older = false;
+  const server = http.createServer(async (req, res) => {
+    const chunks = [];
+    for await (const c of req) chunks.push(c);
+    if (older && req.url.startsWith('/admin/storage-')) {
+      res.writeHead(404, { 'content-type': 'application/json' });
+      res.end('{"error":"not found"}');
+      return;
+    }
+    const answer = await worker.fetch(new Request(`http://127.0.0.1${req.url}`, { method: req.method, headers: req.headers, body: chunks.length ? Buffer.concat(chunks) : undefined }), env);
+    res.writeHead(answer.status, Object.fromEntries(answer.headers));
+    res.end(Buffer.from(await answer.arrayBuffer()));
+  });
+  await new Promise((ok) => server.listen(0, '127.0.0.1', ok));
+  const vendor = fs.mkdtempSync(path.join(os.tmpdir(), 'storage-vendor-'));
+  fs.writeFileSync(path.join(vendor, 'admin_token'), 'secret-admin-token\n', { mode: 0o600 });
+  const run = (...args) => new Promise((ok) => execFile(process.execPath, [path.join(HERE, 'admin.mjs'), ...args], { env: { PATH: process.env.PATH, BEETHOVEN_VENDOR_DIR: vendor, BEETHOVEN_SERVICE_URL: `http://127.0.0.1:${server.address().port}` } }, (err, stdout, stderr) => ok({ code: err ? err.code : 0, stdout, stderr })));
+  try {
+    let r = await run('readers');
+    assert.equal(r.code, 0, r.stderr);
+    assert.equal(r.stdout, 'cd5678 shared/data\nrd5678 lab\nrd5678 shared/access\n');
+    r = await run('roster');
+    assert.equal(r.code, 0, r.stderr);
+    assert.equal(r.stdout, 'ab1234\n');
+    r = await run('storage-list');
+    assert.equal(r.code, 0, r.stderr);
+    assert.match(r.stdout, /^readers \(2\):$/m);
+    assert.match(r.stdout, /^ {2}rd5678 {2}reads lab, shared\/access {2}\(since /m);
+    assert.ok(!r.stderr.includes('secret-admin-token') && !r.stdout.includes('secret-admin-token'), 'the token is never printed');
+    older = true;
+    r = await run('readers');
+    assert.equal(r.code, 1);
+    assert.equal(r.stdout, '');
+    assert.match(r.stderr, /the access service has no lab storage list yet: deploy the service/);
+  } finally {
+    server.close();
+    fs.rmSync(vendor, { recursive: true, force: true });
+  }
 });

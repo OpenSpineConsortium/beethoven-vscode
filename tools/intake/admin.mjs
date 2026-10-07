@@ -23,6 +23,18 @@
 //                                                                                 any installation) and nowhere else; one: the rule
 //   node tools/intake/admin.mjs cv <accessId> [<file>]                            saves the CV sent with the request
 //   node tools/intake/admin.mjs notify-test                                       sends the maintainer a test e-mail; prints the provider's answer
+//   node tools/intake/admin.mjs roster                                            the approved list, one AccessID a line (GET
+//                                                                                 /admin/allowlist): what tools/grid_access.sh applies
+// Lab storage, read only (storage.js): who may read which folders of the lab's storage on the grid
+//   node tools/intake/admin.mjs storage-list [--json]                             requests, readers and denials
+//   node tools/intake/admin.mjs storage-approve <accessId> [<folder>...]          the request's folders, or only those named
+//   node tools/intake/admin.mjs storage-deny <accessId> ["<reason>"]
+//   node tools/intake/admin.mjs storage-add <accessId> <folder>...                a reader without a request, or a reader's
+//                                                                                 folders set exactly
+//   node tools/intake/admin.mjs storage-remove <accessId>                         takes the reader off (their folders, a request
+//                                                                                 and a denial)
+//   node tools/intake/admin.mjs readers                                           the readers, one "<AccessID> <folder>" a line:
+//                                                                                 what tools/grid_access.sh applies
 // The service address: service.mjs (BEETHOVEN_SERVICE_URL, the site's beethoven/services.json, or the
 // primary Worker's address). The admin token: admin_token in the vendor folder (../license/vendor.mjs:
 // BEETHOVEN_VENDOR_DIR, else ~/.beethoven-vendor, the old names still read), read from the file and sent
@@ -46,6 +58,13 @@ async function call(route, body) {
   return j;
 }
 const id = (a1 || '').toLowerCase();
+// the storage list; a service deployed before storage.js answers 404, and says so plainly
+async function storageList() {
+  const res = await fetch(`${base}/admin/storage-list`, { headers });
+  if (res.status === 404) { console.error('the access service has no lab storage list yet: deploy the service (tools/intake/deploy.sh) first'); process.exit(1); }
+  if (!res.ok) { console.error(`HTTP ${res.status}:`, await res.text()); process.exit(1); }
+  return res.json();
+}
 // a time in one short column: the date and the minute, UTC; a dash when there is none
 const at = (t) => (t ? String(t).slice(0, 16).replace('T', ' ') : '-');
 // one line per request: where it stands, its mailbox and its age (an unconfirmed one also says when it goes)
@@ -125,5 +144,44 @@ switch (cmd) {
     if (!j.sent) process.exit(1);
     break;
   }
-  default: console.error('usage: admin.mjs list [--json] | invited <id> [clear] | add <id> "<name>" [<email>] ["<note>"] | approve <id> ["<note>"] | approve-lab <id> ["<note>"] | deny <id> ["<reason>"] | remove <id> | grant <id> extension,lab|lab|extension | seat <id> | reset-seat <id> | seat-rule <id> any|one | cv <id> [<file>] | notify-test'); process.exit(2);
+  case 'roster': {
+    const j = await call('allowlist');
+    for (const a of j.accessIds || []) console.log(a);
+    break;
+  }
+  case 'storage-list': {
+    const j = await storageList();
+    if (a1 === '--json') {
+      console.log(JSON.stringify(j, null, 1));
+      break;
+    }
+    console.log(`lab storage: ${j.root}`);
+    console.log(`requests (${(j.pending || []).length}):`);
+    for (const p of j.pending || []) console.log(`  ${p.accessId}${p.name ? `  ${p.name}` : ''}  asks for ${(p.folders || []).join(', ')}  (${p.age_hours ?? '?'} h old): ${p.note || ''}`);
+    console.log(`readers (${(j.readers || []).length}):`);
+    for (const r of j.readers || []) console.log(`  ${r.accessId}${r.name ? `  ${r.name}` : ''}  reads ${(r.folders || []).join(', ')}  (since ${at(r.approved_at)}, ${r.decision || 'approve'} ${at(r.decided_at)} by ${r.by || '?'})`);
+    console.log(`denied (${(j.denied || []).length}):`);
+    for (const d of j.denied || []) console.log(`  ${d.accessId}${d.name ? `  ${d.name}` : ''}  asked for ${(d.folders || []).join(', ')}, denied ${at(d.denied_at)}${d.reason ? `: ${d.reason}` : ''}`);
+    break;
+  }
+  case 'storage-approve': {
+    const folders = process.argv.slice(4);
+    console.log(JSON.stringify(await call('storage-approve', { accessId: id, ...(folders.length ? { folders } : {}) })));
+    break;
+  }
+  case 'storage-deny': console.log(JSON.stringify(await call('storage-deny', { accessId: id, reason: a2 || '' }))); break;
+  case 'storage-add': {
+    const folders = process.argv.slice(4);
+    if (!folders.length) { console.error('storage-add <accessId> <folder>... (to take every folder away: storage-remove <accessId>)'); process.exit(2); }
+    console.log(JSON.stringify(await call('storage-add', { accessId: id, folders })));
+    break;
+  }
+  case 'storage-remove': console.log(JSON.stringify(await call('storage-remove', { accessId: id }))); break;
+  case 'readers': {
+    // grid_access.sh reads this: a failure must end non-zero, never print an empty list
+    const j = await storageList();
+    for (const r of j.readers || []) for (const f of r.folders || []) console.log(`${r.accessId} ${f}`);
+    break;
+  }
+  default: console.error('usage: admin.mjs list [--json] | invited <id> [clear] | add <id> "<name>" [<email>] ["<note>"] | approve <id> ["<note>"] | approve-lab <id> ["<note>"] | deny <id> ["<reason>"] | remove <id> | grant <id> extension,lab|lab|extension | seat <id> | reset-seat <id> | seat-rule <id> any|one | cv <id> [<file>] | notify-test | roster | storage-list [--json] | storage-approve <id> [<folder>...] | storage-deny <id> ["<reason>"] | storage-add <id> <folder>... | storage-remove <id> | readers'); process.exit(2);
 }
