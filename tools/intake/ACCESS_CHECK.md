@@ -327,7 +327,11 @@ unless `STORAGE_ROOT` names another) as `tools/grid_access.sh` takes it: parts o
 dashes and underscores, each starting with a letter, a digit or an underscore, joined by `/`, 200
 characters at most; a list holds one to eight, sorted, without repeats. A write's `folders` may be a list
 or one text with a folder a line; the root written in front is taken off, and anything else absolute is
-refused with 400.
+refused with 400. The whole volume (since 2026-10-07) is one folder spelled `.`: a write may name it as `.`
+or as the root itself, with or without a slash behind, and it is stored, listed and printed as `.`. It
+covers every folder, so it is always a reader's only one: a list that names it beside others is `["."]`,
+and an approval that adds folders to a reader of `.`, or `.` to a reader of folders, leaves `["."]`. The
+e-mail and the decision pages say "all of the lab storage (`/rs/rs_grp_oschome`)", never a bare `.`.
 
 **`GET /admin/storage-list`** answers 200 (404 from a service deployed before it; the page then hides the
 section):
@@ -353,9 +357,9 @@ each sorted by `accessId`. `note` is what the person said they need the folders 
 | `storage-add` | `{ accessId, folders, name?, note? }` | `{ status: "approved", accessId, record }` | a reader without a request, or a reader's folders set exactly (an empty list is refused: use `storage-remove`); a request or a denial on record goes |
 | `storage-remove` | `{ accessId }` | `{ status: "removed", accessId, folders? }`; 404 when there is no storage record | every storage record of the person: their folders, a request and a denial |
 
-`admin.mjs readers` prints `<accessId> <folder>` for each reader and folder, sorted, and nothing else: what
-`tools/grid_access.sh` in `hpcworker` applies. Against a service without `storage-list` it prints nothing
-and ends with exit 1.
+`admin.mjs readers` prints `<accessId> <folder>` for each reader and folder, sorted, and nothing else
+(`<accessId> .` for a reader of the whole volume): what `tools/grid_access.sh` in `hpcworker` applies.
+Against a service without `storage-list` it prints nothing and ends with exit 1.
 
 ## Proof, 2026-09-29 afternoon (before the public name changed)
 

@@ -25,7 +25,8 @@
 //   node tools/intake/admin.mjs notify-test                                       sends the maintainer a test e-mail; prints the provider's answer
 //   node tools/intake/admin.mjs roster                                            the approved list, one AccessID a line (GET
 //                                                                                 /admin/allowlist): what tools/grid_access.sh applies
-// Lab storage, read only (storage.js): who may read which folders of the lab's storage on the grid
+// Lab storage, read only (storage.js): who may read which folders of the lab's storage on the grid. A folder is a
+// path under the root, like shared/data; "." (or the root itself) is all of the lab storage, and then the only folder
 //   node tools/intake/admin.mjs storage-list [--json]                             requests, readers and denials
 //   node tools/intake/admin.mjs storage-approve <accessId> [<folder>...]          the request's folders, or only those named
 //   node tools/intake/admin.mjs storage-deny <accessId> ["<reason>"]
@@ -33,8 +34,9 @@
 //                                                                                 folders set exactly
 //   node tools/intake/admin.mjs storage-remove <accessId>                         takes the reader off (their folders, a request
 //                                                                                 and a denial)
-//   node tools/intake/admin.mjs readers                                           the readers, one "<AccessID> <folder>" a line:
-//                                                                                 what tools/grid_access.sh applies
+//   node tools/intake/admin.mjs readers                                           the readers, one "<AccessID> <folder>" a line
+//                                                                                 ("<AccessID> ." for all of it): what
+//                                                                                 tools/grid_access.sh applies
 // The service address: service.mjs (BEETHOVEN_SERVICE_URL, the site's beethoven/services.json, or the
 // primary Worker's address). The admin token: admin_token in the vendor folder (../license/vendor.mjs:
 // BEETHOVEN_VENDOR_DIR, else ~/.beethoven-vendor, the old names still read), read from the file and sent

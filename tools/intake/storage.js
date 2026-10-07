@@ -6,7 +6,10 @@
 // or the admin page's section "Lab storage, read only"; and `admin.mjs readers` prints the approved pairs,
 // "<AccessID> <folder>" a line, which hpcworker's tools/grid_access.sh turns into the group's read on those
 // folders by named ACL entries (its header, and docs/guides/LAB_LEAD.md section 9 there, say what a reader
-// gets and never gets). Nothing here reaches the grid or C&IT, and the person asking is not e-mailed.
+// gets and never gets). The whole volume is one folder, spelled "." (2026-10-07: the maintainer gave a lab member
+// the group's read on all of it): a form may name it as "." or as the root itself, it is stored and printed as
+// ".", and it is a reader's only folder, since it covers every other. What a person reads says it in words.
+// Nothing here reaches the grid or C&IT, and the person asking is not e-mailed.
 //   POST /storage_request    the website's storage page (/beethoven/storage.html): {v: 1, access_id, name,
 //                            email, folders, purpose}. Checked like /request, limited per hashed IP apart
 //                            from it, stored as storage_pending:<AccessID>, and e-mailed to the maintainer
@@ -26,18 +29,33 @@ const FOLDER = /^[A-Za-z0-9_][A-Za-z0-9._-]*(\/[A-Za-z0-9_][A-Za-z0-9._-]*)*$/;
 const FOLDER_MAX = 200;
 const FOLDERS_MAX = 8;
 const DEFAULT_ROOT = '/rs/rs_grp_oschome';
+// the whole volume: the spelling admin.mjs readers prints and tools/grid_access.sh takes ("<AccessID> .")
+const WHOLE = '.';
 // what /storage_decide takes; /decide takes neither, and these links take none of /decide's
 const STORAGE_DECISIONS = new Set(['storage-approve', 'storage-deny']);
 const VERSIONS_PER_DAY = 3;
 
 export const storageRoot = (env) => String(env.STORAGE_ROOT || DEFAULT_ROOT).replace(/\/+$/, '');
 // a folder is read by a reader of itself or of any folder above it: the grid gives read on a folder's whole tree
-export const covered = (folders, f) => folders.some((a) => f === a || f.startsWith(`${a}/`));
+export const covered = (folders, f) => folders.some((a) => a === WHOLE || f === a || f.startsWith(`${a}/`));
 const list = (folders) => folders.join(', ');
+// two lists of folders as one, sorted, without repeats; with the whole volume in it, that alone
+export const union = (...lists) => {
+  const all = [...new Set(lists.flat())].sort();
+  return all.includes(WHOLE) ? [WHOLE] : all;
+};
+// folders as a sentence names them: never a bare "."
+const whole = (folders) => folders.includes(WHOLE);
+const named = (folders, root) => (whole(folders) ? `all of the lab storage (${root})` : list(folders));
+const where = (folders, root) => (whole(folders) ? named(folders, root) : `${list(folders)} (in ${root})`);
+// what the whole volume gives, said where it is approved: the grid tool can add a named entry only on what the
+// volume's owner owns (setfacl is the owner's), so another person's own folder stays as they set it
+const WHOLE_TOO = 'All of the lab storage means everything in it that the group may read and the volume\'s owner owns: read can be given only on what the owner owns, so a folder another person owns stays as they set it.';
 
 // The folders a form or the admin page names: a list, or one text with a folder a line (or between commas).
-// A folder may be written with the root in front; anything else absolute is refused. { folders } sorted and
-// without repeats, or { error } in a sentence for the person who typed it.
+// A folder may be written with the root in front; anything else absolute is refused. "." or the root itself
+// is the whole volume, and then the only folder. { folders } sorted and without repeats, or { error } in a
+// sentence for the person who typed it.
 export function readFolders(given, root) {
   const raw = Array.isArray(given) ? given : typeof given === 'string' ? given.split(/[\r\n,]+/) : null;
   if (!raw || raw.length > 64 || !raw.every((x) => typeof x === 'string')) return { error: 'name the folders, one a line' };
@@ -45,7 +63,11 @@ export function readFolders(given, root) {
   for (const x of raw) {
     let f = x.trim();
     if (!f) continue;
-    if (f.replace(/\/+$/, '') === root) return { error: `name a folder inside ${root}, not all of it` };
+    const bare = f.replace(/\/+$/, '');
+    if (bare === root || bare === WHOLE) {
+      out.add(WHOLE);
+      continue;
+    }
     if (f.startsWith('/')) {
       if (!f.startsWith(`${root}/`)) return { error: `only folders inside ${root} can be asked for; write the part after ${root}/, like shared/data` };
       f = f.slice(root.length + 1);
@@ -55,6 +77,7 @@ export function readFolders(given, root) {
     out.add(f);
   }
   if (!out.size) return { error: `name at least one folder inside ${root}` };
+  if (out.has(WHOLE)) return { folders: [WHOLE] };
   if (out.size > FOLDERS_MAX) return { error: `${FOLDERS_MAX} folders at most` };
   return { folders: [...out].sort() };
 }
@@ -76,10 +99,10 @@ export function storageService(kit) {
       ['Name', name],
       ['AccessID', accessId],
       ['E-mail', rec.email],
-      ['Folders', `${list(rec.folders)} (in ${root})`],
+      ['Folders', where(rec.folders, root)],
       ['What for', oneLine(rec.note)],
       ['Mailbox', 'not verified. Anyone can type an AccessID; check with the person before approving'],
-      ...(already ? [['Reads already', list(already)]] : []),
+      ...(already ? [['Reads already', named(already, root)]] : []),
       ['Asked', readableTime(rec.requested_at)],
       ...(askedAgain ? [['Asked again', `${readableTime(askedAgain)}${changed ? `, with changes: links in an earlier e-mail about ${accessId} no longer work` : ''}`]] : []),
     ];
@@ -93,7 +116,7 @@ export function storageService(kit) {
     const how = links
       ? `Each link opens a page with one button; nothing is decided until you press it. Use one of the two, once: after that both stop working. They work until ${links.until}, for this version of the request: if the form is sent again with changes, they answer "replaced" and a newer e-mail comes. To approve fewer folders than asked for, use the admin page.`
       : 'The links are off because the service has no DECIDE_KEY; decide on the admin page.';
-    const what = `Approve puts ${accessId} on the readers list for these folders. At the grid access task's next run (tools/grid_access.sh), their grid account gets the lab group's read there and nothing more: what a member of the group may read, never write; nothing the group may not read, such as a file only its owner reads; no folder's mode changes. It is not membership of the Unix group oschome, which is C&IT's. Where a folder may hold patient data, they read it as the group does.`;
+    const what = `Approve puts ${accessId} on the readers list for ${whole(rec.folders) ? 'all of the lab storage' : 'these folders'}. At the grid access task's next run (tools/grid_access.sh), their grid account gets the lab group's read there and nothing more: what a member of the group may read, never write; nothing the group may not read, such as a file only its owner reads; no folder's mode changes. It is not membership of the Unix group oschome, which is C&IT's. ${whole(rec.folders) ? `${WHOLE_TOO} ` : ''}Where a folder may hold patient data, they read it as the group does.`;
     const typed = 'The name, the folders and the note were typed by the person asking.';
     const footer = 'Sent by the Beethoven access service because someone filled in the lab storage form. You get one e-mail a day at most about the same request, and one for each changed version (three a day at most). The person is not told when you decide; let them know.';
     const text = [
@@ -198,7 +221,7 @@ export function storageService(kit) {
       name: pending.name || (approved && approved.name) || '',
       email: pending.email || `${accessId}@wayne.edu`,
       note: pending.note || '',
-      folders: [...new Set([...((approved && approved.folders) || []), ...added])].sort(),
+      folders: union((approved && approved.folders) || [], added),
       approved_at: (approved && approved.approved_at) || now,
       requested_at: pending.requested_at,
       submitted_at: pending.submitted_at || pending.requested_at,
@@ -237,19 +260,20 @@ export function storageService(kit) {
     const id = c.access_id;
     const replaced = () => decidePage(409, 'This request was replaced', ['The storage form was sent again after this e-mail, with changes, so this link no longer matches the request on record: see the newer e-mail. Nothing was changed.', toAdmin('Every request is on')]);
     if (pending) return pending.ref === c.ref ? null : replaced();
-    if (approved && approved.ref === c.ref) return decidePage(409, 'Nothing changed', [`This request was decided already: ${id} reads ${list(approved.folders || [])}, approved ${readableTime(approved.decided_at || approved.approved_at)}.`, toAdmin('To change their folders, use')]);
+    if (approved && approved.ref === c.ref) return decidePage(409, 'Nothing changed', [`This request was decided already: ${id} reads ${named(approved.folders || [], storageRoot(env))}, approved ${readableTime(approved.decided_at || approved.approved_at)}.`, toAdmin('To change their folders, use')]);
     if (denied && denied.ref === c.ref) return decidePage(409, 'Nothing changed', [`This request was decided already: it was denied ${readableTime(denied.denied_at)}.`, toAdmin('To change the decision, use')]);
     return decidePage(409, 'Nothing changed', [`The storage request from ${id} this e-mail was about is not on record any more: a newer one replaced it, or it was settled on the admin page. Nothing was changed.`, toAdmin('Every request and reader is on')]);
   }
 
   function question(env, c, { pending, approved }) {
-    const asked = `Asked ${readableTime(pending.requested_at)} to read ${list(pending.folders)} (in ${storageRoot(env)}). What for: ${sentence(oneLine(pending.note))} Mailbox: not verified.`;
-    const now = approved ? `They read ${list(approved.folders || [])} already.` : null;
+    const root = storageRoot(env);
+    const asked = `Asked ${readableTime(pending.requested_at)} to read ${where(pending.folders, root)}. What for: ${sentence(oneLine(pending.note))} Mailbox: not verified.`;
+    const now = approved ? `They read ${named(approved.folders || [], root)} already.` : null;
     if (c.decision === 'storage-deny') return [asked, ...(now ? [now] : []), `Pressing the button marks the request not approved${approved ? '; they keep what they read now' : ''}. They are not told the reason, and the storage page will say not approved if they ask again.`];
     return [
       asked,
       ...(now ? [now] : []),
-      `Pressing the button puts them on the readers list for ${list(pending.folders)}. At the grid access task's next run, their grid account gets the lab group's read there and nothing more: what a member of the group may read, never write; nothing the group may not read; no folder's mode changes. It is not membership of the Unix group oschome, which is C&IT's.`,
+      `Pressing the button puts them on the readers list for ${named(pending.folders, root)}. At the grid access task's next run, their grid account gets the lab group's read there and nothing more: what a member of the group may read, never write; nothing the group may not read; no folder's mode changes. It is not membership of the Unix group oschome, which is C&IT's.${whole(pending.folders) ? ` ${WHOLE_TOO}` : ''}`,
       'Where a folder may hold patient data, they read it as the group does: approve it only where they may see that data. To approve fewer folders, use the admin page instead.',
     ];
   }
@@ -280,10 +304,13 @@ export function storageService(kit) {
     const r = c.decision === 'storage-approve' ? await applyApprove(env, c.access_id, { by: 'e-mail link' }) : await applyDeny(env, c.access_id, { reason: '', by: 'e-mail link' });
     if (r.status === 404) return decidePage(409, 'Nothing changed', [`There is no storage request from ${c.access_id} on record any more; it may have been taken off on the admin page.`, toAdmin('To add them as a reader anyway, use')]);
     if (r.status !== 200) return decidePage(500, 'Nothing changed', [`The service answered ${r.status}.`, toAdmin('Decide on')]);
-    if (c.decision === 'storage-deny') return decidePage(200, 'Denied.', [`The request of ${label} to read ${list(recs.pending.folders)} is not approved${r.body.reads ? `; they keep reading ${list(r.body.reads)}` : ''}. They are not told automatically, and the storage page will say not approved if they ask again.`, toAdmin('To change this, use')]);
+    const root = storageRoot(env);
+    if (c.decision === 'storage-deny') return decidePage(200, 'Denied.', [`The request of ${label} to read ${named(recs.pending.folders, root)} is not approved${r.body.reads ? `; they keep reading ${named(r.body.reads, root)}` : ''}. They are not told automatically, and the storage page will say not approved if they ask again.`, toAdmin('To change this, use')]);
     const before = (recs.approved && recs.approved.folders) || [];
+    // the whole volume replaces whatever they read before, so there is nothing to name beside it
+    const reads = whole(r.body.record.folders) ? named(r.body.record.folders, root) : `${list(r.body.added)}${before.length ? `, beside ${list(before)}` : ''}`;
     return decidePage(200, 'Approved.', [
-      `${label} is on the readers list for ${list(r.body.added)}${before.length ? `, beside ${list(before)}` : ''}.`,
+      `${label} is on the readers list for ${reads}.`,
       'Their grid account gets the lab group\'s read there at the grid access task\'s next run (tools/grid_access.sh); nothing changes on the grid before that.',
       'They are not told automatically; let them know.',
       toAdmin('Every reader is on'),

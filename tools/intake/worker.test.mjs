@@ -14,6 +14,7 @@ import { execFile } from 'node:child_process';
 import * as http from 'node:http';
 import * as os from 'node:os';
 import worker from './worker.js';
+import { readFolders, covered, union } from './storage.js';
 
 const require = createRequire(import.meta.url);
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -2711,8 +2712,7 @@ test('POST /storage_request checks every field, takes folders as the grid tool d
     [{ folders: [] }, 'name at least one folder inside /rs/rs_grp_oschome'],
     [{ folders: 'lab' + ',x'.repeat(64) }, 'name the folders, one a line'],
     [{ folders: [1] }, 'name the folders, one a line'],
-    [{ folders: ['/rs/rs_grp_oschome'] }, 'name a folder inside /rs/rs_grp_oschome, not all of it'],
-    [{ folders: ['/rs/rs_grp_oschome/'] }, 'name a folder inside /rs/rs_grp_oschome, not all of it'],
+    [{ folders: ['/rs'] }, 'only folders inside /rs/rs_grp_oschome can be asked for; write the part after /rs/rs_grp_oschome/, like shared/data'],
     [{ folders: ['/home/rd5678'] }, 'only folders inside /rs/rs_grp_oschome can be asked for; write the part after /rs/rs_grp_oschome/, like shared/data'],
     [{ folders: ['/rs/rs_grp_oschome_other/x'] }, 'only folders inside /rs/rs_grp_oschome can be asked for; write the part after /rs/rs_grp_oschome/, like shared/data'],
     [{ folders: ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i'] }, '8 folders at most'],
@@ -2983,6 +2983,125 @@ test('/admin/storage-*: the list, approve fewer folders, deny, add, change, remo
   assert.deepEqual((await adminList(env)).body.approved, []);
 });
 
+// ---- the whole volume as one folder, spelled "." (2026-10-07): what hpcworker's grid_access.sh takes as "<id> ." ----
+
+const ROOT = '/rs/rs_grp_oschome';
+const ALL = `all of the lab storage (${ROOT})`;
+// a "." standing alone in a sentence: after a space, a colon or a comma, and before a space, a comma, "(" or the end
+const bareDot = /[\s:,]\.(?=[\s,(]|$)/m;
+// text as the pages and the e-mail's HTML escape it (worker.js esc)
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+
+test('the whole volume: "." or the root, either way written, is one folder that covers every other and stands alone', () => {
+  for (const given of ['.', './', ROOT, `${ROOT}/`, `${ROOT}//`, ['.'], [` ${ROOT} `], `lab\n.\nshared/data`, ['lab', ROOT, 'shared/data'], `shared/x,${ROOT}/`]) {
+    assert.deepEqual(readFolders(given, ROOT), { folders: ['.'] }, JSON.stringify(given));
+  }
+  // the limit counts what is kept: nine folders and the whole volume are the whole volume
+  assert.deepEqual(readFolders(['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', '.'], ROOT), { folders: ['.'] });
+  // never the root's parent, a sibling, another root or a part that starts with a dot
+  for (const f of ['/rs', '/', `${ROOT}_other`, `${ROOT}/..`, '..', './lab', '.lab', `${ROOT}/.`, '/home/zq0001']) {
+    assert.ok(readFolders([f], ROOT).error, f);
+  }
+  // STORAGE_ROOT moves what the root is
+  assert.deepEqual(readFolders(['/lab/data/'], '/lab/data'), { folders: ['.'] });
+  assert.ok(readFolders([ROOT], '/lab/data').error);
+  // covered: "." covers every folder and itself; no folder covers "."
+  for (const f of ['lab', 'shared/data/x', '.']) assert.equal(covered(['.'], f), true, f);
+  assert.equal(covered(['lab', 'shared'], '.'), false);
+  assert.equal(covered(['lab'], 'lab/data'), true);
+  assert.equal(covered(['lab'], 'labs'), false);
+  // union: sorted, without repeats, and "." alone whenever it is in either list
+  assert.deepEqual(union(['shared/data', 'lab'], ['lab']), ['lab', 'shared/data']);
+  assert.deepEqual(union(['lab', 'shared/data'], ['.']), ['.']);
+  assert.deepEqual(union(['.'], ['lab']), ['.']);
+  assert.deepEqual(union([], ['.']), ['.']);
+});
+
+test('a request for the whole volume: stored as ".", e-mailed and asked in words, approved once, covering every folder after', async () => {
+  const env = mailEnv();
+  mails.length = 0;
+  const r = await storageRequest(env, { access_id: 'zq0001', email: 'zq0001@wayne.edu', folders: `${ROOT}/` });
+  assert.equal(r.status, 202);
+  assert.deepEqual((await env.ACCESS.get('storage_pending:zq0001', 'json')).folders, ['.']);
+  assert.equal((await storageList(env)).body.pending[0].folders[0], '.', 'the admin page reads the JSON as it is stored');
+  const m = storageMails()[0].body;
+  for (const s of [`Folders: ${ALL}`, 'Approve puts zq0001 on the readers list for all of the lab storage.', 'All of the lab storage means everything in it that the group may read and the volume\'s owner owns', 'a folder another person owns stays as they set it', 'never write']) assert.ok(m.text.includes(s), s);
+  assert.ok(m.html.includes(`>Folders</td><td style="padding:2px 0">${ALL}</td>`));
+  assert.ok(!bareDot.test(m.html));
+  assert.ok(!bareDot.test(m.text), 'no bare "." in the e-mail');
+  assert.ok(!m.text.includes(`(in ${ROOT})`), 'the root is named once, not as a folder inside itself');
+  const { approve } = storageLinks(m.text);
+  const q = await openStorage(env, tokenOf(approve));
+  assert.equal(q.status, 200);
+  for (const s of [`to read ${ALL}.`, `puts them on the readers list for ${ALL}.`, 'a folder another person owns stays as they set it']) assert.ok(q.text.includes(esc(s)), s);
+  assert.ok(!bareDot.test(q.text));
+  const done = await pressStorage(env, tokenOf(approve));
+  assert.equal(done.status, 200);
+  assert.ok(done.text.includes(`A. Reader (zq0001) is on the readers list for ${ALL}.`));
+  assert.ok(!bareDot.test(done.text));
+  assert.deepEqual((await env.ACCESS.get('storage:zq0001', 'json')).folders, ['.']);
+  assert.deepEqual(auditsOf(env).map((a) => [a.action, a.folders]), [['storage-approve', ['.']]]);
+  // the link is spent, as any other storage link
+  const again = await openStorage(env, tokenOf(approve));
+  assert.equal(again.status, 410);
+  assert.ok(again.text.includes('zq0001 was approved to read lab storage then') && !bareDot.test(again.text));
+  // every folder is read already, the whole volume too: the page answers approved and stores nothing
+  for (const folders of [['lab/data'], ['shared/x', 'lab'], ['.'], ROOT]) {
+    assert.deepEqual((await storageRequest(env, { access_id: 'zq0001', email: 'zq0001@wayne.edu', folders })).body, { status: 'approved' }, JSON.stringify(folders));
+  }
+  assert.equal(await env.ACCESS.get('storage_pending:zq0001'), null);
+  // a link for a request the admin page settled says what they read, in words
+  mails.length = 0;
+  await storageRequest(env, { access_id: 'zq0002', email: 'zq0002@wayne.edu', folders: ['.'] });
+  const t2 = tokenOf(storageLinks(storageMails()[0].body.text).approve);
+  assert.equal((await adminPost(env, 'storage-approve', { accessId: 'zq0002' })).body.record.folders[0], '.');
+  const settled = await openStorage(env, t2);
+  assert.equal(settled.status, 409);
+  assert.ok(settled.text.includes(esc(`This request was decided already: zq0002 reads ${ALL}, approved`)));
+  assert.ok(!bareDot.test(settled.text));
+});
+
+test('a reader of some folders asks for the whole volume: the union is "." alone; Deny keeps their folders; add, change and remove take "."', async () => {
+  const env = mailEnv();
+  await adminPost(env, 'storage-add', { accessId: 'zq0003', name: 'Z. Reader', folders: ['lab', 'shared/data'] });
+  mails.length = 0;
+  assert.equal((await storageRequest(env, { access_id: 'zq0003', email: 'zq0003@wayne.edu', name: 'Z. Reader', folders: ['.'] })).status, 202, 'a reader of some folders does not read the whole volume');
+  let m = storageMails()[0].body.text;
+  assert.ok(m.includes(`Folders: ${ALL}`) && m.includes('Reads already: lab, shared/data'));
+  const first = storageLinks(m);
+  // Deny: the page and the answer say it in words; they keep their folders
+  const denied = await pressStorage(env, tokenOf(first.deny));
+  assert.ok(denied.text.includes(`The request of Z. Reader (zq0003) to read ${ALL} is not approved; they keep reading lab, shared/data.`));
+  assert.ok(!bareDot.test(denied.text));
+  assert.deepEqual((await env.ACCESS.get('storage:zq0003', 'json')).folders, ['lab', 'shared/data']);
+  // storage-add lifts the denial; they ask again, and Approve makes the whole volume their only folder
+  await adminPost(env, 'storage-add', { accessId: 'zq0003', folders: ['lab', 'shared/data'] });
+  mails.length = 0;
+  await storageRequest(env, { access_id: 'zq0003', email: 'zq0003@wayne.edu', name: 'Z. Reader', folders: [ROOT, 'lab/new'] });
+  assert.deepEqual((await env.ACCESS.get('storage_pending:zq0003', 'json')).folders, ['.'], 'a folder beside the whole volume collapses into it');
+  const approved = await pressStorage(env, tokenOf(storageLinks(storageMails()[0].body.text).approve));
+  assert.ok(approved.text.includes(`Z. Reader (zq0003) is on the readers list for ${ALL}.`));
+  assert.ok(!approved.text.includes('beside'), 'nothing is named beside the whole volume');
+  assert.deepEqual((await env.ACCESS.get('storage:zq0003', 'json')).folders, ['.']);
+  // the admin page: approve with folders given, add with "." among others, set back to named folders, remove
+  await storageRequest(env, { access_id: 'zq0004', email: 'zq0004@wayne.edu', folders: ['lab'] });
+  let r = await adminPost(env, 'storage-approve', { accessId: 'zq0004', folders: ['lab', '.'] });
+  assert.deepEqual([r.status, r.body.added, r.body.record.folders], [200, ['.'], ['.']]);
+  r = await adminPost(env, 'storage-add', { accessId: 'zq0005', folders: `shared/data\n${ROOT}` });
+  assert.deepEqual([r.status, r.body.record.folders], [200, ['.']]);
+  r = await adminPost(env, 'storage-add', { accessId: 'zq0005', folders: ['shared/data'] });
+  assert.deepEqual(r.body.record.folders, ['shared/data'], 'storage-add sets the folders exactly, the whole volume taken away');
+  r = await adminPost(env, 'storage-add', { accessId: 'zq0005', folders: ['.'] });
+  assert.deepEqual(r.body.record.folders, ['.']);
+  const l = (await storageList(env)).body;
+  assert.deepEqual(l.readers.map((x) => [x.accessId, x.folders]), [['zq0003', ['.']], ['zq0004', ['.']], ['zq0005', ['.']]]);
+  r = await adminPost(env, 'storage-remove', { accessId: 'zq0005' });
+  assert.deepEqual(r.body, { status: 'removed', accessId: 'zq0005', folders: ['.'] });
+  assert.equal(await env.ACCESS.get('storage:zq0005'), null);
+  const adds = auditsOf(env).filter((a) => a.action === 'storage-add' && a.accessId === 'zq0005').map((a) => a.folders);
+  assert.deepEqual(adds, [['.'], ['shared/data'], ['.']]);
+});
+
 // admin.mjs readers is what hpcworker's tools/grid_access.sh reads: "<AccessID> <folder>" a line, and a
 // non-zero exit (never an empty list) when the service cannot answer. Run here against the Worker behind a
 // local HTTP server, with a vendor folder of its own holding only the admin token.
@@ -2990,6 +3109,7 @@ test('admin.mjs readers and roster print what grid_access.sh reads; an older ser
   const env = mailEnv();
   await adminPost(env, 'storage-add', { accessId: 'rd5678', folders: ['shared/access', 'lab'] });
   await adminPost(env, 'storage-add', { accessId: 'cd5678', folders: ['shared/data'] });
+  await adminPost(env, 'storage-add', { accessId: 'zq0006', folders: ['/rs/rs_grp_oschome/'] });
   await adminPost(env, 'add', { accessId: 'ab1234', name: 'A. Student' });
   let older = false;
   const server = http.createServer(async (req, res) => {
@@ -3011,13 +3131,14 @@ test('admin.mjs readers and roster print what grid_access.sh reads; an older ser
   try {
     let r = await run('readers');
     assert.equal(r.code, 0, r.stderr);
-    assert.equal(r.stdout, 'cd5678 shared/data\nrd5678 lab\nrd5678 shared/access\n');
+    // the whole volume is the line "<AccessID> .", as grid_access.sh takes it
+    assert.equal(r.stdout, 'cd5678 shared/data\nrd5678 lab\nrd5678 shared/access\nzq0006 .\n');
     r = await run('roster');
     assert.equal(r.code, 0, r.stderr);
     assert.equal(r.stdout, 'ab1234\n');
     r = await run('storage-list');
     assert.equal(r.code, 0, r.stderr);
-    assert.match(r.stdout, /^readers \(2\):$/m);
+    assert.match(r.stdout, /^readers \(3\):$/m);
     assert.match(r.stdout, /^ {2}rd5678 {2}reads lab, shared\/access {2}\(since /m);
     assert.ok(!r.stderr.includes('secret-admin-token') && !r.stdout.includes('secret-admin-token'), 'the token is never printed');
     older = true;

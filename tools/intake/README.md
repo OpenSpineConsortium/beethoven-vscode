@@ -69,7 +69,8 @@ for keys and lists signed by hand. Flip either only after every installed build 
 8.0.0 and Beethoven for VS Code 4.0.0 is retired. The payload's `product` field stays `ashley`: every
 verifier checks it, and none shows it.
 
-Deploy both whenever `worker.js` or `wrangler.toml` changes:
+Deploy both whenever `worker.js` or `wrangler.toml` changes (since 2026-10-07 GitHub does this on every
+merge, once two secrets are saved: [Deploying from GitHub](#deploying-from-github)):
 
 ```
 cd /mnt/c/Users/grego/OneDrive/Desktop/ashley          # from WSL (the folder is beethoven-vscode after the rename)
@@ -86,6 +87,34 @@ something differs; `SKIP_SITE=1` leaves it alone. The site's generator never wri
 `ashley-service`). `admin.mjs` and `publish.sh` take the address from `BEETHOVEN_SERVICE_URL`, else
 `license_service` in the site's `beethoven/services.json`, else `beethoven-access` (`service.mjs`); either
 name would do, since both hold the same records.
+
+## Deploying from GitHub
+
+greg's decision of 2026-10-07: `.github/workflows/deploy-access.yml` deploys the service whenever a change
+under `tools/intake/` (or to the workflow itself) lands on `main`, and when started by hand from the Actions
+tab (main's code only). One run at a time, never cancelled midway. It runs `worker.test.mjs` and
+`vendor.test.mjs` first and deploys nothing if they fail; then, in `tools/intake`, it does what `deploy.sh`
+does with the code and nothing else: `wrangler deploy --name beethoven-access --var
+SERVICE_NAME:beethoven-access`, a check that `/health` on the address the deploy printed answers
+`{"ok":true}`, and the same for `ashley-service` (both names run the same code, [Two names](#two-names)).
+wrangler is pinned to an exact version in the workflow (4.148.0); raise it there by hand.
+
+It needs two repository secrets, which greg saves under Settings, Secrets and variables, Actions:
+
+| Secret | What |
+|---|---|
+| `CLOUDFLARE_API_TOKEN` | a Cloudflare API token limited to Workers: it can edit Workers on the account and nothing else there |
+| `CLOUDFLARE_ACCOUNT_ID` | the Cloudflare account's id |
+
+Until both are saved the deploy job says so in the run's summary and passes; nothing else changes. They
+reach the one deploy step through its environment, where wrangler reads them; they are never an argument
+and never printed.
+
+`deploy.sh` is still how everything else is done, from the maintainer's machine: the first deploy of a
+name and the KV namespaces (the workflow never creates one: it checks that `wrangler.toml` names all three
+and switches wrangler's automatic provisioning off), the Worker's secrets (they come from the vendor folder,
+which never enters CI; a deploy keeps the secrets a Worker holds, so `deploy.sh` is needed only when one
+changes), and the site's `beethoven/services.json` (written only when an address changes).
 
 ## Deploy (once, from the maintainer's machine)
 
@@ -499,8 +528,17 @@ directly, sets a reader's folders, or takes a reader off (`storage-approve`, `st
 `storage-remove`; the same with `admin.mjs`). The person asking is never e-mailed; the page tells them the
 lab lead decides and lets them know.
 
+**The whole volume.** Since 2026-10-07 (greg gave a lab member the group's read on all of it) a reader may
+have the whole of `/rs/rs_grp_oschome`: one folder spelled `.`, which the form and the admin page also take
+as the root itself (with or without a slash behind). It is stored and listed as `.`, and it is the reader's
+only folder, since it covers every other: a list that names it beside others keeps `.` alone, approving
+more folders for a reader of `.` leaves `.`, and approving `.` for a reader of some folders replaces them.
+The e-mail and the decision pages say "all of the lab storage (`/rs/rs_grp_oschome`)", never a bare dot,
+and say what it gives: everything there the group may read and the volume's owner owns. The grid can add
+read only on what the owner owns, so a folder another person owns stays as they set it.
+
 Nothing here reaches the grid. `node tools/intake/admin.mjs readers` prints the readers, one `<AccessID>
-<folder>` a line, and `tools/grid_access.sh` in the `hpcworker` repository reads it on each run, beside
+<folder>` a line (`<AccessID> .` for the whole volume), and `tools/grid_access.sh` in the `hpcworker` repository reads it on each run, beside
 `admin.mjs roster` (the approved list): each reader gets `--x` on the root and the lab group's read on their
 folders by named ACL entries, never write and never a default entry, and a reader taken off loses them at
 the next run. What a reader gets and never gets is that tool's header and `docs/guides/LAB_LEAD.md`
@@ -619,8 +657,11 @@ refused by `/trial`; left out of the reminder; still on the admin list; and an o
 unaffected on every one of those routes; and the public `GET /allowlist` naming nobody, whoever asks, while
 `GET /admin/allowlist` gives the maintainer the list behind the admin token. Since 2026-10-07 also lab
 storage: the request's fields and folders (never a part that starts with a dot or a dash, never a folder
-outside the root or the root itself), its own limit per connection, the maintainer's e-mail and its two
+outside the root), its own limit per connection, the maintainer's e-mail and its two
 links (refused at `/decide`, as `/decide`'s are refused at `/storage_decide`), approve and deny once,
 versions replaced, the admin routes, and `admin.mjs readers` and `roster` run against the Worker behind a
-local server (and failing, with exit 1, against a service that has no storage list). `vendor.test.mjs`
-checks the order in which the vendor folder is found.
+local server (and failing, with exit 1, against a service that has no storage list); and the whole volume:
+`.` and the root, either way written, as the one folder, in a request, an approval, the union with folders
+already read, `storage-add` and `storage-remove`, said in words in the e-mail and on the pages, and printed
+`<AccessID> .` by `readers`. `vendor.test.mjs` checks the order in which the vendor folder is found. The same
+two files run on GitHub before every deploy ([Deploying from GitHub](#deploying-from-github)).

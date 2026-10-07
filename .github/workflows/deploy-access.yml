@@ -1,0 +1,142 @@
+# Deploys the access service (tools/intake: worker.js, storage.js, wrangler.toml) to Cloudflare whenever a
+# change to it lands on main, under both Worker names, the way tools/intake/deploy.sh deploys the code
+# (README.md there, "Two names" and "Deploying from GitHub"). greg's decision of 2026-10-07.
+#
+# It reads two repository secrets that greg saves himself: CLOUDFLARE_API_TOKEN, a Cloudflare API token
+# limited to Workers (it can edit Workers on his account and nothing else there), and CLOUDFLARE_ACCOUNT_ID.
+# Both reach one step only, through its environment, where wrangler reads them; neither is ever an argument
+# or printed. Until both are saved the deploy job says so and passes. Nothing here runs Claude Code or holds
+# an Anthropic key.
+#
+# What stays manual, with deploy.sh on the maintainer's machine, and why:
+# - the Worker's own secrets (ADMIN_TOKEN, DECIDE_KEY, IP_SALT, the trial key, the mail settings): they come
+#   from the vendor folder, which never enters the repository or CI. A deploy keeps the secrets a Worker
+#   holds (wrangler: "secrets are never deleted by deployments"), so deploy.sh is needed only when one
+#   changes, or for a Worker name's first deploy.
+# - the KV namespaces: never created here. Their ids are in wrangler.toml, checked before each deploy, and
+#   wrangler's automatic provisioning is switched off, so a binding without an id stops the deploy.
+# - the site's beethoven/services.json: it is in the site repository, and deploy.sh writes it only when an
+#   address changes, which a code deploy never does.
+name: deploy access service
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'tools/intake/**'
+      - '.github/workflows/deploy-access.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One run at a time, for the whole workflow and not per job, so an older change can never deploy after a
+# newer one. A run that has started is never cancelled; a newer one waits, and of several waiting only the
+# newest runs, which deploys the newest code.
+concurrency:
+  group: deploy-access
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      # README.md's test line. worker.test.mjs loads worker.js and storage.js, grid/license.js (the verifier of
+      # what /trial signs), the test signing key under extension/test-fixtures and, for admin.mjs,
+      # tools/license/vendor.mjs: all in this checkout, nothing installed
+      - run: node --test tools/intake/worker.test.mjs tools/license/vendor.test.mjs
+
+  deploy:
+    needs: test
+    # main's code only, also when the run is started by hand from another branch
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      # true or false only: the values themselves never enter this step
+      - name: Are both secrets saved?
+        id: secrets
+        env:
+          HAVE_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
+          HAVE_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID != '' }}
+        run: |
+          if [ "$HAVE_TOKEN" = true ] && [ "$HAVE_ACCOUNT" = true ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          MSG="The access service was not deployed: it is deployed from here once greg saves both repository secrets, CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID (Settings, Secrets and variables, Actions). Until then deploy with tools/intake/deploy.sh."
+          echo "::notice title=Deploy skipped::$MSG"
+          echo "$MSG" >> "$GITHUB_STEP_SUMMARY"
+          echo "ready=false" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: steps.secrets.outputs.ready == 'true'
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        if: steps.secrets.outputs.ready == 'true'
+        with:
+          node-version: '22'
+          package-manager-cache: false
+
+      # deploy.sh's check, without creating anything: each binding names a namespace id
+      - name: wrangler.toml names the three KV namespaces
+        if: steps.secrets.outputs.ready == 'true'
+        working-directory: tools/intake
+        run: |
+          node -e '
+            const t = require("fs").readFileSync("wrangler.toml", "utf8");
+            const missing = ["TRIALS", "REPORTS", "ACCESS"].filter((b) => !new RegExp("binding = \"" + b + "\"\\r?\\nid = \"[0-9a-f]{32}\"").test(t));
+            if (missing.length) {
+              console.error("no namespace id in wrangler.toml for " + missing.join(", ") + ": nothing is created from here; deploy.sh makes them on a first deploy");
+              process.exit(3);
+            }
+            console.log("TRIALS, REPORTS and ACCESS each name a namespace id");'
+
+      # The exact version, installed in a step that holds no secret. Looked up with npm view wrangler version
+      # on 2026-10-07 (the latest 4.x, published 2026-10-06); raise it by hand, and see that the flags below
+      # still exist in the new version.
+      - name: Install wrangler 4.148.0
+        if: steps.secrets.outputs.ready == 'true'
+        run: npm install --prefix "$RUNNER_TEMP/wrangler" --no-save --no-audit --no-fund wrangler@4.148.0
+
+      # deploy.sh's deploy and check, for each name in turn: the code with SERVICE_NAME set to the name (both
+      # run the daily cron; only REMINDER_FROM in wrangler.toml sends the reminder), then /health on the
+      # workers.dev address the deploy printed. beethoven-access first; ashley-service is not deployed when
+      # beethoven-access fails, so the two never run different code because of this run.
+      - name: Deploy beethoven-access and ashley-service
+        if: steps.secrets.outputs.ready == 'true'
+        working-directory: tools/intake
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          WRANGLER_SEND_METRICS: 'false'
+          WRANGLER_SEND_ERROR_REPORTS: 'false'
+        run: |
+          W="$RUNNER_TEMP/wrangler/node_modules/.bin/wrangler"
+          for NAME in beethoven-access ashley-service; do
+            echo "== deploy ($NAME)"
+            # --x-provision=false: a binding without an id is an error, never a new namespace
+            OUT=$("$W" deploy --name "$NAME" --var "SERVICE_NAME:$NAME" --x-provision=false 2>&1) || { printf '%s\n' "$OUT" | tail -20; exit 5; }
+            URL=$(printf '%s' "$OUT" | grep -oE "https://$NAME\.[a-z0-9.-]+\.workers\.dev" | head -1) || true
+            [ -n "$URL" ] || { printf '%s\n' "$OUT" | tail -20; echo "no workers.dev address for $NAME in the deploy output"; exit 5; }
+            echo "  $URL"
+            printf '%s\n' "$OUT" | grep -E "schedule:" | sed -E 's/^[[:space:]]*/  cron /' || echo "  no cron in the deploy output: check [triggers] in wrangler.toml"
+            sleep 3
+            BODY=$(curl -fsS --retry 5 --retry-delay 5 --retry-all-errors --max-time 20 "$URL/health") || { echo "  $URL/health did not answer"; exit 6; }
+            [ "$BODY" = '{"ok":true}' ] || { echo "  $URL/health answered $BODY"; exit 6; }
+            echo "  $URL/health: $BODY"
+            echo "- $NAME deployed at $URL; /health answered $BODY" >> "$GITHUB_STEP_SUMMARY"
+          done
