@@ -487,8 +487,9 @@ once needs a strongly consistent store for spending a link (a Durable Object); i
 Added 2026-10-07 (`storage.js`). Some people need to read lab data on the grid without running Beethoven,
 and ask to be put in the Unix group `oschome` for it, which is C&IT's to change and is not the lab's
 approved list. They ask on the lab storage page instead (`https://openspineconsortium.com/beethoven/storage.html`,
-hidden like the request page): their AccessID, name, the folders under `/rs/rs_grp_oschome` they need
-(eight at most, one a line, like `go2432/data`; `STORAGE_ROOT` names another root) and what for. The
+left out of the site's menus and site map and marked not to be indexed, so the lab lead sends its address):
+their AccessID, name, the folders under `/rs/rs_grp_oschome` they need (eight at most, one a line, like
+`shared/data`; `STORAGE_ROOT` names another root) and what for. The
 request is e-mailed to the maintainer with two links, **Approve read access** and **Deny**, made and
 checked as the access links are (signed with `DECIDE_KEY`, 14 days, one use, tied to the version of the
 request), but answered at `/storage_decide` only: `/decide` takes neither, and `/storage_decide` takes none
