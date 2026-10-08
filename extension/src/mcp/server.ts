@@ -14,7 +14,7 @@ import { z } from 'zod';
 import * as os from 'node:os';
 import { GridApi } from '../core/gridApi';
 import { GridRelay } from '../core/relay';
-import { PermissionMode } from '../core/protocol';
+import { PermissionMode, REQUEST_ID, WORKER_NAME } from '../core/protocol';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { checkLicense, readIdentity, unlicensedMessage } from '../core/license';
@@ -81,10 +81,10 @@ server.registerTool(
     description:
       'Submit a Slurm job that runs a persistent Claude Code worker in a Singularity container. Returns the job id; the worker is usable once its state is idle (see beethoven_workers). Use a GPU only when the work needs one.',
     inputSchema: {
-      name: z.string().default('default').describe('worker name'),
+      name: z.string().regex(WORKER_NAME, 'letters, digits, - and _ only').default('default').describe('worker name'),
       hours: z.number().int().min(1).max(720).default(24),
       cpus: z.number().int().min(1).max(64).default(4),
-      memory: z.string().default('16G'),
+      memory: z.string().regex(/^[0-9]+([KMGTkmgt][Bb]?)?$/, 'a number with an optional K, M, G or T, like 16G').default('16G'),
       gpus: z.number().int().min(0).max(4).default(0),
       qos: z.enum(['requeue', 'primary', 'secondary']).default('requeue').describe('requeue = shared pool, may be requeued (worker resumes); primary = dedicated'),
       concurrency: z.number().int().min(1).max(8).default(2),
@@ -109,7 +109,7 @@ server.registerTool(
       mode: z.enum(['default', 'acceptEdits', 'plan', 'bypassPermissions']).default('acceptEdits'),
       max_turns: z.number().int().min(1).max(500).default(50),
       timeout_sec: z.number().int().min(10).max(86400).default(1800),
-      worker: z.string().default(defaultWorker),
+      worker: z.string().regex(WORKER_NAME, 'letters, digits, - and _ only').default(defaultWorker),
       model: z.string().optional(),
     },
   },
@@ -135,7 +135,7 @@ server.registerTool(
       cwd: z.string().optional(),
       mode: z.enum(['default', 'acceptEdits', 'plan', 'bypassPermissions']).default('acceptEdits'),
       max_turns: z.number().int().min(1).max(500).default(50),
-      worker: z.string().default(defaultWorker),
+      worker: z.string().regex(WORKER_NAME, 'letters, digits, - and _ only').default(defaultWorker),
     },
   },
   async (a) => {
@@ -149,7 +149,7 @@ server.registerTool(
   {
     title: 'Fetch a queued answer',
     description: 'Return the result of a request queued with beethoven_send, or say it is not finished yet.',
-    inputSchema: { id: z.string(), worker: z.string().default(defaultWorker) },
+    inputSchema: { id: z.string().regex(REQUEST_ID, 'the id beethoven_send returned'), worker: z.string().regex(WORKER_NAME, 'letters, digits, - and _ only').default(defaultWorker) },
   },
   async (a) => {
     const r = await grid.result(a.id, a.worker);

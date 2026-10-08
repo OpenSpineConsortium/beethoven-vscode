@@ -1,6 +1,7 @@
 // Parsing of Slurm output and rendering of the few Slurm commands the laptop issues.
 // The grid-side CLI (grid/bin/beethoven) does the real work; these helpers keep the laptop
 // side to one layer of quoting (a lesson written down in Student_Projects/tools/grid.sh).
+import { checkWorkerName } from './protocol';
 
 export interface SqueueRow {
   jobId: string;
@@ -55,8 +56,27 @@ export interface WorkerJobSpec {
   container?: string;
 }
 
-/** Arguments for `beethoven worker start` on the grid; the grid CLI renders the sbatch file. */
+// The grid writes every one of these into the job script with sed, and the job's shell runs it: the values
+// can come from a workspace's settings or the laptop's Claude, so only plain words and numbers pass (the grid
+// checks the same in cmd_worker).
+const SLURM_WORD = /^[A-Za-z0-9_-]+$/;
+const PARTITIONS = /^[A-Za-z0-9_-]+(,[A-Za-z0-9_-]+)*$/;
+const MEMORY = /^[0-9]+([KMGTkmgt][Bb]?)?$/; // Slurm reads the unit's first letter: 16G and 16GB alike
+const LIBRARY_NAME = /^[A-Za-z0-9_.-]+$/;
+const isCount = (n: unknown): n is number => typeof n === 'number' && Number.isInteger(n) && n >= 0;
+
+/** Arguments for `beethoven worker start` on the grid; the grid CLI renders the sbatch file. Throws on a value
+ *  the grid would refuse. */
 export function workerStartArgs(s: WorkerJobSpec): string[] {
+  checkWorkerName(s.name);
+  if (!isCount(s.hours) || s.hours < 1) throw new Error('hours must be a whole number, 1 or more');
+  if (!isCount(s.cpus) || s.cpus < 1) throw new Error('cpus must be a whole number, 1 or more');
+  if (!isCount(s.gpus)) throw new Error('gpus must be a whole number');
+  if (!isCount(s.concurrency) || s.concurrency < 1) throw new Error('concurrency must be a whole number, 1 or more');
+  if (typeof s.memory !== 'string' || !MEMORY.test(s.memory)) throw new Error('memory must be a number with an optional K, M, G or T, like 16G');
+  if (s.container && !LIBRARY_NAME.test(s.container)) throw new Error('the container must be a name from the lab library');
+  if (s.gpus === 0 && (typeof s.partition !== 'string' || !PARTITIONS.test(s.partition))) throw new Error('the partition must be partition names separated by commas');
+  if (s.gpus === 0 && (typeof s.qos !== 'string' || !SLURM_WORD.test(s.qos))) throw new Error('the qos must be letters, digits, - and _ only');
   const args = [
     'worker', 'start',
     '--name', s.name,

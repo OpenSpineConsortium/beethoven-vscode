@@ -77,7 +77,9 @@ A request is a JSON file. Its life:
 The laptop keeps **one ssh session** to the login node open, running `beethoven relay`. A prompt
 is one line on that session's stdin; the relay writes the inbox file and answers `QUEUED`; the
 daemon polls the inbox every 250 ms; results and events come back on the same session as
-`RESULT`/`EVENT` lines. Measured on 2026-09-28 (Windows laptop, skew-corrected; `docs/research/`):
+`RESULT`/`EVENT` lines. The worker name and the request id on those lines are checked on both ends
+before either becomes a file name (letters, digits, `_` and `-`; the id also `.`), and the daemon
+takes a request's id from its inbox file's name (grid scripts 10). Measured on 2026-09-28 (Windows laptop, skew-corrected; `docs/research/`):
 
 | Path | Median | Range |
 |---|---|---|
