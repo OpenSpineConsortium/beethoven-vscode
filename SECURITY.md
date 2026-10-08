@@ -24,7 +24,12 @@ not be met with a claim.
 ## Design rules that bound the damage
 
 Tokens never appear on command lines, in job logs or in `sbatch --export`. Every remote argument is
-quoted once. Every Claude Code process runs in a Slurm allocation, never on the login node. The
+quoted once. A worker's name and a request's id, which become file names under `~/.beethoven/workers`
+and reach the grid from the laptop's Claude, are checked against one fixed pattern on the laptop and
+again on the grid, and the worker takes a request's id from its file's name; the values a worker job
+is started with are checked the same way before they are written into its job script (grid scripts
+10; up to grid scripts 9 an id holding `../` made `beethoven result` and the relay print any `.json`
+file the student's account can read, the Claude sign-in included). Every Claude Code process runs in a Slurm allocation, never on the login node. The
 worker refuses work without a valid license and without the student's own sign-in. The maintenance
 pipeline runs on the maintainer's own accounts, treats reports as hostile input, holds no secrets
 besides a repository-scoped token, and cannot merge: reports arrive as GitHub issues and the

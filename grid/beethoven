@@ -37,6 +37,11 @@ VERSION=$(cat "$BIN/VERSION" 2>/dev/null || echo 0)
 # Beethoven): the CLAUDE_CONFIG_DIR of every Claude Code process Beethoven starts on the grid.
 CLAUDE_HOME="$BEETHOVEN_HOME/claude"
 die() { echo "beethoven: $*" >&2; exit 1; }
+# A worker name and a request id become path segments under workers/ (inbox, outbox) and reach this
+# script from the laptop's Claude through the MCP tools: one with a slash or a dot-dot would read or
+# write outside the worker's folder, the Claude sign-in included. Checked before any path is built.
+valid_worker() { [[ "${1:-}" =~ ^[A-Za-z0-9_-]+$ ]]; }
+valid_id() { [[ "${1:-}" =~ ^[A-Za-z0-9_.-]+$ ]]; }   # always followed by .json or .events.jsonl
 json_str() { # escape a string for JSON (control characters dropped)
   local s; s=$(printf '%s' "$1" | tr -d '\000-\010\013\014\016-\037'); s=${s//\\/\\\\}; s=${s//\"/\\\"}; s=${s//$'\n'/\\n}; s=${s//$'\r'/}; s=${s//$'\t'/\\t}; printf '"%s"' "$s"
 }
@@ -387,7 +392,7 @@ cmd_worker() {
     --partition) part="$2"; shift 2;; --qos) qos="$2"; shift 2;; --gpus) gpus="$2"; shift 2;; --concurrency) conc="$2"; shift 2;;
     --container) container="$2"; shift 2;;
     --lines) lines="$2"; shift 2;; --json) as_json=1; shift;; *) shift;; esac; done
-  [[ "$name" =~ ^[A-Za-z0-9_-]+$ ]] || die "worker name must be letters, digits, _ or -"
+  valid_worker "$name" || die "worker name must be letters, digits, _ or -"
   local w="$BEETHOVEN_HOME/workers/$name"
   case "$sub" in
     start)
@@ -404,6 +409,14 @@ cmd_worker() {
       local jid st; jid=$(cat "$w/job.id" 2>/dev/null || echo ""); st=$(job_state "$jid")
       case "$st" in PENDING|RUNNING|CONFIGURING) echo "worker $name already has job $jid ($st) on $(cat "$w/node" 2>/dev/null || echo '?')"; return 0;; esac
       [[ "$hours" =~ ^[0-9]+$ ]] || die "--hours must be an integer"
+      # every value below is written into the job script by sed and runs in the job's shell
+      [[ "$cpus" =~ ^[0-9]+$ ]] || die "--cpus must be an integer"
+      [[ "$gpus" =~ ^[0-9]+$ ]] || die "--gpus must be an integer"
+      [[ "$conc" =~ ^[0-9]+$ ]] || die "--concurrency must be an integer"
+      [[ "$mem" =~ ^[0-9]+[KMGTkmgt]?$ ]] || die "--mem must be a number with an optional K, M, G or T"
+      [[ "$part" =~ ^[A-Za-z0-9_-]+(,[A-Za-z0-9_-]+)*$ ]] || die "--partition must be partition names separated by commas"
+      [[ "$qos" =~ ^[A-Za-z0-9_-]+$ ]] || die "--qos must be letters, digits, _ or -"
+      [ -z "$container" ] || [[ "$container" =~ ^[A-Za-z0-9_.-]+$ ]] || die "--container must be a library name (beethoven library)"
       local time; time=$(printf '%d-%02d:00:00' $((hours / 24)) $((hours % 24)))
       local gres="" requeue="#SBATCH --no-requeue" w_sandbox="" w_claude=""
       [ "$gpus" != "0" ] && gres="#SBATCH --gres=gpu:$gpus"
@@ -420,7 +433,7 @@ cmd_worker() {
       sed -e "s|@NAME@|$name|g" -e "s|@PARTITION@|$part|g" -e "s|@QOS@|$qos|g" -e "s|@CPUS@|$cpus|g" -e "s|@MEM@|$mem|g" \
           -e "s|@TIME@|$time|g" -e "s|@GRES@|$gres|g" -e "s|@REQUEUE@|$requeue|g" -e "s|@GPUS@|$gpus|g" -e "s|@CONC@|$conc|g" \
           -e "s|@SANDBOX@|$w_sandbox|g" -e "s|@CLAUDE_BIN@|$w_claude|g" -e "s|@LIBRARY@|$SHARED|g" \
-          "$BIN/worker.sbatch.tpl" > "$w/job.sbatch"
+          "$BIN/worker.sbatch.tpl" > "$w/job.sbatch.part" && mv "$w/job.sbatch.part" "$w/job.sbatch" || die "could not write the job script"
       local out; out=$(cd "$w" && sbatch --parsable job.sbatch 2>&1) || die "sbatch failed: $out"
       jid=${out%%;*}; echo "$jid" > "$w/job.id"; rm -f "$w/node"
       echo "submitted worker $name as job $jid ($part/$qos, $cpus cpu, $mem, $time, gpus=$gpus, concurrency=$conc${container:+, container $container})";;
@@ -461,10 +474,11 @@ cmd_worker() {
 req_id_from_stdin() { # reads JSON on stdin into $REQ, extracts id
   REQ=$(cat); [ -n "$REQ" ] || die "expected a JSON request on stdin"
   RID=$(printf '%s' "$REQ" | grep -o '"id": *"[^"]*"' | head -1 | sed 's/.*"\([^"]*\)"$/\1/')
-  [[ "$RID" =~ ^[A-Za-z0-9_.-]+$ ]] || die "request JSON needs an id"
+  valid_id "$RID" || die "request JSON needs an id"
 }
 enqueue() { # $1 worker; uses REQ/RID; prints the queued line
   local worker="$1" w="$BEETHOVEN_HOME/workers/$1"
+  valid_worker "$worker" || die "worker name must be letters, digits, _ or -"
   [ -d "$w" ] || die "no worker '$worker' (beethoven worker start --name $worker)"
   mkdir -p "$w/inbox" "$w/outbox"
   printf '%s' "$REQ" > "$w/inbox/$RID.json.part" && mv "$w/inbox/$RID.json.part" "$w/inbox/$RID.json"
@@ -480,7 +494,8 @@ cmd_send() {
 cmd_wait() {
   local worker="default" timeout=3600 stream=0 id=""
   while [ $# -gt 0 ]; do case "$1" in --worker) worker="$2"; shift 2;; --timeout) timeout="$2"; shift 2;; --stream) stream=1; shift;; --json) shift;; *) id="$1"; shift;; esac; done
-  [[ "$id" =~ ^[A-Za-z0-9_.-]+$ ]] || die "wait: request id required"
+  valid_id "$id" || die "wait: request id required"
+  valid_worker "$worker" || die "worker name must be letters, digits, _ or -"
   local w="$BEETHOVEN_HOME/workers/$worker" out="$BEETHOVEN_HOME/workers/$worker/outbox/$id.json" ev="$BEETHOVEN_HOME/workers/$worker/outbox/$id.events.jsonl"
   local start; start=$(date +%s); local off=0
   while :; do
@@ -511,11 +526,15 @@ cmd_ask() {
 cmd_result() {
   local worker="default" id=""
   while [ $# -gt 0 ]; do case "$1" in --worker) worker="$2"; shift 2;; *) id="$1"; shift;; esac; done
+  valid_worker "$worker" || die "worker name must be letters, digits, _ or -"
+  valid_id "$id" || die "result: request id must be letters, digits, _, . or -"
   local f="$BEETHOVEN_HOME/workers/$worker/outbox/$id.json"; [ -s "$f" ] || { echo "no result yet for $id" >&2; exit 1; }; cat "$f"
 }
 cmd_tail() {
   local worker="default" id=""
   while [ $# -gt 0 ]; do case "$1" in --worker) worker="$2"; shift 2;; *) id="$1"; shift;; esac; done
+  valid_worker "$worker" || die "worker name must be letters, digits, _ or -"
+  valid_id "$id" || die "tail: request id must be letters, digits, _, . or -"
   tail -n 50 -f "$BEETHOVEN_HOME/workers/$worker/outbox/$id.events.jsonl"
 }
 cmd_sessions() {
@@ -693,13 +712,14 @@ cmd_relay() {
         SEND)
           worker=${rest%% *}; json=${rest#* }
           id=$(printf '%s' "$json" | grep -o '"id": *"[^"]*"' | head -1 | sed 's/.*"\([^"]*\)"$/\1/')
-          if [[ ! "$id" =~ ^[A-Za-z0-9_.-]+$ ]] || [ ! -d "$BEETHOVEN_HOME/workers/$worker" ]; then echo "ERROR bad request or unknown worker '$worker'"; continue; fi
+          if ! valid_id "$id" || ! valid_worker "$worker" || [ ! -d "$BEETHOVEN_HOME/workers/$worker" ]; then echo "ERROR bad request or unknown worker '$worker'"; continue; fi
           mkdir -p "$BEETHOVEN_HOME/workers/$worker/inbox" "$BEETHOVEN_HOME/workers/$worker/outbox"
           printf '%s' "$json" > "$BEETHOVEN_HOME/workers/$worker/inbox/$id.json.part" && mv "$BEETHOVEN_HOME/workers/$worker/inbox/$id.json.part" "$BEETHOVEN_HOME/workers/$worker/inbox/$id.json"
           pw[$id]=$worker; poff[$id]=0
           echo "QUEUED $id $(date +%s%3N)";;
         RESULT)
           worker=${rest%% *}; id=${rest#* }
+          if ! valid_worker "$worker" || ! valid_id "$id"; then echo "ERROR bad worker or request id"; continue; fi
           if [ -s "$BEETHOVEN_HOME/workers/$worker/outbox/$id.json" ]; then printf 'RESULT %s ' "$id"; tr -d '\n' < "$BEETHOVEN_HOME/workers/$worker/outbox/$id.json"; echo; else echo "PENDING $id"; fi;;
         PING) echo "PONG $(date +%s%3N)";;
         QUIT) exit 0;;
@@ -953,7 +973,7 @@ cmd_phone() { # phone access through Claude Code Remote Control, hosted by a wor
   local sub="${1:-status}"; shift || true
   local worker="default" as_json=0
   while [ $# -gt 0 ]; do case "$1" in --worker) worker="$2"; shift 2;; --json) as_json=1; shift;; *) shift;; esac; done
-  [[ "$worker" =~ ^[A-Za-z0-9_-]+$ ]] || die "bad worker name"
+  valid_worker "$worker" || die "bad worker name"
   local w="$BEETHOVEN_HOME/workers/$worker" rc="$BEETHOVEN_HOME/workers/$worker/rc"
   [ -d "$w" ] || die "no worker '$worker' (start one first)"
   case "$sub" in

@@ -95,6 +95,24 @@ export interface WorkerState {
   blocked_until?: string | null;
 }
 
+// A worker's name and a request's id become one path segment each under ~/.beethoven/workers on the grid
+// (inbox/<id>.json, outbox/<id>.json), and both arrive from the laptop's Claude through the MCP tools. One
+// with a slash or a dot-dot read the Claude sign-in through `beethoven result` up to grid scripts 9, so the
+// laptop refuses anything else before it reaches ssh or the relay's line, and the grid checks the same
+// patterns again (valid_worker and valid_id in grid/beethoven, REQUEST_ID in beethovend.js).
+export const WORKER_NAME = /^[A-Za-z0-9_-]+$/;
+export const REQUEST_ID = /^[A-Za-z0-9_.-]+$/;
+
+export function checkWorkerName(name: unknown): string {
+  if (typeof name !== 'string' || !WORKER_NAME.test(name)) throw new Error('a worker name is letters, digits, - and _ only');
+  return name;
+}
+
+export function checkRequestId(id: unknown): string {
+  if (typeof id !== 'string' || !REQUEST_ID.test(id)) throw new Error('a request id is letters, digits, ., - and _ only');
+  return id;
+}
+
 export function newRequestId(now = new Date()): string {
   const ts = now.toISOString().replace(/[-:]/g, '').replace(/\..+$/, '').replace('T', 'T');
   const rnd = Math.random().toString(36).slice(2, 8);

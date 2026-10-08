@@ -42,6 +42,8 @@ const ROOT = envOf('ROOT') || path.join(os.homedir(), 'beethoven');
 const WORKER = path.basename(WORKER_DIR);
 const INBOX = path.join(WORKER_DIR, 'inbox');
 const OUTBOX = path.join(WORKER_DIR, 'outbox');
+// a request's id names its files in outbox; the beethoven command and the relay check it the same way
+const REQUEST_ID = /^[A-Za-z0-9_.-]+$/;
 const LOGDIR = path.join(WORKER_DIR, 'log');
 const SESSIONS = path.join(BEETHOVEN_HOME, 'sessions');
 const ACCOUNTS = path.join(BEETHOVEN_HOME, 'accounts');
@@ -260,7 +262,17 @@ function tick() {
         fs.renameSync(claimed, path.join(OUTBOX, f.replace(/\.json$/, '.bad.json')));
         continue;
       }
-      if (!req.id) req.id = f.replace(/\.json$/, '');
+      // The result and events files are named by req.id. The beethoven command named this file by the
+      // first "id" in the text and checked it; JSON.parse keeps the last of two, which could reach out
+      // of outbox (../../claude/...). So the id is the file's own name, and a request that says another
+      // is parked unread, like one that does not parse.
+      const stem = f.replace(/\.json$/, '');
+      if (req !== null && typeof req === 'object' && !Array.isArray(req) && (req.id === undefined || req.id === null)) req.id = stem;
+      if (req === null || typeof req !== 'object' || Array.isArray(req) || !REQUEST_ID.test(stem) || req.id !== stem) {
+        log(`bad request file ${f}: its id is not its file name`);
+        fs.renameSync(claimed, path.join(OUTBOX, `${stem}.bad.json`));
+        continue;
+      }
       startRequest(req, claimed);
     }
     writeState();

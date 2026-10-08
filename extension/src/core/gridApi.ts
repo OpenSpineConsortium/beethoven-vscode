@@ -2,7 +2,7 @@
 // (gridCli in shell.ts: an account not yet moved answers with ~/.ashley/bin/ashley).
 // Shared by the extension, the MCP server and the CLI.
 import { ssh, RunResult, RunOptions, shq, remotePath, gridCli } from './shell';
-import { BeethovenRequest, BeethovenResult, WorkerState, makeRequest, PermissionMode } from './protocol';
+import { BeethovenRequest, BeethovenResult, WorkerState, makeRequest, PermissionMode, checkRequestId, checkWorkerName } from './protocol';
 import { parseSqueue, SqueueRow, SQUEUE_FORMAT, workerStartArgs, WorkerJobSpec } from './slurm';
 import { GridRelay } from './relay';
 import { redactCredentials } from './redact';
@@ -157,7 +157,13 @@ export class GridApi {
   }
 
   async workerStart(spec: WorkerJobSpec): Promise<{ ok: boolean; jobId?: string; message: string }> {
-    const r = await this.beethoven(workerStartArgs(spec), { timeoutMs: 120_000 });
+    let args: string[];
+    try {
+      args = workerStartArgs(spec);
+    } catch (e) {
+      return { ok: false, message: (e as Error).message };
+    }
+    const r = await this.beethoven(args, { timeoutMs: 120_000 });
     const m = /job (\d+)/.exec(r.stdout);
     return { ok: r.code === 0, jobId: m?.[1], message: (r.stdout + r.stderr).trim() };
   }
@@ -175,6 +181,9 @@ export class GridApi {
   /** Queue a prompt; returns the request id immediately. */
   async send(req: Partial<BeethovenRequest> & { prompt: string }, worker = 'default'): Promise<{ id: string; message: string }> {
     const full = makeRequest({ ...req, from: req.from ?? 'laptop' });
+    // checked here as well as in the relay: when the relay fails, the same values go to a fresh ssh
+    checkWorkerName(worker);
+    checkRequestId(full.id);
     if (this.relay) {
       try {
         const q = await this.relay.send(full, worker);
@@ -190,6 +199,8 @@ export class GridApi {
 
   /** Fetch a result if it exists (null otherwise). */
   async result(id: string, worker = 'default'): Promise<BeethovenResult | null> {
+    checkWorkerName(worker);
+    checkRequestId(id);
     if (this.relay) {
       try {
         return await this.relay.result(id, worker);
@@ -214,6 +225,8 @@ export class GridApi {
     signal?: AbortSignal,
   ): Promise<BeethovenResult> {
     const full = makeRequest({ ...req, from: req.from ?? 'laptop' });
+    checkWorkerName(worker);
+    checkRequestId(full.id);
     if (this.relay) {
       try {
         return await this.relay.ask(full, worker, timeoutSec, (ev) => events.onEvent?.(ev));

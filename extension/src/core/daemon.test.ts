@@ -278,3 +278,31 @@ test('a sign-in that is not a Claude subscription gets no work, says so, and the
   assert.ok(await waitFor(() => !!result('r52')));
   assert.equal(result('r52').status, 'ok');
 });
+
+test('a request whose id is not its file name is parked unread, so its result cannot land outside outbox', async () => {
+  // The beethoven command names the inbox file by the first "id" in the text and checks it; JSON.parse keeps the
+  // last of two. Up to grid scripts 9 the worker took the parsed one, and a second id reached out of outbox.
+  const put = (file: string, body: string) => {
+    const p = path.join(worker, 'inbox', file);
+    fs.writeFileSync(p + '.part', body);
+    fs.renameSync(p + '.part', p);
+  };
+  const base = { v: 1, prompt: 'escape', session: 's-esc', mode: 'acceptEdits', max_turns: 5, created: new Date().toISOString(), from: 'test' };
+  put('r60.json', `{"id":"r60",${JSON.stringify(base).slice(1, -1)},"id":"../../../claude/planted"}`);
+  put('r61.json', JSON.stringify({ ...base, id: 'r61-other' }));
+  put('r62.json', JSON.stringify({ ...base, id: 62 }));
+  put('r 63.json', JSON.stringify({ ...base, id: 'r 63' }));
+  const parked = ['r60', 'r61', 'r62', 'r 63'].map((s) => path.join(worker, 'outbox', `${s}.bad.json`));
+  const planted = ['planted.json', 'planted.events.jsonl'].map((f) => path.join(claudeHome, f));
+  await waitFor(() => parked.every((p) => fs.existsSync(p)) || planted.some((p) => fs.existsSync(p)));
+  await sleep(1000); // a request that did start has time to write
+  for (const p of planted) assert.equal(fs.existsSync(p), false, `nothing written into the sign-in folder (${path.basename(p)})`);
+  for (const p of parked) assert.ok(fs.existsSync(p), `${path.basename(p)} parked in outbox`);
+  for (const id of ['r60', 'r61', 'r61-other', 'r62', '62', 'r 63']) assert.equal(result(id), null, `no result for ${id}`);
+  assert.equal(fs.existsSync(path.join(root, 'workspaces', 's-esc', 'fake_argv.json')), false, 'Claude Code was not started');
+  // a request with no id takes its file's name, as before
+  put('r64.json', JSON.stringify({ ...base, session: 's-r64' }));
+  assert.ok(await waitFor(() => !!result('r64')));
+  assert.equal(result('r64').id, 'r64');
+  assert.equal(result('r64').status, 'ok');
+});

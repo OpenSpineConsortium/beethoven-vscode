@@ -6,7 +6,7 @@
 import { ChildProcess, spawn } from 'node:child_process';
 import * as readline from 'node:readline';
 import { SSH_BATCH_OPTS, gridCliLine } from './shell';
-import { BeethovenRequest, BeethovenResult } from './protocol';
+import { BeethovenRequest, BeethovenResult, checkRequestId, checkWorkerName } from './protocol';
 
 export interface RelayEvents {
   onEvent?(id: string, event: Record<string, unknown>): void;
@@ -164,6 +164,8 @@ export class GridRelay {
 
   /** Queue a request; resolves with the grid's queue time (epoch ms, grid clock) as soon as the file is written. */
   async send(req: BeethovenRequest, worker = 'default'): Promise<{ queuedGridMs: number }> {
+    checkWorkerName(worker);
+    checkRequestId(req.id);
     await this.ensure();
     return new Promise((resolve, reject) => {
       const w: Waiter = { reject, resolveQueued: (ms) => resolve({ queuedGridMs: ms }) };
@@ -177,6 +179,8 @@ export class GridRelay {
 
   /** Queue a request and wait for its result, receiving events as they stream. */
   async ask(req: BeethovenRequest, worker = 'default', timeoutSec = 3600, onEvent?: (ev: Record<string, unknown>) => void): Promise<BeethovenResult> {
+    checkWorkerName(worker);
+    checkRequestId(req.id);
     await this.ensure();
     return new Promise<BeethovenResult>((resolve, reject) => {
       const w: Waiter = { reject, onEvent, resolveResult: resolve, resolveQueued: () => {} };
@@ -190,6 +194,9 @@ export class GridRelay {
   }
 
   async result(id: string, worker = 'default'): Promise<BeethovenResult | null> {
+    // both go into the line as words: a space or a newline would start another command
+    checkWorkerName(worker);
+    checkRequestId(id);
     await this.ensure();
     return new Promise((resolve, reject) => {
       const w: Waiter = { reject, resolveResult: (r) => resolve(r), resolveQueued: () => {} };
