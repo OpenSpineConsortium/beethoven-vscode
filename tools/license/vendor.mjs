@@ -5,7 +5,8 @@
 // The first that is set, or exists, wins:
 //   BEETHOVEN_VENDOR_DIR, ASHLEY_VENDOR_DIR (the old variable), ~/.beethoven-vendor,
 //   ~/.ashley-vendor (the old folder), and ~/.beethoven-vendor when neither folder exists yet.
-// tools/intake/deploy.sh and tools/publish_marketplace.sh spell out the same order in the shell.
+// tools/publish_marketplace.sh spells out the same order in the shell, and so does the access service's
+// own deploy script, which lives in OpenSpineConsortium/beethoven-access since 2026-10-07.
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
