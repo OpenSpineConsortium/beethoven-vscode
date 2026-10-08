@@ -366,6 +366,8 @@
         "beethoven.worker.partition": {
           "type": "string",
           "default": "reqp",
+          "pattern": "^[A-Za-z0-9_-]+(,[A-Za-z0-9_-]+)*$",
+          "patternErrorMessage": "Partition names separated by commas, like reqp.",
           "description": "Slurm partition for the Claude worker job."
         },
         "beethoven.worker.qos": {
@@ -393,6 +395,8 @@
         "beethoven.worker.memory": {
           "type": "string",
           "default": "16G",
+          "pattern": "^[0-9]+([KMGTkmgt][Bb]?)?$",
+          "patternErrorMessage": "A number with an optional K, M, G or T, like 16G.",
           "description": "Memory for the worker job."
         },
         "beethoven.worker.gpu": {

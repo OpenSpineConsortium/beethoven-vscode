@@ -384,6 +384,18 @@ cmd_doctor() {
   return $fail
 }
 
+# The values a worker job starts with are written into its job script by sed, and the job's shell runs
+# them: only plain words and numbers pass (uses cmd_worker's locals; dies on the first bad one).
+check_worker_values() {
+  [[ "$hours" =~ ^[0-9]+$ ]] || die "--hours must be an integer"
+  [[ "$cpus" =~ ^[0-9]+$ ]] || die "--cpus must be an integer"
+  [[ "$gpus" =~ ^[0-9]+$ ]] || die "--gpus must be an integer"
+  [[ "$conc" =~ ^[0-9]+$ ]] || die "--concurrency must be an integer"
+  [[ "$mem" =~ ^[0-9]+([KMGTkmgt][Bb]?)?$ ]] || die "--mem must be a number with an optional K, M, G or T"
+  [[ "$part" =~ ^[A-Za-z0-9_-]+(,[A-Za-z0-9_-]+)*$ ]] || die "--partition must be partition names separated by commas"
+  [[ "$qos" =~ ^[A-Za-z0-9_-]+$ ]] || die "--qos must be letters, digits, _ or -"
+  [ -z "$container" ] || [[ "$container" =~ ^[A-Za-z0-9_.-]+$ ]] || die "--container must be a library name (beethoven library)"
+}
 cmd_worker() {
   local sub="${1:-list}"; shift || true
   local name="default" hours=24 cpus=4 mem="16G" part="reqp" qos="requeue" gpus=0 conc=2 lines=80 as_json=0 container=""
@@ -408,15 +420,7 @@ cmd_worker() {
       retire_apikey
       local jid st; jid=$(cat "$w/job.id" 2>/dev/null || echo ""); st=$(job_state "$jid")
       case "$st" in PENDING|RUNNING|CONFIGURING) echo "worker $name already has job $jid ($st) on $(cat "$w/node" 2>/dev/null || echo '?')"; return 0;; esac
-      [[ "$hours" =~ ^[0-9]+$ ]] || die "--hours must be an integer"
-      # every value below is written into the job script by sed and runs in the job's shell
-      [[ "$cpus" =~ ^[0-9]+$ ]] || die "--cpus must be an integer"
-      [[ "$gpus" =~ ^[0-9]+$ ]] || die "--gpus must be an integer"
-      [[ "$conc" =~ ^[0-9]+$ ]] || die "--concurrency must be an integer"
-      [[ "$mem" =~ ^[0-9]+[KMGTkmgt]?$ ]] || die "--mem must be a number with an optional K, M, G or T"
-      [[ "$part" =~ ^[A-Za-z0-9_-]+(,[A-Za-z0-9_-]+)*$ ]] || die "--partition must be partition names separated by commas"
-      [[ "$qos" =~ ^[A-Za-z0-9_-]+$ ]] || die "--qos must be letters, digits, _ or -"
-      [ -z "$container" ] || [[ "$container" =~ ^[A-Za-z0-9_.-]+$ ]] || die "--container must be a library name (beethoven library)"
+      check_worker_values
       local time; time=$(printf '%d-%02d:00:00' $((hours / 24)) $((hours % 24)))
       local gres="" requeue="#SBATCH --no-requeue" w_sandbox="" w_claude=""
       [ "$gpus" != "0" ] && gres="#SBATCH --gres=gpu:$gpus"
@@ -438,6 +442,8 @@ cmd_worker() {
       jid=${out%%;*}; echo "$jid" > "$w/job.id"; rm -f "$w/node"
       echo "submitted worker $name as job $jid ($part/$qos, $cpus cpu, $mem, $time, gpus=$gpus, concurrency=$conc${container:+, container $container})";;
     restart) # stop, re-render the job from the current template with the saved settings, submit again
+      # saved settings the start would refuse (grid scripts 10 check them) leave the running job alone
+      if [ -s "$w/params" ]; then local -a chk; mapfile -t chk < "$w/params"; ( cmd_worker check --name "$name" "${chk[@]}" ) || exit 1; fi
       local oj; oj=$(cat "$w/job.id" 2>/dev/null || echo ""); [ -n "$oj" ] && scancel "$oj" 2>/dev/null
       rm -f "$w/stop" "$w/node" "$w/job.id"; sleep 2
       if [ -s "$w/params" ]; then
@@ -463,6 +469,7 @@ cmd_worker() {
       local dl="$w/log/beethovend.log"; [ -s "$dl" ] || [ ! -s "$w/log/ashleyd.log" ] || dl="$w/log/ashleyd.log"
       echo "--- $(basename "$dl")"; tail -n "$lines" "$dl" 2>/dev/null
       echo "--- slurm"; ls -t "$w"/log/slurm_*.out 2>/dev/null | head -1 | xargs -r tail -n 40;;
+    check) check_worker_values;;   # restart asks before it cancels anything
     node)
       [ -s "$w/node" ] || die "worker $name has no node yet ($(job_state "$(cat "$w/job.id" 2>/dev/null)"))"
       cat "$w/node";;
@@ -719,7 +726,8 @@ cmd_relay() {
           echo "QUEUED $id $(date +%s%3N)";;
         RESULT)
           worker=${rest%% *}; id=${rest#* }
-          if ! valid_worker "$worker" || ! valid_id "$id"; then echo "ERROR bad worker or request id"; continue; fi
+          # refused without ERROR: ERROR carries no id, and a laptop fails its newest request on one
+          if ! valid_worker "$worker" || ! valid_id "$id"; then echo "PENDING ${id//[^A-Za-z0-9_.-]/_}"; continue; fi
           if [ -s "$BEETHOVEN_HOME/workers/$worker/outbox/$id.json" ]; then printf 'RESULT %s ' "$id"; tr -d '\n' < "$BEETHOVEN_HOME/workers/$worker/outbox/$id.json"; echo; else echo "PENDING $id"; fi;;
         PING) echo "PONG $(date +%s%3N)";;
         QUIT) exit 0;;

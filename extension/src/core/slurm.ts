@@ -61,7 +61,7 @@ export interface WorkerJobSpec {
 // checks the same in cmd_worker).
 const SLURM_WORD = /^[A-Za-z0-9_-]+$/;
 const PARTITIONS = /^[A-Za-z0-9_-]+(,[A-Za-z0-9_-]+)*$/;
-const MEMORY = /^[0-9]+[KMGTkmgt]?$/;
+const MEMORY = /^[0-9]+([KMGTkmgt][Bb]?)?$/; // Slurm reads the unit's first letter: 16G and 16GB alike
 const LIBRARY_NAME = /^[A-Za-z0-9_.-]+$/;
 const isCount = (n: unknown): n is number => typeof n === 'number' && Number.isInteger(n) && n >= 0;
 

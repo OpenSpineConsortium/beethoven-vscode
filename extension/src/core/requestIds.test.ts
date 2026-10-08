@@ -31,11 +31,12 @@ test('worker names and request ids: plain words pass, anything that could leave 
 test('worker start values that the job script would run are refused before anything is sent', () => {
   const good: WorkerJobSpec = { name: 'w1', partition: 'reqp', qos: 'requeue', hours: 24, cpus: 4, memory: '16G', gpus: 0, concurrency: 2 };
   assert.ok(workerStartArgs(good).includes('16G'));
+  for (const memory of ['16GB', '512M', '512mb', '2T', '16000']) assert.ok(workerStartArgs({ ...good, memory }).includes(memory), memory);
   assert.ok(workerStartArgs({ ...good, partition: 'secp,reqp', memory: '512M', container: 'node22-bookworm' }).includes('secp,reqp'));
   // with a GPU the partition and qos are the fixed GPU ones, whatever the settings say
   assert.ok(workerStartArgs({ ...good, gpus: 1, partition: 'ignored' }).includes('gmsap,gvohp,galhp'));
   const bad: Partial<WorkerJobSpec>[] = [
-    { name: '../w' }, { memory: '16G$(id)' }, { memory: '16G\n#SBATCH --x' }, { memory: '' }, { partition: 'reqp|x' }, { partition: 'reqp,' },
+    { name: '../w' }, { memory: '16G$(id)' }, { memory: '16G\n#SBATCH --x' }, { memory: '' }, { memory: 'G' }, { memory: '16GBB' }, { partition: 'reqp|x' }, { partition: 'reqp,' },
     { qos: 'requeue;id' as WorkerJobSpec['qos'] }, { container: '../x' }, { container: 'a b' },
     { hours: 0 }, { hours: 1.5 }, { cpus: 0 }, { cpus: NaN }, { gpus: -1 }, { concurrency: 0 }, { cpus: '4;id' as unknown as number },
   ];
@@ -90,6 +91,7 @@ test('GridApi refuses a crafted id or worker for result, send and ask, by a fres
       await assert.rejects(api.ask({ prompt: 'p' }, w, 10), /worker name/, JSON.stringify(w));
     }
     await assert.rejects(api.send({ prompt: 'p', id: '../x' }, 'default'), /request id/);
+    for (const id of CRAFTED_IDS) await assert.rejects(api.ask({ prompt: 'p', id }, 'default', 10), /request id/, `ask ${JSON.stringify(id)}`);
     assert.equal(g.sshCalls(), 0, 'nothing reached ssh');
     assert.deepEqual(g.signin(), ['.credentials.json'], 'nothing added to the sign-in folder');
     // an answered request still comes back
@@ -116,6 +118,7 @@ test('the relay refuses a crafted id or worker before it opens or writes a line,
       await assert.rejects(relay.ask(makeRequest({ prompt: 'p', from: 't' }), w, 10), /worker name/, JSON.stringify(w));
     }
     await assert.rejects(relay.send(makeRequest({ prompt: 'p', from: 't', id: '../x' }), 'default'), /request id/);
+    for (const id of CRAFTED_IDS) await assert.rejects(relay.ask(makeRequest({ prompt: 'p', from: 't', id }), 'default', 10), /request id/, `relay ask ${JSON.stringify(id)}`);
     assert.equal(g.sshCalls(), 0, 'the relay was never opened');
     const api = new GridApi('wsu-grid', () => {}, relay);
     await assert.rejects(api.result('../../../claude/.credentials', 'default'), /request id/);

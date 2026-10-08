@@ -84,7 +84,7 @@ server.registerTool(
       name: z.string().regex(WORKER_NAME, 'letters, digits, - and _ only').default('default').describe('worker name'),
       hours: z.number().int().min(1).max(720).default(24),
       cpus: z.number().int().min(1).max(64).default(4),
-      memory: z.string().regex(/^[0-9]+[KMGTkmgt]?$/, 'a number with an optional K, M, G or T, like 16G').default('16G'),
+      memory: z.string().regex(/^[0-9]+([KMGTkmgt][Bb]?)?$/, 'a number with an optional K, M, G or T, like 16G').default('16G'),
       gpus: z.number().int().min(0).max(4).default(0),
       qos: z.enum(['requeue', 'primary', 'secondary']).default('requeue').describe('requeue = shared pool, may be requeued (worker resumes); primary = dedicated'),
       concurrency: z.number().int().min(1).max(8).default(2),

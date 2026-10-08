@@ -292,13 +292,17 @@ test('a request whose id is not its file name is parked unread, so its result ca
   put('r61.json', JSON.stringify({ ...base, id: 'r61-other' }));
   put('r62.json', JSON.stringify({ ...base, id: 62 }));
   put('r 63.json', JSON.stringify({ ...base, id: 'r 63' }));
-  const parked = ['r60', 'r61', 'r62', 'r 63'].map((s) => path.join(worker, 'outbox', `${s}.bad.json`));
+  put('r65.json', 'null');
+  put('r66.json', JSON.stringify([{ ...base, id: 'r66' }]));
+  const parked = ['r60', 'r61', 'r62', 'r 63', 'r65', 'r66'].map((s) => path.join(worker, 'outbox', `${s}.bad.json`));
   const planted = ['planted.json', 'planted.events.jsonl'].map((f) => path.join(claudeHome, f));
   await waitFor(() => parked.every((p) => fs.existsSync(p)) || planted.some((p) => fs.existsSync(p)));
   await sleep(1000); // a request that did start has time to write
   for (const p of planted) assert.equal(fs.existsSync(p), false, `nothing written into the sign-in folder (${path.basename(p)})`);
   for (const p of parked) assert.ok(fs.existsSync(p), `${path.basename(p)} parked in outbox`);
-  for (const id of ['r60', 'r61', 'r61-other', 'r62', '62', 'r 63']) assert.equal(result(id), null, `no result for ${id}`);
+  for (const id of ['r60', 'r61', 'r61-other', 'r62', '62', 'r 63', 'r65', 'r66']) assert.equal(result(id), null, `no result for ${id}`);
+  assert.deepEqual(fs.readdirSync(path.join(worker, 'inbox')).filter((f) => /^r6/.test(f)), [], 'nothing left claimed in the inbox');
+  assert.doesNotMatch(fs.readFileSync(path.join(worker, 'log', 'beethovend.log'), 'utf8'), /tick error/);
   assert.equal(fs.existsSync(path.join(root, 'workspaces', 's-esc', 'fake_argv.json')), false, 'Claude Code was not started');
   // a request with no id takes its file's name, as before
   put('r64.json', JSON.stringify({ ...base, session: 's-r64' }));
