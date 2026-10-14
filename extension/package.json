@@ -498,7 +498,7 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.31.0",
     "ssh2": "1.17.0",
-    "zod": "4.6.5"
+    "zod": "4.6.6"
   },
   "devDependencies": {
     "@types/mocha": "10.0.10",
