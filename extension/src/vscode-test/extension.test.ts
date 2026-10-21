@@ -89,9 +89,10 @@ suite('Beethoven for VS Code extension', () => {
     const c = vscode.workspace.getConfiguration('beethoven');
     assert.equal(c.get('loginHost'), 'warrior.grid.wayne.edu');
     assert.equal(c.get('sshAlias'), 'wsu-grid');
-    assert.equal(c.get('nodeDomain'), 'nas.grid.wayne.edu');
-    assert.equal(c.get('worker.partition'), 'reqp');
-    assert.equal(c.get('worker.qos'), 'requeue');
+    // empty: the site profile decides (core/gridProfile.ts, held by its own test)
+    assert.equal(c.get('nodeDomain'), '');
+    assert.equal(c.get('worker.partition'), '');
+    assert.equal(c.get('worker.qos'), '');
     assert.equal(c.get('worker.hours'), 24);
     assert.equal(c.get('account'), '', 'no account chosen: Claude Code\'s own sign-in, as before');
   });

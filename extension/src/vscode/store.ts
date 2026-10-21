@@ -11,6 +11,7 @@ import { isMcpRegistered, registerMcp } from './mcpRegister';
 import type { LicenseGate } from './licenseGate';
 import { settings, Settings } from './settings';
 import { REQUEST_PAGE, SUPPORT_PAGE } from '../core/site';
+import { nodeDomainOf } from '../core/gridProfile';
 
 const SECRET_PREFIX = 'beethoven.';
 /** what the daily token check found, per secret id (VS Code state; cleared when the token changes) */
@@ -51,7 +52,7 @@ export class BeethovenStore {
       twoFactorDone: c.get<boolean>('twoFactorDone', false),
       loginHost: c.get<string>('loginHost', 'warrior.grid.wayne.edu'),
       sshAlias: c.get<string>('sshAlias', 'wsu-grid'),
-      nodeDomain: c.get<string>('nodeDomain', 'nas.grid.wayne.edu'),
+      nodeDomain: c.get<string>('nodeDomain', '') || nodeDomainOf(),
       identityFile: c.get<string>('identityFile', '~/.ssh/id_ed25519_wsu'),
       gridRoot: c.get<string>('gridRoot', ''),
       gridScriptsDir: path.join(this.context.extensionPath, 'dist', 'grid'),

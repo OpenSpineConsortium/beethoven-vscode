@@ -12,6 +12,7 @@ import { ACCOUNT_LABEL, ADD_COMMAND, DEFAULT_PLACE, accountPlace, accountProcess
 import { BeethovenStore, findClaudeExecutable } from './store';
 import { isMcpRegistered, registerMcp } from './mcpRegister';
 import { TERMS_VERSION } from '../core/terms';
+import { nodeDomainOf } from '../core/gridProfile';
 import { termsRecord } from './terms';
 
 interface GridDiagNode { id: string; ok: boolean; warn: boolean; skip: boolean; detail: string; repaired: string }
@@ -309,7 +310,7 @@ export function buildGraph(): DiagNode<DiagCtx>[] {
   add({ id: 'laptop.ssh-key', title: 'SSH key for the grid', layer: 'laptop', dependsOn: ['laptop.ssh-keygen', 'account.wsu'], assumption: '~/.ssh/id_ed25519_wsu and .pub exist',
     manualFix: 'run the wizard steps "SSH key" and "Log in to the grid once"', source: 'extension/src/core/wizard.ts (stepSshKey)', check: (ctx) => stepCheck(stepSshKey, ctx) });
   add({ id: 'laptop.ssh-config', title: 'SSH configuration block', layer: 'laptop', dependsOn: ['laptop.ssh-key'],
-    assumption: 'the Beethoven block in ~/.ssh/config is current (jump host, MACs +hmac-sha1, AddressFamily inet, *.nas.grid.wayne.edu)',
+    assumption: `the Beethoven block in ~/.ssh/config is current (jump host, MACs +hmac-sha1, AddressFamily inet, *.${nodeDomainOf()} from the site profile)`,
     manualFix: 'run the wizard step "SSH configuration"', futureRisk: 'the grid dropping hmac-sha1 or renaming nodes', source: 'extension/src/core/sshConfig.ts',
     check: (ctx) => stepCheck(stepSshConfig, ctx),
     async repair(ctx) { const r = await stepSshConfig.run(ctx.env); return { ok: r.status === 'done', detail: r.detail }; } });

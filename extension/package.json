@@ -350,8 +350,8 @@
         },
         "beethoven.nodeDomain": {
           "type": "string",
-          "default": "nas.grid.wayne.edu",
-          "description": "Domain suffix of compute nodes (voh3 -> voh3.nas.grid.wayne.edu)."
+          "default": "",
+          "description": "Domain suffix of compute nodes (voh3 -> voh3.<domain>). Empty = the grid's site profile (nas.grid.wayne.edu at Wayne State)."
         },
         "beethoven.identityFile": {
           "type": "string",
@@ -365,20 +365,21 @@
         },
         "beethoven.worker.partition": {
           "type": "string",
-          "default": "reqp",
-          "pattern": "^[A-Za-z0-9_-]+(,[A-Za-z0-9_-]+)*$",
-          "patternErrorMessage": "Partition names separated by commas, like reqp.",
-          "description": "Slurm partition for the Claude worker job."
+          "default": "",
+          "pattern": "^([A-Za-z0-9_-]+(,[A-Za-z0-9_-]+)*)?$",
+          "patternErrorMessage": "Partition names separated by commas, like reqp, or empty.",
+          "description": "Slurm partition for the Claude worker job. Empty = the grid's site profile's partition for long jobs (reqp at Wayne State)."
         },
         "beethoven.worker.qos": {
           "type": "string",
-          "default": "requeue",
+          "default": "",
           "enum": [
+            "",
             "requeue",
             "primary",
             "secondary"
           ],
-          "description": "QoS for the worker. requeue is the shared pool (job may be requeued; the worker resumes); primary is dedicated."
+          "description": "QoS for the worker. Empty = the grid's site profile's QoS for long jobs (requeue at Wayne State). requeue is the shared pool (job may be requeued; the worker resumes); primary is dedicated."
         },
         "beethoven.worker.hours": {
           "type": "number",
