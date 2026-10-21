@@ -5,7 +5,7 @@ export interface SshTargets {
   accessId: string;
   loginHost: string; // warrior.grid.wayne.edu
   alias: string; // wsu-grid
-  nodeDomain: string; // nas.grid.wayne.edu
+  nodeDomain: string; // the site profile's node_domain (gridProfile.ts)
   identityFile: string; // ~/.ssh/id_ed25519_wsu (tilde form, portable across OSes)
   /** Also answer to "grid" (the Student_Projects convention) when nothing else defines it. */
   includeGridAlias: boolean;
