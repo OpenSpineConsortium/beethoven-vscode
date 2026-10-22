@@ -502,7 +502,7 @@
   },
   "devDependencies": {
     "@types/mocha": "10.0.10",
-    "@types/node": "26.6.3",
+    "@types/node": "26.6.5",
     "@types/ssh2": "^1.15.6",
     "@types/vscode": "1.100.0",
     "@vscode/test-cli": "0.0.15",
