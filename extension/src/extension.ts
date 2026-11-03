@@ -5,6 +5,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { BeethovenStore } from './vscode/store';
+import { placementOf, type Placement } from './core/gridProfile';
 import { resolveExecutable } from './vscode/ui';
 import { SetupPanel } from './vscode/panel';
 import { Troubleshooter } from './vscode/diagnosticsUi';
@@ -498,14 +499,22 @@ async function commandConnect(context: vscode.ExtensionContext, grid: GridApi, w
   await vscode.commands.executeCommand('vscode.openFolder', uri, { forceNewWindow: true });
 }
 
+/** The worker's partition and QoS: the settings where set, else the site profile's for long jobs */
+function workerPlacement(c: { get<T>(key: string, fallback: T): T }): Placement {
+  const site = placementOf('batch');
+  return { partition: c.get<string>('worker.partition', '') || site.partition, qos: c.get<string>('worker.qos', '') || site.qos };
+}
+
 async function commandWorkerStart(grid: GridApi): Promise<void> {
   const c = store.config;
   const name = await vscode.window.showInputBox({ title: 'Worker name', value: 'default', prompt: 'One worker is enough for most people; name a second one for a separate project or a GPU.', validateInput: (v) => (/^[A-Za-z0-9_-]+$/.test(v) ? undefined : 'letters, digits, - and _ only'), ignoreFocusOut: true });
   if (!name) return;
+  const batch = workerPlacement(c);
+  const gpu = placementOf('gpu');
   const gpuPick = await vscode.window.showQuickPick(
     [
-      { label: 'CPU node', description: `${c.get('worker.cpus')} CPUs, ${c.get('worker.memory')}, ${c.get('worker.partition')}/${c.get('worker.qos')}`, gpus: 0 },
-      { label: '1 GPU', description: 'gmsap/gvohp/galhp, qos gpu (only if the work trains or infers)', gpus: 1 },
+      { label: 'CPU node', description: `${c.get('worker.cpus')} CPUs, ${c.get('worker.memory')}, ${batch.partition}/${batch.qos}`, gpus: 0 },
+      { label: '1 GPU', description: `${gpu.partition.replace(/,/g, '/')}, qos ${gpu.qos} (only if the work trains or infers)`, gpus: 1 },
     ],
     { title: 'What kind of node?' },
   );
@@ -527,8 +536,8 @@ async function commandWorkerStart(grid: GridApi): Promise<void> {
   }
   const spec: WorkerJobSpec = {
     name,
-    partition: c.get('worker.partition', 'reqp'),
-    qos: c.get('worker.qos', 'requeue') as WorkerJobSpec['qos'],
+    partition: batch.partition,
+    qos: batch.qos,
     hours: parseInt(hours, 10),
     cpus: c.get('worker.cpus', 4),
     memory: c.get('worker.memory', '16G'),

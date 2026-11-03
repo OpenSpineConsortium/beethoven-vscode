@@ -13,6 +13,7 @@ import { GridRelay } from '../core/relay';
 import { makeRequest } from '../core/protocol';
 import { TerminalUI } from './terminalUi';
 import { renderBlock } from '../core/sshConfig';
+import { nodeDomainOf } from '../core/gridProfile';
 import { installPublicKey, probeWithKey } from '../core/sshInstall';
 import { expandHome } from '../core/shell';
 import { localDir } from '../core/localDir';
@@ -44,7 +45,7 @@ function settings(): WizardSettings {
     twoFactorDone: false,
     loginHost: 'warrior.grid.wayne.edu',
     sshAlias: 'wsu-grid',
-    nodeDomain: 'nas.grid.wayne.edu',
+    nodeDomain: nodeDomainOf(),
     identityFile: '~/.ssh/id_ed25519_wsu',
     gridRoot: '',
     gridScriptsDir: gridScripts,

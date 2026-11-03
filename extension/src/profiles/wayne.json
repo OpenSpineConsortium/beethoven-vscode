@@ -1,0 +1,92 @@
+{
+ "schema_version": 1,
+ "site": "wayne",
+ "display_name": "Wayne State University HPC grid",
+ "scheduler": "slurm",
+ "submit_host": "warrior",
+ "bin_dir": "",
+ "partition_cpu": "secp",
+ "qos_cpu": "secondary",
+ "partition_cpu_batch": "reqp",
+ "qos_batch": "requeue",
+ "partitions_gpu": [
+  "gmsap",
+  "gvohp",
+  "galhp"
+ ],
+ "qos_gpu": "gpu",
+ "account": "",
+ "max_walltime": "",
+ "node_tmp": "/tmp/$USER/hpcworker_$SLURM_JOB_ID",
+ "node_tmp_var": "",
+ "tmpdir_is_node_local": false,
+ "ipc_dir": "/dev/shm",
+ "shared_state_dir": "/rs/rs_grp_oschome/$USER/hpcworker",
+ "shared_install": "/rs/rs_grp_oschome/shared/beethoven/hpcworker/current",
+ "runtime": "apptainer",
+ "runtime_module": "apptainer/1.2.2",
+ "runtime_bin": "/wsu/el7/gnu7/apptainer/1.2.2/bin/apptainer",
+ "image_store": {
+  "type": "sandbox",
+  "path": "/rs/rs_grp_oschome/shared/beethoven/containers/claude-node22"
+ },
+ "claude_bin": "/rs/rs_grp_oschome/shared/beethoven/npm-claude-node22/bin/claude",
+ "binds": [
+  "$HOME",
+  "/rs/rs_grp_oschome/$USER",
+  "/rs/rs_grp_oschome/shared/beethoven"
+ ],
+ "cache_dir": "",
+ "fakeroot_rung": null,
+ "egress": {
+  "class": "direct",
+  "proxy_env": {},
+  "proxy_module": "",
+  "ca_bundle": "",
+  "measured": {
+   "when": "2026-09-28",
+   "node": "asx15",
+   "api.anthropic.com": 404,
+   "platform.claude.com": 200,
+   "claude.ai": 403,
+   "statsig.anthropic.com": "no DNS record"
+  }
+ },
+ "claude_config_dir": "$HOME/.beethoven/claude",
+ "consent_markers": [
+  "$HOME/.beethoven/claude/.beethoven-remote-consent",
+  "$HOME/.beethoven/claude/.ashley-remote-consent"
+ ],
+ "ood_base_url": "https://ondemand.grid.wayne.edu",
+ "ood_shell_host": "",
+ "ood_rnode_enabled": null,
+ "ood_auth": "http-basic",
+ "vpn_required": true,
+ "vpn_portal": "protect.wayne.edu",
+ "vpn_app": "GlobalProtect",
+ "vpn_help_url": "https://services.wayne.edu/TDClient/277/Portal/KB/Article/20314/Wayne-State-VPN-and-the-Global-Protect-client",
+ "grid_account_help_url": "https://services.wayne.edu/TDClient/277/Portal/KB/ArticleDet?ID=20199",
+ "grid_2fa_help_url": "https://services.wayne.edu/TDClient/277/Portal/KB/Article/20242/How-do-I-set-up-and-use-Google-Authenticator-for-the-Grid",
+ "ssh_host": "grid.wayne.edu",
+ "ssh_port": 22,
+ "node_domain": "nas.grid.wayne.edu",
+ "ssh_host_key": "SHA256:kLTz1xK6anQ1denM+31kDEryQtgan2P76r9aLno+K3s",
+ "ssh_relay": null,
+ "session_title": "Wayne State grid",
+ "login_abandon_s": 1200,
+ "login_node_rules": {
+  "max_processes": 20,
+  "poll_floor_seconds": 60
+ },
+ "xdg_runtime_fix": true,
+ "scheduler_in_worker": true,
+ "home_filesystem": "panfs",
+ "worker_defaults": {
+  "cpus": 2,
+  "mem": "8G",
+  "hours": 8,
+  "permission_mode": "default",
+  "capacity": 4
+ },
+ "notes": "Login node warrior is CentOS 7 (python3 is 3.6, no sysctl on PATH). $TMPDIR there points at CephFS, not the node. The image is an existing sandbox with Node 22 and Claude Code shared with Beethoven for VS Code; new images at this site should be SIF because the home is Panasas. claude_config_dir is the student's existing Claude Code login from Beethoven for VS Code; the framework only starts Claude Code there and reads 'claude auth status'. Until 2026-09-30 the lab folder was /rs/rs_grp_oschome/shared/ashley and the sign-in folder $HOME/.ashley/claude; both old names remain as links to the new ones, for builds older than Beethoven 8.0.0. scheduler_in_worker (framework 9): the host's Slurm client, its library, the munge library and socket, /etc/slurm and the slurm and munge users are bound into the worker's container, the set measured on asx1 on 2026-09-28 for the lab's VS Code tool. Framework 10: the portal answered an unauthenticated request with 401 and WWW-Authenticate Basic on 2026-10-01 (ood_auth http-basic, a hint only); grid_account_help_url is TeamDynamix's standard address for KB 20199 and was not fetched; the worker partition stays partition_cpu_batch (reqp/requeue), the lab lead's choice. Framework 11: ssh_host, ssh_port and ssh_host_key are what grid.wayne.edu:22 answered from the internet on 2026-10-02 (OpenSSH 7.4, host key ssh-rsa with that SHA256 fingerprint, publickey, password and keyboard-interactive offered; a password sign-in also asks for the Google Authenticator code, which grid_2fa_help_url, KB 20242, explains); ssh_relay is null (no relay); browser_key_days is absent (no expiry), the lab lead's choice. Framework 25: partitions_gpu gains galhp and qos_gpu is gpu, both as Beethoven for VS Code's GPU workers ask them (core/slurm.ts, --partition gmsap,gvohp,galhp --qos gpu); a GPU request without the QoS was refused on 2026-10-21. node_domain is the compute nodes' domain its ssh configuration reaches through the login node (core/sshConfig.ts, Host *.nas.grid.wayne.edu with ProxyJump), and only while a job of the account's runs on the node; neither was measured by hpcworker."
+}

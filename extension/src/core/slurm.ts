@@ -2,6 +2,7 @@
 // The grid-side CLI (grid/bin/beethoven) does the real work; these helpers keep the laptop
 // side to one layer of quoting (a lesson written down in Student_Projects/tools/grid.sh).
 import { checkWorkerName } from './protocol';
+import { placementOf } from './gridProfile';
 
 export interface SqueueRow {
   jobId: string;
@@ -46,7 +47,8 @@ export function parseSbatchId(text: string): string | null {
 export interface WorkerJobSpec {
   name: string;
   partition: string;
-  qos: 'requeue' | 'primary' | 'secondary' | 'gpu';
+  /** a CPU job's QoS; a GPU job takes the site profile's */
+  qos: string;
   hours: number;
   cpus: number;
   memory: string;
@@ -87,7 +89,9 @@ export function workerStartArgs(s: WorkerJobSpec): string[] {
   ];
   if (s.container) args.push('--container', s.container);
   if (s.gpus > 0) {
-    args.push('--gpus', String(s.gpus), '--partition', 'gmsap,gvohp,galhp', '--qos', 'gpu');
+    // the GPU partitions in order of preference and their QoS are the site profile's
+    const gpu = placementOf('gpu');
+    args.push('--gpus', String(s.gpus), '--partition', gpu.partition, '--qos', gpu.qos);
   } else {
     args.push('--partition', s.partition, '--qos', s.qos);
   }

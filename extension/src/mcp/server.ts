@@ -19,6 +19,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { checkLicense, readIdentity, unlicensedMessage } from '../core/license';
 import { readTermsRecord, TERMS_REFUSAL } from '../core/terms';
+import { placementOf } from '../core/gridProfile';
 
 const alias = process.env.BEETHOVEN_GRID || process.env.ASHLEY_GRID || 'wsu-grid';
 const defaultWorker = process.env.BEETHOVEN_WORKER || process.env.ASHLEY_WORKER || 'default';
@@ -86,12 +87,12 @@ server.registerTool(
       cpus: z.number().int().min(1).max(64).default(4),
       memory: z.string().regex(/^[0-9]+([KMGTkmgt][Bb]?)?$/, 'a number with an optional K, M, G or T, like 16G').default('16G'),
       gpus: z.number().int().min(0).max(4).default(0),
-      qos: z.enum(['requeue', 'primary', 'secondary']).default('requeue').describe('requeue = shared pool, may be requeued (worker resumes); primary = dedicated'),
+      qos: z.enum(['requeue', 'primary', 'secondary']).optional().describe('omitted = the site profile\'s QoS for long jobs; requeue = shared pool, may be requeued (worker resumes); primary = dedicated'),
       concurrency: z.number().int().min(1).max(8).default(2),
     },
   },
   async (a) => {
-    const r = await grid.workerStart({ name: a.name, hours: a.hours, cpus: a.cpus, memory: a.memory, gpus: a.gpus, qos: a.qos, partition: 'reqp', concurrency: a.concurrency });
+    const r = await grid.workerStart({ name: a.name, hours: a.hours, cpus: a.cpus, memory: a.memory, gpus: a.gpus, qos: a.qos ?? placementOf('batch').qos, partition: placementOf('batch').partition, concurrency: a.concurrency });
     return text(r.message);
   },
 );
